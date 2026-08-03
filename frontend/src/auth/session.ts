@@ -71,13 +71,3 @@ export function useSignOut() {
 		},
 	});
 }
-
-export function errorMessage(error: unknown): string | null {
-	if (error instanceof ApiError) {
-		return error.message;
-	}
-	if (error instanceof Error) {
-		return "Could not reach Sift. Check that the backend is running.";
-	}
-	return null;
-}
