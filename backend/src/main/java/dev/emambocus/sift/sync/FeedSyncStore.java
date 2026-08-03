@@ -113,18 +113,13 @@ public class FeedSyncStore {
 
 	@Transactional
 	public void markSuccess(UUID credentialId) {
-		credentials.findById(credentialId).ifPresent(credential -> {
-			credential.recordSuccess(clock.instant());
-			credentials.save(credential);
-		});
+		credentials.recordSyncOutcome(credentialId, clock.instant(), SyncStatus.OK, null);
 	}
 
 	@Transactional
 	public void markFailure(UUID credentialId, SyncStatus status, String message) {
-		credentials.findById(credentialId).ifPresent(credential -> {
-			credential.recordFailure(clock.instant(), status, message);
-			credentials.save(credential);
-		});
+		credentials.recordSyncOutcome(credentialId, clock.instant(), status,
+				SourceCredential.abbreviateError(message));
 	}
 
 	private static void apply(FeedItem stored, IncomingItem item, Instant now) {
@@ -137,7 +132,14 @@ public class FeedSyncStore {
 		stored.setContextLabel(item.contextLabel());
 		stored.setContextUrl(item.contextUrl());
 		stored.setUrl(item.url());
-		stored.setSourceCreatedAt(item.sourceCreatedAt());
+		/*
+		 * both columns are NOT NULL, and a source that omits a timestamp must degrade rather than
+		 * fail the whole sync. one guard here beats one per adapter.
+		 */
+		Instant created = item.sourceCreatedAt() == null ? now : item.sourceCreatedAt();
+		stored.setSourceCreatedAt(created);
+		stored.setActivityAt(item.activityAt() == null ? created : item.activityAt());
+
 		stored.setRawPayload(item.rawPayload());
 		stored.setResolveWhenAbsent(item.resolveWhenAbsent());
 		stored.setLastSeenAt(now);

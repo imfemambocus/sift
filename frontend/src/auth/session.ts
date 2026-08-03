@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router";
 import { z } from "zod";
 import { ApiError, request } from "../lib/api";
 
@@ -63,11 +64,19 @@ export function useCreateAccount() {
 
 export function useSignOut() {
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+
 	return useMutation({
 		mutationFn: () => request<null>("/api/auth/logout", { method: "POST" }),
 		onSuccess: () => {
-			queryClient.clear();
+			/*
+			 * navigate explicitly rather than leaving it to the route guard noticing a null session.
+			 * this previously called queryClient.clear(), which also empties the mutation cache from
+			 * inside that mutation's own callback, and the redirect never happened.
+			 */
 			queryClient.setQueryData(SESSION_KEY, null);
+			queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SESSION_KEY[0] });
+			navigate("/sign-in", { replace: true });
 		},
 	});
 }

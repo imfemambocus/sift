@@ -10,6 +10,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -58,6 +59,22 @@ public class SourceService {
 
 		SourceCredential synced = store.forUser(userId, source).orElse(credential);
 		return SourceStatusResponse.of(synced, store.itemCount(userId, source), account);
+	}
+
+	/**
+	 * Reads a source right now instead of waiting for the sweep. Any source failure propagates, so a
+	 * manual check reports the real reason rather than quietly doing nothing.
+	 */
+	public Optional<SourceStatusResponse> syncNow(UUID userId, SourceType source) {
+		Optional<SourceCredential> credential = store.forUser(userId, source);
+		if (credential.isEmpty()) {
+			return Optional.empty();
+		}
+
+		syncService.sync(credential.get());
+
+		SourceCredential synced = store.forUser(userId, source).orElse(credential.get());
+		return Optional.of(SourceStatusResponse.of(synced, store.itemCount(userId, source), null));
 	}
 
 	public List<SourceStatusResponse> statuses(UUID userId) {

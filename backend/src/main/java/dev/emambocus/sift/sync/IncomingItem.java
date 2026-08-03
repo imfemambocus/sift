@@ -19,6 +19,11 @@ public record IncomingItem(
 		String contextUrl,
 		String url,
 		Instant sourceCreatedAt,
+		/**
+		 * When this last moved. The feed orders and timestamps by it, so for anything long-lived
+		 * (a merge request awaiting review) this must be the latest activity, not the creation date.
+		 */
+		Instant activityAt,
 		String rawPayload,
 		/**
 		 * True when this is state the source keeps reporting, so its disappearance means it is done.

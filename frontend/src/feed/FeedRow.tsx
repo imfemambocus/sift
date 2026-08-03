@@ -59,8 +59,14 @@ export function FeedRow({ item }: { readonly item: FeedItem }) {
 				)}
 
 				<Dot />
-				<time dateTime={item.createdAt} title={fullTimestamp(item.createdAt)} className="font-mono text-[11px]">
-					{shortAgo(item.createdAt)}
+				{/* the time shown is the last activity, not the creation date: an MR opened last
+				    week that got commits an hour ago is an hour old as far as anyone cares */}
+				<time
+					dateTime={item.activityAt}
+					title={`Last activity ${fullTimestamp(item.activityAt)}\nCreated ${fullTimestamp(item.createdAt)}`}
+					className="font-mono text-[11px]"
+				>
+					{shortAgo(item.activityAt)}
 				</time>
 			</span>
 		</motion.a>

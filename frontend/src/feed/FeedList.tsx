@@ -11,7 +11,7 @@ function intoDays(items: readonly FeedItem[]): Section[] {
 	const sections: { label: string; items: FeedItem[] }[] = [];
 
 	for (const item of items) {
-		const label = dayGroup(item.createdAt);
+		const label = dayGroup(item.activityAt);
 		const current = sections.at(-1);
 		if (current?.label === label) {
 			current.items.push(item);

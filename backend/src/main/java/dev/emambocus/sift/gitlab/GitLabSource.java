@@ -180,6 +180,23 @@ public class GitLabSource implements NotificationSource {
 		}
 	}
 
+	/*
+	 * a detail line for a merge request row, from fields already in the list response so it costs
+	 * nothing. what is *new* comes from the separate thread and commit rows; this says what the
+	 * merge request is like right now, and is always true rather than appearing and vanishing.
+	 */
+	private static String summary(GitLabResponses.MergeRequest mergeRequest) {
+		List<String> parts = new ArrayList<>();
+		Integer comments = mergeRequest.userNotesCount();
+		if (comments != null && comments > 0) {
+			parts.add(comments == 1 ? "1 comment" : comments + " comments");
+		}
+		if (Boolean.TRUE.equals(mergeRequest.hasConflicts())) {
+			parts.add("has conflicts");
+		}
+		return parts.isEmpty() ? null : String.join(", ", parts);
+	}
+
 	private static String titleOr(String title) {
 		return title == null || title.isBlank() ? UNTITLED : title;
 	}
@@ -206,13 +223,14 @@ public class GitLabSource implements NotificationSource {
 				kind,
 				Priority.HIGH,
 				mergeRequest.title(),
-				null,
+				summary(mergeRequest),
 				mergeRequest.author() == null ? null : mergeRequest.author().name(),
 				mergeRequest.author() == null ? null : mergeRequest.author().avatarUrl(),
 				projectPath(mergeRequest.references()),
 				projectUrl(mergeRequest.webUrl()),
 				mergeRequest.webUrl(),
 				mergeRequest.createdAt(),
+				mergeRequest.updatedAt() == null ? mergeRequest.createdAt() : mergeRequest.updatedAt(),
 				rawPayload(mergeRequest),
 				// an open merge request that stops being listed has been merged or closed
 				true);
@@ -250,6 +268,7 @@ public class GitLabSource implements NotificationSource {
 				contextUrl(todo),
 				todo.targetUrl(),
 				todo.createdAt(),
+				todo.updatedAt() == null ? todo.createdAt() : todo.updatedAt(),
 				rawPayload(todo),
 				// a to-do that stops being pending has been dealt with in GitLab
 				true);

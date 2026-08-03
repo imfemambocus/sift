@@ -73,8 +73,13 @@ public class FeedItem {
 	@Column(nullable = false)
 	private String url;
 
+	/** When the underlying thing was created. Kept for context, not for ordering. */
 	@Column(name = "source_created_at", nullable = false)
 	private Instant sourceCreatedAt;
+
+	/** When it last moved. This is what the feed sorts and shows, because it is what people mean. */
+	@Column(name = "activity_at", nullable = false)
+	private Instant activityAt;
 
 	@Column(name = "first_seen_at", nullable = false)
 	private Instant firstSeenAt;

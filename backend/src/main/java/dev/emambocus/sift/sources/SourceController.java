@@ -40,6 +40,15 @@ public class SourceController {
 		return sources.connect(principal.id(), type, request);
 	}
 
+	@PostMapping("/{source}/sync")
+	public SourceStatusResponse sync(@PathVariable String source,
+			@AuthenticationPrincipal SiftUserDetails principal) {
+
+		SourceType type = sources.resolve(source);
+		return sources.syncNow(principal.id(), type)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "That source is not connected."));
+	}
+
 	@DeleteMapping("/{source}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void disconnect(@PathVariable String source, @AuthenticationPrincipal SiftUserDetails principal) {

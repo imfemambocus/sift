@@ -4,6 +4,7 @@ import { Button } from "../components/Button";
 import { Field } from "../components/Field";
 import { FormError } from "../components/FormError";
 import { errorMessage } from "../lib/api";
+import { CheckNowButton } from "./CheckNowButton";
 import { agoPhrase } from "../lib/time";
 import type { SourceStatus } from "./sources";
 import { useConnectSource, useDisconnectSource, useSource } from "./sources";
@@ -72,7 +73,8 @@ function SourceCard({ source, canReplace, onReplace, onDisconnect, disconnecting
 				{source.itemCount} {source.itemCount === 1 ? "item" : "items"} in your feed.
 			</p>
 
-			<div className="flex items-center gap-2">
+			<div className="flex flex-wrap items-center gap-2">
+				<CheckNowButton source={source.source} />
 				{canReplace && (
 					<Button variant="ghost" onClick={onReplace}>
 						Replace token
