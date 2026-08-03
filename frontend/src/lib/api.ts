@@ -37,6 +37,17 @@ function detailFrom(payload: unknown): string | null {
 	return typeof detail === "string" ? detail : null;
 }
 
+/** Turns whatever a mutation failed with into something worth showing a person. */
+export function errorMessage(error: unknown): string | null {
+	if (error instanceof ApiError) {
+		return error.message;
+	}
+	if (error instanceof Error) {
+		return "Could not reach Sift. Check that the backend is running.";
+	}
+	return null;
+}
+
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 	const method = (init.method ?? "GET").toUpperCase();
 	const headers = new Headers(init.headers);

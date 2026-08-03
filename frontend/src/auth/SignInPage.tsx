@@ -4,7 +4,8 @@ import { Button } from "../components/Button";
 import { Field } from "../components/Field";
 import { FormError } from "../components/FormError";
 import { AuthLayout } from "./AuthLayout";
-import { errorMessage, useSignIn } from "./session";
+import { errorMessage } from "../lib/api";
+import { useSignIn } from "./session";
 
 export function SignInPage() {
 	const signIn = useSignIn();

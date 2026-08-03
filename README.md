@@ -20,13 +20,13 @@ a fuzzy command palette over the result.
 Built and verified:
 
 - accounts: register, sign in, sign out, session persistence
-- the app shell: icon rail, auth screens, light and dark themes
-- connecting GitLab with a personal access token, validated against the live instance
+- connecting GitLab from Settings with a personal access token, checked against the live instance
 - reading your GitLab to-do list on a schedule, ranked by how much it needs you
-- the feed API behind it
+- the feed itself, grouped by day, with priority shown as an edge marker rather than a badge
+- a visible warning when a token stops working, so an empty list is never mistaken for good news
 
-Not built yet: the feed's own screen (the app still shows empty states, so connecting a token is
-an API call for now), mute and boost rules, the fuzzy command palette, browser notifications.
+Not built yet: marking items read, mute and boost rules, the fuzzy command palette, browser
+notifications.
 
 ## Running it
 
@@ -53,17 +53,15 @@ deletes the volume.
 
 ## Connecting GitLab
 
-Create a personal access token with the **`read_api`** scope, then:
+Open **Settings**, put in your instance URL, and Sift shows you a link that opens GitLab's token
+page with the name and scope already filled in. Paste the token back and connect.
 
-```
-curl -X POST http://localhost:7777/api/sources/gitlab/connect \
-  -H 'Content-Type: application/json' \
-  -d '{"instanceUrl":"https://gitlab.example.org","token":"glpat-..."}'
-```
+The token is checked against your instance before it is stored, so a typo fails immediately rather
+than quietly never syncing, and a first read happens in the same step so your feed is populated
+straight away. After that Sift re-reads every five minutes.
 
-The token is checked against the instance before it is stored, so a typo fails immediately rather
-than quietly never syncing. A first sync runs as part of the same request, so `GET /api/feed`
-has something in it straight away. After that the sweep runs every five minutes.
+If a token later expires or is revoked, Sift says so on the feed itself rather than just going
+quiet, and Settings offers to replace it.
 
 `read_api` is read-only on purpose. Marking a to-do done through the API would need GitLab's full
 `api` scope, which is read *and* write across everything you can see, so Sift links out to GitLab

@@ -4,7 +4,8 @@ import { Button } from "../components/Button";
 import { Field } from "../components/Field";
 import { FormError } from "../components/FormError";
 import { AuthLayout } from "./AuthLayout";
-import { errorMessage, useCreateAccount } from "./session";
+import { errorMessage } from "../lib/api";
+import { useCreateAccount } from "./session";
 
 const MINIMUM_PASSWORD_LENGTH = 12;
 
