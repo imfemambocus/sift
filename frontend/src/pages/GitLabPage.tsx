@@ -5,6 +5,7 @@ import { useFeed } from "../feed/feed";
 import { FeedList } from "../feed/FeedList";
 import { FeedSkeleton } from "../feed/FeedSkeleton";
 import { Page } from "../layout/Page";
+import { CheckNowButton } from "../sources/CheckNowButton";
 import { SourceAlerts } from "../sources/SourceAlerts";
 import { useSource } from "../sources/sources";
 
@@ -16,7 +17,11 @@ export function GitLabPage() {
 	return (
 		<Page title="GitLab" description="To-dos, review requests and mentions from your GitLab instance.">
 			<SourceAlerts only="gitlab" />
-			<EventLegend items={items ?? []} />
+			{/* reachable from where the feed is, not buried in settings */}
+			<div className="flex flex-wrap items-center justify-between gap-3">
+				<EventLegend items={items ?? []} />
+				{source !== undefined && <CheckNowButton source="gitlab" />}
+			</div>
 			{isPending ? <FeedSkeleton /> : <FeedList items={items ?? []} empty={empty} />}
 		</Page>
 	);

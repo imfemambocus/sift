@@ -74,6 +74,9 @@ straight away. After that Sift re-reads every five minutes.
 If a token later expires or is revoked, Sift says so on the feed itself rather than just going
 quiet, and Settings offers to replace it.
 
+**Check now** reads a source immediately instead of waiting for the next pass, from Settings or from
+the source's own tab. If it fails it tells you why, rather than appearing to do nothing.
+
 `read_api` is read-only on purpose. Marking a to-do done through the API would need GitLab's full
 `api` scope, which is read *and* write across everything you can see, so Sift links out to GitLab
 for actions instead.
@@ -97,6 +100,17 @@ Everything lives in `.env`, copied from `.env.example`.
 | `SIFT_ALLOWED_EMAIL_DOMAINS` | Comma separated. Empty lets any address register, which suits a local instance only. |
 | `SIFT_SYNC_INTERVAL` | How often each source is re-read, as an ISO-8601 duration. Defaults to `PT5M`. Drop it to something like `PT20S` while trying things out, so you are not waiting five minutes to see a change. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database credentials. |
+
+## Checking it works
+
+`verify/` holds integration suites that drive the real backend over HTTP against a stand-in GitLab,
+on a real Postgres. Each one starts everything it needs and cleans up after itself:
+
+```
+verify/verify-participation.sh
+```
+
+Run one at a time. `verify/README.md` explains the rest, including the browser suite.
 
 ## Shape
 

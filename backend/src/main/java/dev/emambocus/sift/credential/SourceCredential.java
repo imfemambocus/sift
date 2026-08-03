@@ -92,20 +92,13 @@ public class SourceCredential {
 		this.lastError = null;
 	}
 
-	public void recordSuccess(Instant at) {
-		this.lastSyncAt = at;
-		this.lastSyncStatus = SyncStatus.OK;
-		this.lastError = null;
-	}
-
-	public void recordFailure(Instant at, SyncStatus status, String message) {
-		this.lastSyncAt = at;
-		this.lastSyncStatus = status;
-		this.lastError = abbreviate(message);
-	}
+	/*
+	 * the sync outcome is written by a targeted update on the repository, not by mutating this entity
+	 * and saving it: see the comment on recordSyncOutcome for why saving the whole row is unsafe here.
+	 */
 
 	// a stack-derived message can be enormous, and only the first line ever helps the user
-	private static String abbreviate(String message) {
+	public static String abbreviateError(String message) {
 		if (message == null) {
 			return null;
 		}

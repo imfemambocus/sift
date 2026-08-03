@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+# the participation rules, which are all about what must NOT be emitted as much as what must
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+# scratch: logs, cookies and the fixtures a run mutates. kept out of the repo.
+WORK="${SIFT_VERIFY_WORK:-$(mktemp -d)}"
+JAR="$WORK/p-cookies.txt"
+TODOS="$WORK/p-todos.json"
+MRS="$WORK/p-mrs.json"
+ISSUES="$WORK/p-issues.json"
+DISC="$WORK/p-disc.json"
+BASE=http://localhost:7779
+FAKE=http://127.0.0.1:7788
+PASS=0; FAIL=0
+
+cleanup() {
+  [ -n "${BOOT_PID:-}" ] && kill "$BOOT_PID" 2>/dev/null
+  [ -n "${STUB_PID:-}" ] && kill "$STUB_PID" 2>/dev/null
+  docker rm -f sift-p-db >/dev/null 2>&1
+}
+trap cleanup EXIT
+
+check() {
+  if [ "$3" = "$2" ]; then printf '  ok    %-56s %s\n' "$1" "$3"; PASS=$((PASS+1))
+  else printf '  FAIL  %-56s expected %s, got %s\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
+}
+
+# self is user 42 in the stub; 9 is a colleague
+echo '[]' > "$TODOS"
+echo '{"assigned_to_me": [], "created_by_me": []}' > "$ISSUES"
+cat > "$MRS" <<'JSON'
+{"review_requested": [{"id": 700, "iid": 20, "title": "Chart V2: Line chart color encoding",
+   "state": "opened", "draft": false, "sha": "aaa111", "project_id": 5, "user_notes_count": 3,
+   "web_url": "https://gl.example.org/team/web/-/merge_requests/20",
+   "created_at": "2026-08-01T09:00:00.000Z", "updated_at": "2026-08-03T09:00:00.000Z",
+   "author": {"id": 9, "username": "maxime", "name": "Maxime"},
+   "references": {"full": "team/web!20"}}],
+ "assigned": [], "authored": []}
+JSON
+# one thread the user is in, already containing their own comment
+cat > "$DISC" <<'JSON'
+{"merge_requests:5:20": [
+  {"id": "d1", "notes": [
+    {"id": 1001, "body": "This colour ramp is not colourblind safe.", "system": false,
+     "created_at": "2026-08-02T10:00:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}}]}]}
+JSON
+
+PORT=7788 TODOS_FILE="$TODOS" MRS_FILE="$MRS" ISSUES_FILE="$ISSUES" DISCUSSIONS_FILE="$DISC" \
+  python3 "$HERE/fake-gitlab.py" &
+STUB_PID=$!
+for _ in $(seq 1 30); do curl -sf -o /dev/null -H 'PRIVATE-TOKEN: good-token' "$FAKE/api/v4/user" && break; sleep 1; done
+
+docker rm -f sift-p-db >/dev/null 2>&1
+docker run -d --rm --name sift-p-db -e POSTGRES_DB=sift -e POSTGRES_USER=sift \
+  -e POSTGRES_PASSWORD=sift -p 5439:5432 postgres:17-alpine >/dev/null
+for _ in $(seq 1 60); do docker exec sift-p-db pg_isready -U sift -d sift >/dev/null 2>&1 && break; sleep 1; done
+
+SIFT_DB_URL=jdbc:postgresql://localhost:5439/sift SIFT_DB_USER=sift SIFT_DB_PASSWORD=sift \
+SIFT_ENCRYPTION_KEY="$(openssl rand -base64 32)" SIFT_SYNC_INITIAL_DELAY=PT1H SIFT_PORT=7779 \
+  "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/p-boot.log" 2>&1 &
+BOOT_PID=$!
+for _ in $(seq 1 150); do
+  grep -q "Started SiftApplication" "$WORK/p-boot.log" 2>/dev/null && break
+  grep -qE "APPLICATION FAILED TO START|FAILURE: " "$WORK/p-boot.log" 2>/dev/null && {
+    sed -n '/APPLICATION FAILED TO START/,/^$/p' "$WORK/p-boot.log" | head -20; exit 1; }
+  sleep 1
+done
+echo "backend up"; echo
+
+csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
+api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
+post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
+connect() { post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null; }
+kinds() { api "$BASE/api/feed" | python3 -c 'import json,sys; print(" ".join(sorted(i["kind"] for i in json.load(sys.stdin))))'; }
+count() { api "$BASE/api/feed" | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1'))"; }
+
+api "$BASE/actuator/health" >/dev/null
+post -d '{"email":"a@b.co","displayName":"A","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
+post -d '{"email":"a@b.co","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
+
+echo "--- first sync only baselines: an existing thread must not be announced ---"
+connect
+check "kinds after first sync" "mr_review_requested" "$(kinds)"
+check "no thread rows from history" 0 "$(count new_comment)"
+check "no new_thread rows either" 0 "$(count new_thread)"
+check "threads recorded as baseline" 1 "$(docker exec sift-p-db psql -U sift -d sift -qtAc 'select count(*) from gitlab_watched_discussions' | tr -d ' ')"
+
+echo
+echo "--- Maxime replies and pushes commits: one row per thread, plus the commits ---"
+python3 - "$DISC" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+data["merge_requests:5:20"][0]["notes"].append(
+    {"id": 1002, "body": "Fixed, switched to the Okabe-Ito ramp and pushed.", "system": False,
+     "created_at": "2026-08-03T11:00:00.000Z", "author": {"id": 9, "username": "maxime", "name": "Maxime"}})
+data["merge_requests:5:20"][0]["notes"].append(
+    {"id": 1003, "body": "added 2 commits", "system": True,
+     "created_at": "2026-08-03T11:01:00.000Z", "author": {"id": 9, "username": "maxime", "name": "Maxime"}})
+json.dump(data, open(path, "w"))
+PY
+python3 - "$MRS" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+data["review_requested"][0]["sha"] = "bbb222"
+data["review_requested"][0]["updated_at"] = "2026-08-03T11:01:00.000Z"
+json.dump(data, open(path, "w"))
+PY
+connect
+check "kinds now" "changes_pushed mr_review_requested new_comment" "$(kinds)"
+check "one row for the thread, not one per reply" 1 "$(count new_comment)"
+check "commits noticed via sha" 1 "$(count changes_pushed)"
+check "commits are high, since he is the reviewer" '"HIGH"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["priority"] for i in json.load(sys.stdin) if i["kind"]=="changes_pushed")))')"
+check "snippet is the reply, not the system note" '"Fixed, switched to the Okabe-Ito ramp and pushed."' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["body"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
+check "deep links to the note" '"https://gl.example.org/team/web/-/merge_requests/20#note_1002"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["url"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
+
+echo
+echo "--- an old merge request with fresh activity reads as fresh ---"
+MRROW='import json,sys; print(json.dumps(next(i for i in json.load(sys.stdin) if i["kind"]=="mr_review_requested")))'
+check "created stays the day it was opened" '"2026-08-01T09:00:00Z"' "$(api "$BASE/api/feed" | python3 -c "$MRROW" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["createdAt"]))')"
+check "activity follows the merge request updated_at" '"2026-08-03T11:01:00Z"' "$(api "$BASE/api/feed" | python3 -c "$MRROW" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["activityAt"]))')"
+check "feed is ordered newest activity first" True "$(api "$BASE/api/feed" | python3 -c 'import json,sys
+feed = json.load(sys.stdin)
+print(feed == sorted(feed, key=lambda i: i["activityAt"], reverse=True))')"
+check "the merge request row has a detail line" '"3 comments"' "$(api "$BASE/api/feed" | python3 -c "$MRROW" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["body"]))')"
+
+echo
+echo "--- syncing again with nothing new must not re-announce ---"
+connect
+check "still one thread row" 1 "$(count new_comment)"
+check "still one commits row" 1 "$(count changes_pushed)"
+
+echo
+echo "--- my own reply is not news ---"
+python3 - "$DISC" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["merge_requests:5:20"][0]["notes"].append(
+    {"id": 1004, "body": "Great, thanks.", "system": False,
+     "created_at": "2026-08-03T12:00:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}})
+json.dump(data, open(sys.argv[1], "w"))
+PY
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["review_requested"][0]["updated_at"] = "2026-08-03T12:00:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "own reply did not create a row" 1 "$(count new_comment)"
+check "own reply still advanced the watermark" 1004 "$(docker exec sift-p-db psql -U sift -d sift -qtAc 'select last_note_id from gitlab_watched_discussions' | tr -d ' ')"
+
+echo
+echo "--- a brand new thread is a new_thread, not a new_comment ---"
+python3 - "$DISC" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["merge_requests:5:20"].append(
+    {"id": "d2", "notes": [
+        {"id": 2001, "body": "Separate question about the tooltip.", "system": False,
+         "created_at": "2026-08-03T13:00:00.000Z", "author": {"id": 9, "username": "maxime", "name": "Maxime"}}]})
+json.dump(data, open(sys.argv[1], "w"))
+PY
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["review_requested"][0]["updated_at"] = "2026-08-03T13:00:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "one new_thread appeared" 1 "$(count new_thread)"
+check "the older thread row is untouched" 1 "$(count new_comment)"
+
+echo
+echo "--- an unchanged resource costs no discussion request ---"
+BEFORE=$(grep -c "discussions" "$WORK/p-boot.log")
+connect
+check "no extra discussion reads when updated_at is unchanged" "$BEFORE" "$(grep -c 'discussions' "$WORK/p-boot.log")"
+
+echo
+echo "RESULT: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] || exit 1

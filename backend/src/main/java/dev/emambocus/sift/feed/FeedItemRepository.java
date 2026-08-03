@@ -16,9 +16,9 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 
 	List<FeedItem> findByUserIdAndSource(UUID userId, SourceType source);
 
-	List<FeedItem> findByUserIdAndResolvedAtIsNullOrderBySourceCreatedAtDesc(UUID userId);
+	List<FeedItem> findByUserIdAndResolvedAtIsNullOrderByActivityAtDesc(UUID userId);
 
-	List<FeedItem> findByUserIdAndSourceAndResolvedAtIsNullOrderBySourceCreatedAtDesc(
+	List<FeedItem> findByUserIdAndSourceAndResolvedAtIsNullOrderByActivityAtDesc(
 			UUID userId, SourceType source);
 
 	long countByUserIdAndSourceAndResolvedAtIsNull(UUID userId, SourceType source);

@@ -20,6 +20,7 @@ const feedItemSchema = z.object({
 	contextUrl: z.string().nullable(),
 	url: z.string(),
 	createdAt: z.string(),
+	activityAt: z.string(),
 	read: z.boolean(),
 });
 

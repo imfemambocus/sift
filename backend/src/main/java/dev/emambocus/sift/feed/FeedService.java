@@ -19,8 +19,8 @@ public class FeedService {
 	@Transactional(readOnly = true)
 	public List<FeedItemResponse> feed(UUID userId, SourceType source) {
 		List<FeedItem> found = source == null
-				? items.findByUserIdAndResolvedAtIsNullOrderBySourceCreatedAtDesc(userId)
-				: items.findByUserIdAndSourceAndResolvedAtIsNullOrderBySourceCreatedAtDesc(userId, source);
+				? items.findByUserIdAndResolvedAtIsNullOrderByActivityAtDesc(userId)
+				: items.findByUserIdAndSourceAndResolvedAtIsNullOrderByActivityAtDesc(userId, source);
 
 		return found.stream().map(FeedItemResponse::of).toList();
 	}

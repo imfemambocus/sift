@@ -185,6 +185,7 @@ class GitLabParticipation {
 				null,
 				resource.webUrl(),
 				now,
+				resource.updatedAt() == null ? now : resource.updatedAt(),
 				null,
 				// commits landing is an event; it does not un-happen on the next sweep
 				false);
@@ -206,6 +207,7 @@ class GitLabParticipation {
 				null,
 				// deep link to the note, so clicking lands on what changed rather than the top
 				resource.webUrl() + "#note_" + newest.id(),
+				newest.createdAt(),
 				newest.createdAt(),
 				null,
 				// a reply arrived once. absence next sweep says nothing about whether it was read.

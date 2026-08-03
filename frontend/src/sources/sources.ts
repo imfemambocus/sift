@@ -59,6 +59,21 @@ export function useConnectSource(source: string) {
 	});
 }
 
+/** Reads the source now rather than waiting for the sweep. */
+export function useSyncSource(source: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async () => {
+			const payload = await request<unknown>(`/api/sources/${source}/sync`, { method: "POST" });
+			return sourceStatusSchema.parse(payload);
+		},
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
+			await queryClient.invalidateQueries({ queryKey: [FEED_KEY] });
+		},
+	});
+}
+
 export function useDisconnectSource(source: string) {
 	const queryClient = useQueryClient();
 	return useMutation({

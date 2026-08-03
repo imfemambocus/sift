@@ -19,7 +19,10 @@ public record FeedItemResponse(
 		String contextLabel,
 		String contextUrl,
 		String url,
+		/** When the thing was created, for context. */
 		Instant createdAt,
+		/** When it last moved. What the list orders by and shows. */
+		Instant activityAt,
 		boolean read) {
 
 	static FeedItemResponse of(FeedItem item) {
@@ -36,6 +39,7 @@ public record FeedItemResponse(
 				item.getContextUrl(),
 				item.getUrl(),
 				item.getSourceCreatedAt(),
+				item.getActivityAt(),
 				item.getReadAt() != null);
 	}
 }
