@@ -20,5 +20,22 @@ services:
       timeout: 5s
       retries: 10
 
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    # without this the app races postgres on a cold start and crash-loops
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SIFT_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
+      SIFT_DB_USER: ${POSTGRES_USER}
+      SIFT_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      SIFT_ENCRYPTION_KEY: ${SIFT_ENCRYPTION_KEY}
+      SIFT_ALLOWED_EMAIL_DOMAINS: ${SIFT_ALLOWED_EMAIL_DOMAINS:-}
+    ports:
+      - "127.0.0.1:7777:7777"
+
 volumes:
   db-data:

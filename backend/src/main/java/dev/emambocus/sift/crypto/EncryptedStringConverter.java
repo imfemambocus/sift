@@ -2,6 +2,8 @@ package dev.emambocus.sift.crypto;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /*
@@ -11,6 +13,8 @@ import org.springframework.stereotype.Component;
 @Component
 @Converter
 public class EncryptedStringConverter implements AttributeConverter<String, String> {
+
+	private static final Logger log = LoggerFactory.getLogger(EncryptedStringConverter.class);
 
 	private final TokenCipher cipher;
 
@@ -23,8 +27,23 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
 		return attribute == null ? null : cipher.encrypt(attribute);
 	}
 
+	/*
+	 * an unreadable value becomes null rather than an exception. it means the encryption key changed
+	 * (or the column was tampered with), and throwing here would fail every read of the row,
+	 * including the ones that never wanted the token: listing which sources are connected would 500
+	 * instead of being able to tell the user to reconnect. callers treat a null token as "reconnect".
+	 */
 	@Override
 	public String convertToEntityAttribute(String dbData) {
-		return dbData == null ? null : cipher.decrypt(dbData);
+		if (dbData == null) {
+			return null;
+		}
+		try {
+			return cipher.decrypt(dbData);
+		}
+		catch (RuntimeException ex) {
+			log.warn("a stored token could not be decrypted, treating it as absent: {}", ex.getMessage());
+			return null;
+		}
 	}
 }

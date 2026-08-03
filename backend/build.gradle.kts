@@ -25,6 +25,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-security")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
+	// boot 4 no longer ships RestClient.Builder with webmvc; the http client is its own module
+	implementation("org.springframework.boot:spring-boot-starter-restclient")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.springframework.session:spring-session-jdbc")
 	compileOnly("org.projectlombok:lombok")
@@ -44,4 +46,10 @@ dependencies {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+// on a framework this new, a rename like UNPROCESSABLE_ENTITY -> UNPROCESSABLE_CONTENT is silent
+// without this, so deprecations are surfaced rather than discovered at the next major upgrade
+tasks.withType<JavaCompile> {
+	options.compilerArgs.add("-Xlint:deprecation")
 }

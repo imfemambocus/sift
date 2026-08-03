@@ -1,0 +1,101 @@
+package dev.emambocus.sift.feed;
+
+import dev.emambocus.sift.credential.SourceType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+/**
+ * One thing that wants your attention, normalised away from whichever source produced it. Every
+ * field here has to make sense for a future source too, so nothing GitLab-shaped belongs in it;
+ * that goes in {@code rawPayload}.
+ */
+@Entity
+@Table(name = "feed_items")
+@Getter
+@Setter
+@NoArgsConstructor
+public class FeedItem {
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.UUID)
+	private UUID id;
+
+	@Column(name = "user_id", nullable = false)
+	private UUID userId;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private SourceType source;
+
+	/** Stable id within the source, prefixed by kind of record (for example {@code todo:4213}). */
+	@Column(name = "source_id", nullable = false)
+	private String sourceId;
+
+	/** The source's own action token, e.g. {@code review_requested}. Rules match on this. */
+	@Column(nullable = false)
+	private String kind;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private Priority priority;
+
+	@Column(nullable = false)
+	private String title;
+
+	@Column
+	private String body;
+
+	@Column(name = "actor_name")
+	private String actorName;
+
+	@Column(name = "actor_avatar_url")
+	private String actorAvatarUrl;
+
+	@Column(name = "context_label")
+	private String contextLabel;
+
+	@Column(name = "context_url")
+	private String contextUrl;
+
+	@Column(nullable = false)
+	private String url;
+
+	@Column(name = "source_created_at", nullable = false)
+	private Instant sourceCreatedAt;
+
+	@Column(name = "first_seen_at", nullable = false)
+	private Instant firstSeenAt;
+
+	@Column(name = "last_seen_at", nullable = false)
+	private Instant lastSeenAt;
+
+	@Column(name = "read_at")
+	private Instant readAt;
+
+	@Column(name = "notified_at")
+	private Instant notifiedAt;
+
+	/*
+	 * set when the item stops coming back from the source, rather than deleting the row: it keeps
+	 * the history, and it stops a reappearing item being notified a second time
+	 */
+	@Column(name = "resolved_at")
+	private Instant resolvedAt;
+
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "raw_payload")
+	private String rawPayload;
+}

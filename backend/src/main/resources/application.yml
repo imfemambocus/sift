@@ -39,3 +39,9 @@ sift:
   registration:
     # empty means any address may register, which is only appropriate for a local instance
     allowed-email-domains: ${SIFT_ALLOWED_EMAIL_DOMAINS:}
+  sync:
+    # the scheduled sweep reads it as a placeholder, so it must always have a value here
+    interval: ${SIFT_SYNC_INTERVAL:PT5M}
+    initial-delay: ${SIFT_SYNC_INITIAL_DELAY:PT30S}
+    # a safety net on paging, not an expected limit: hitting it is logged as incomplete
+    max-pages: ${SIFT_SYNC_MAX_PAGES:20}
