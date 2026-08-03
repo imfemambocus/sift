@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,12 +60,23 @@ public class FeedSyncStore {
 		Map<String, FeedItem> existing = items.findByUserIdAndSource(userId, source).stream()
 				.collect(Collectors.toMap(FeedItem::getSourceId, Function.identity(), (first, second) -> first));
 
+		/*
+		 * an adapter must not hand over two items with the same id, and one reading several
+		 * endpoints can do it by accident (a merge request that is both assigned to you and awaiting
+		 * your review). left through, the second insert violates the unique key mid-flush and takes
+		 * the whole sync down, so it is collapsed here rather than trusted not to happen.
+		 */
+		Map<String, IncomingItem> unique = new LinkedHashMap<>();
+		for (IncomingItem item : incoming) {
+			unique.putIfAbsent(item.sourceId(), item);
+		}
+
 		Set<String> seen = new HashSet<>();
 		List<FeedItem> touched = new ArrayList<>();
 		int added = 0;
 		int updated = 0;
 
-		for (IncomingItem item : incoming) {
+		for (IncomingItem item : unique.values()) {
 			seen.add(item.sourceId());
 			FeedItem stored = existing.get(item.sourceId());
 			if (stored == null) {
@@ -84,6 +96,10 @@ public class FeedSyncStore {
 
 		int resolved = 0;
 		for (FeedItem stored : existing.values()) {
+			// an event is never resolved by absence; only state is
+			if (!stored.isResolveWhenAbsent()) {
+				continue;
+			}
 			if (!seen.contains(stored.getSourceId()) && stored.getResolvedAt() == null) {
 				stored.setResolvedAt(now);
 				touched.add(stored);
@@ -92,7 +108,7 @@ public class FeedSyncStore {
 		}
 
 		items.saveAll(touched);
-		return new SyncOutcome(added, updated, resolved, incoming.size());
+		return new SyncOutcome(added, updated, resolved, unique.size());
 	}
 
 	@Transactional
@@ -123,6 +139,7 @@ public class FeedSyncStore {
 		stored.setUrl(item.url());
 		stored.setSourceCreatedAt(item.sourceCreatedAt());
 		stored.setRawPayload(item.rawPayload());
+		stored.setResolveWhenAbsent(item.resolveWhenAbsent());
 		stored.setLastSeenAt(now);
 		// something that came back is live again, but notifiedAt is left alone so it is not
 		// announced a second time

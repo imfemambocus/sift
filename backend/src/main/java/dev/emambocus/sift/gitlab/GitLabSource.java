@@ -9,11 +9,15 @@ import dev.emambocus.sift.feed.Priority;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.NotificationSource;
 import dev.emambocus.sift.sync.SourceAccount;
+import dev.emambocus.sift.sync.SourceUnavailableException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -49,11 +53,14 @@ public class GitLabSource implements NotificationSource {
 	private final Set<String> reportedUnknownActions = ConcurrentHashMap.newKeySet();
 
 	private final GitLabClient client;
+	private final GitLabParticipation participation;
 	private final ObjectMapper objectMapper;
 	private final int maxPages;
 
-	GitLabSource(GitLabClient client, ObjectMapper objectMapper, SiftProperties properties) {
+	GitLabSource(GitLabClient client, GitLabParticipation participation, ObjectMapper objectMapper,
+			SiftProperties properties) {
 		this.client = client;
+		this.participation = participation;
 		this.objectMapper = objectMapper;
 		this.maxPages = properties.sync().maxPages();
 	}
@@ -69,13 +76,163 @@ public class GitLabSource implements NotificationSource {
 		return new SourceAccount(user.username(), user.name(), user.avatarUrl(), user.webUrl());
 	}
 
+	/*
+	 * Todos alone are not enough. A to-do is an event: GitLab does not always raise one, it can be
+	 * dismissed, and once it is gone the merge request waiting on you is invisible. So open merge
+	 * requests where you are a reviewer or the assignee are read as well, which is state and is
+	 * therefore always true. A merge request already covered by a to-do is dropped, since the to-do
+	 * carries who asked and when.
+	 */
 	@Override
 	public List<IncomingItem> fetch(SourceCredential credential) {
-		return client
-				.fetchPendingTodos(credential.getInstanceUrl(), credential.getAccessToken(), maxPages)
-				.stream()
-				.map(this::toIncomingItem)
-				.toList();
+		String instanceUrl = credential.getInstanceUrl();
+		String token = credential.getAccessToken();
+
+		// also the cheapest possible check that the token still works, before any real paging
+		GitLabResponses.User me = client.fetchCurrentUser(instanceUrl, token);
+		if (me.id() == null) {
+			throw new SourceUnavailableException("GitLab did not say who the token belongs to.");
+		}
+
+		List<GitLabResponses.Todo> todos = client.fetchPendingTodos(instanceUrl, token, maxPages);
+		Set<String> covered = todos.stream()
+				.map(GitLabResponses.Todo::targetUrl)
+				.filter(Objects::nonNull)
+				.collect(Collectors.toUnmodifiableSet());
+
+		List<GitLabResponses.MergeRequest> reviewing =
+				client.fetchReviewRequested(instanceUrl, token, me.id(), maxPages);
+		List<GitLabResponses.MergeRequest> assigned = client.fetchAssignedToMe(instanceUrl, token, maxPages);
+		List<GitLabResponses.MergeRequest> authored = client.fetchAuthoredMergeRequests(instanceUrl, token, maxPages);
+		List<GitLabResponses.Issue> assignedIssues = client.fetchIssues(instanceUrl, token, "assigned_to_me", maxPages);
+		List<GitLabResponses.Issue> authoredIssues = client.fetchIssues(instanceUrl, token, "created_by_me", maxPages);
+
+		Map<String, IncomingItem> items = new LinkedHashMap<>();
+		for (GitLabResponses.Todo todo : todos) {
+			if (todo.id() == null) {
+				continue;
+			}
+			IncomingItem item = toIncomingItem(todo);
+			items.putIfAbsent(item.sourceId(), item);
+		}
+
+		// review requests first: when a merge request is both, that is the more useful framing
+		collect(items, reviewing, "mr_review_requested", covered);
+		collect(items, assigned, "mr_assigned", covered);
+
+		/*
+		 * everything above is "you are wanted". this is "the thing you are part of moved", which is
+		 * a different question and the one GitLab's to-do list cannot answer at all. issues are
+		 * watched but never emitted as items of their own; to-dos already cover being assigned one.
+		 */
+		List<GitLabParticipation.Watched> watched = new ArrayList<>();
+		addWatched(watched, reviewing, true);
+		addWatched(watched, assigned, false);
+		addWatched(watched, authored, false);
+		addWatchedIssues(watched, assignedIssues);
+		addWatchedIssues(watched, authoredIssues);
+
+		for (IncomingItem item : participation.collect(credential, me.id(), watched, maxPages)) {
+			items.putIfAbsent(item.sourceId(), item);
+		}
+
+		return List.copyOf(items.values());
+	}
+
+	private static void addWatched(List<GitLabParticipation.Watched> watched,
+			List<GitLabResponses.MergeRequest> mergeRequests, boolean reviewing) {
+
+		for (GitLabResponses.MergeRequest mergeRequest : mergeRequests) {
+			// without a project id and iid there is no path to read its discussions from
+			if (mergeRequest.webUrl() == null || mergeRequest.projectId() == null || mergeRequest.iid() == null) {
+				continue;
+			}
+			watched.add(new GitLabParticipation.Watched(
+					GitLabResourceType.MERGE_REQUEST,
+					mergeRequest.projectId(),
+					mergeRequest.iid(),
+					titleOr(mergeRequest.title()),
+					mergeRequest.webUrl(),
+					projectPath(mergeRequest.references()),
+					mergeRequest.updatedAt(),
+					mergeRequest.sha(),
+					reviewing));
+		}
+	}
+
+	private static void addWatchedIssues(List<GitLabParticipation.Watched> watched,
+			List<GitLabResponses.Issue> issues) {
+
+		for (GitLabResponses.Issue issue : issues) {
+			if (issue.webUrl() == null || issue.projectId() == null || issue.iid() == null) {
+				continue;
+			}
+			watched.add(new GitLabParticipation.Watched(
+					GitLabResourceType.ISSUE,
+					issue.projectId(),
+					issue.iid(),
+					titleOr(issue.title()),
+					issue.webUrl(),
+					projectPath(issue.references()),
+					issue.updatedAt(),
+					null,
+					false));
+		}
+	}
+
+	private static String titleOr(String title) {
+		return title == null || title.isBlank() ? UNTITLED : title;
+	}
+
+	private void collect(Map<String, IncomingItem> items, List<GitLabResponses.MergeRequest> mergeRequests,
+			String kind, Set<String> covered) {
+
+		for (GitLabResponses.MergeRequest mergeRequest : mergeRequests) {
+			// a draft says "not ready" outright, so it is not something waiting on anyone yet
+			if (Boolean.TRUE.equals(mergeRequest.draft()) || covered.contains(mergeRequest.webUrl())) {
+				continue;
+			}
+			if (mergeRequest.id() == null) {
+				continue;
+			}
+			IncomingItem item = toIncomingItem(mergeRequest, kind);
+			items.putIfAbsent(item.sourceId(), item);
+		}
+	}
+
+	private IncomingItem toIncomingItem(GitLabResponses.MergeRequest mergeRequest, String kind) {
+		return new IncomingItem(
+				"mr:" + mergeRequest.id(),
+				kind,
+				Priority.HIGH,
+				mergeRequest.title(),
+				null,
+				mergeRequest.author() == null ? null : mergeRequest.author().name(),
+				mergeRequest.author() == null ? null : mergeRequest.author().avatarUrl(),
+				projectPath(mergeRequest.references()),
+				projectUrl(mergeRequest.webUrl()),
+				mergeRequest.webUrl(),
+				mergeRequest.createdAt(),
+				rawPayload(mergeRequest),
+				// an open merge request that stops being listed has been merged or closed
+				true);
+	}
+
+	// the merge request API never returns the project path directly, only inside references.full
+	private static String projectPath(GitLabResponses.References references) {
+		if (references == null || references.full() == null) {
+			return null;
+		}
+		int separator = references.full().indexOf('!');
+		return separator < 0 ? references.full() : references.full().substring(0, separator);
+	}
+
+	private static String projectUrl(String mergeRequestUrl) {
+		if (mergeRequestUrl == null) {
+			return null;
+		}
+		int marker = mergeRequestUrl.indexOf("/-/merge_requests");
+		return marker < 0 ? null : mergeRequestUrl.substring(0, marker);
 	}
 
 	private IncomingItem toIncomingItem(GitLabResponses.Todo todo) {
@@ -93,7 +250,9 @@ public class GitLabSource implements NotificationSource {
 				contextUrl(todo),
 				todo.targetUrl(),
 				todo.createdAt(),
-				rawPayload(todo));
+				rawPayload(todo),
+				// a to-do that stops being pending has been dealt with in GitLab
+				true);
 	}
 
 	private Priority priorityOf(String actionName) {
@@ -136,13 +295,13 @@ public class GitLabSource implements NotificationSource {
 		return todo.group() == null ? null : todo.group().webUrl();
 	}
 
-	private String rawPayload(GitLabResponses.Todo todo) {
+	private String rawPayload(Object payload) {
 		try {
-			return objectMapper.writeValueAsString(todo);
+			return objectMapper.writeValueAsString(payload);
 		}
 		catch (JacksonException ex) {
 			// the payload is only ever used for a detail view, so losing it must not fail the sync
-			log.warn("could not serialise GitLab todo {} for storage: {}", todo.id(), ex.getMessage());
+			log.warn("could not serialise a GitLab record for storage: {}", ex.getMessage());
 			return null;
 		}
 	}

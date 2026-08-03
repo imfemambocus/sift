@@ -34,6 +34,13 @@ services:
       SIFT_DB_PASSWORD: ${POSTGRES_PASSWORD}
       SIFT_ENCRYPTION_KEY: ${SIFT_ENCRYPTION_KEY}
       SIFT_ALLOWED_EMAIL_DOMAINS: ${SIFT_ALLOWED_EMAIL_DOMAINS:-}
+      # forwarded so the sweep stays tunable from .env; shortening it is the only practical way to
+      # watch a sync happen without waiting five minutes
+      SIFT_SYNC_INTERVAL: ${SIFT_SYNC_INTERVAL:-PT5M}
+      SIFT_SYNC_INITIAL_DELAY: ${SIFT_SYNC_INITIAL_DELAY:-PT30S}
+      SIFT_SYNC_MAX_PAGES: ${SIFT_SYNC_MAX_PAGES:-20}
+    # SIFT_PORT is deliberately not forwarded: the published port below is fixed, and changing only
+    # the app's side would break the mapping
     ports:
       - "127.0.0.1:7777:7777"
 

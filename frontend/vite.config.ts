@@ -2,7 +2,8 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-const BACKEND = "http://localhost:7777";
+// overridable so a dev server can be pointed at a second backend without touching a running one
+const BACKEND = process.env.SIFT_BACKEND_URL ?? "http://localhost:7777";
 
 /*
  * proxying keeps the dev server on one origin with the api, so the session cookie and the csrf

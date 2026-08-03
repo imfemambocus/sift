@@ -19,5 +19,11 @@ public record IncomingItem(
 		String contextUrl,
 		String url,
 		Instant sourceCreatedAt,
-		String rawPayload) {
+		String rawPayload,
+		/**
+		 * True when this is state the source keeps reporting, so its disappearance means it is done.
+		 * False when it is an event: it happened once, and the next sync not mentioning it again
+		 * says nothing at all about whether the user has dealt with it.
+		 */
+		boolean resolveWhenAbsent) {
 }

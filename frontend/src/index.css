@@ -18,6 +18,15 @@
 	--accent-fg: #ffffff;
 	--accent-soft: #f0e7d5;
 	--danger: #b4342a;
+
+	/* event families. muted on purpose: six hues on a quiet page becomes a fruit salad fast */
+	--event-review: #5b4bc4;
+	--event-assigned: #2a6bb0;
+	--event-mention: #b03d7a;
+	--event-discussion: #1f7d70;
+	--event-blocked: #b4342a;
+	--event-other: #8a8f98;
+
 	color-scheme: light;
 }
 
@@ -32,6 +41,14 @@
 	--accent-fg: #17130a;
 	--accent-soft: #2a2318;
 	--danger: #e2685c;
+
+	--event-review: #9a8ae0;
+	--event-assigned: #5c9ce0;
+	--event-mention: #e07ab4;
+	--event-discussion: #4fbfae;
+	--event-blocked: #e2685c;
+	--event-other: #6e747e;
+
 	color-scheme: dark;
 }
 
@@ -48,6 +65,13 @@
 	--color-accent-soft: var(--accent-soft);
 	--color-danger: var(--danger);
 
+	--color-event-review: var(--event-review);
+	--color-event-assigned: var(--event-assigned);
+	--color-event-mention: var(--event-mention);
+	--color-event-discussion: var(--event-discussion);
+	--color-event-blocked: var(--event-blocked);
+	--color-event-other: var(--event-other);
+
 	--font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
 	--font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
@@ -61,6 +85,19 @@
 	::before,
 	::after {
 		border-color: var(--border);
+	}
+
+	/*
+	 * the native scrollbar is hidden and replaced by WindowScrollbar. the document is still the
+	 * scroller, so this is purely cosmetic and no scrolling behaviour changes.
+	 */
+	html {
+		scrollbar-width: none;
+		-ms-overflow-style: none;
+	}
+
+	html::-webkit-scrollbar {
+		display: none;
 	}
 
 	body {

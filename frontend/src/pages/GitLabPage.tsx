@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { EmptyState } from "../components/EmptyState";
+import { EventLegend } from "../feed/EventLegend";
 import { useFeed } from "../feed/feed";
 import { FeedList } from "../feed/FeedList";
 import { FeedSkeleton } from "../feed/FeedSkeleton";
@@ -15,6 +16,7 @@ export function GitLabPage() {
 	return (
 		<Page title="GitLab" description="To-dos, review requests and mentions from your GitLab instance.">
 			<SourceAlerts only="gitlab" />
+			<EventLegend items={items ?? []} />
 			{isPending ? <FeedSkeleton /> : <FeedList items={items ?? []} empty={empty} />}
 		</Page>
 	);

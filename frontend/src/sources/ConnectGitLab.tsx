@@ -4,7 +4,7 @@ import { Button } from "../components/Button";
 import { Field } from "../components/Field";
 import { FormError } from "../components/FormError";
 import { errorMessage } from "../lib/api";
-import { shortAgo } from "../lib/time";
+import { agoPhrase } from "../lib/time";
 import type { SourceStatus } from "./sources";
 import { useConnectSource, useDisconnectSource, useSource } from "./sources";
 
@@ -31,7 +31,7 @@ function statusLine(source: SourceStatus): { tone: Tone; text: string } {
 	if (source.lastSyncAt === null) {
 		return { tone: "ok", text: "Connected." };
 	}
-	return { tone: "ok", text: `Connected. Last read ${shortAgo(source.lastSyncAt)} ago.` };
+	return { tone: "ok", text: `Connected. Last read ${agoPhrase(source.lastSyncAt)}.` };
 }
 
 /*
