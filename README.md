@@ -21,30 +21,53 @@ Built and verified:
 
 - accounts: register, sign in, sign out, session persistence
 - the app shell: icon rail, auth screens, light and dark themes
-- the encrypted credential store, ready for a GitLab token
-- database migrations
+- connecting GitLab with a personal access token, validated against the live instance
+- reading your GitLab to-do list on a schedule, ranked by how much it needs you
+- the feed API behind it
 
-Not built yet: the GitLab sync, the feed itself, the packaged single-container image.
+Not built yet: the feed's own screen (the app still shows empty states, so connecting a token is
+an API call for now), mute and boost rules, the fuzzy command palette, browser notifications.
 
 ## Running it
 
-Docker is the only prerequisite for the backend. The Gradle wrapper provisions its own Java 25
-toolchain, so whatever JDK you happen to have does not matter.
+Docker is the only prerequisite. The Gradle wrapper provisions its own Java 25 toolchain, so
+whatever JDK you happen to have does not matter.
 
 ```
-make db        # starts postgres, and writes .env with a fresh encryption key on first run
-make backend   # runs the backend on http://localhost:7777
+make up        # builds and runs everything on http://localhost:7777
 ```
 
-Then, in a second terminal, for the frontend:
+That is the whole setup. It writes a `.env` with a fresh encryption key on first run, waits for
+the database to be ready, applies migrations, and serves the app.
+
+To work on it instead, run the pieces separately so both sides reload:
 
 ```
-cd frontend
-npm install
-npm run dev    # http://localhost:5174
+make db                      # just postgres
+make backend                 # the backend from source, on http://localhost:7777
+cd frontend && npm run dev    # vite, on http://localhost:5174
 ```
 
-`make help` lists the rest. `make stop` keeps your data, `make clean` deletes the volume.
+`make help` lists the rest. `make logs` follows the app, `make stop` keeps your data, `make clean`
+deletes the volume.
+
+## Connecting GitLab
+
+Create a personal access token with the **`read_api`** scope, then:
+
+```
+curl -X POST http://localhost:7777/api/sources/gitlab/connect \
+  -H 'Content-Type: application/json' \
+  -d '{"instanceUrl":"https://gitlab.example.org","token":"glpat-..."}'
+```
+
+The token is checked against the instance before it is stored, so a typo fails immediately rather
+than quietly never syncing. A first sync runs as part of the same request, so `GET /api/feed`
+has something in it straight away. After that the sweep runs every five minutes.
+
+`read_api` is read-only on purpose. Marking a to-do done through the API would need GitLab's full
+`api` scope, which is read *and* write across everything you can see, so Sift links out to GitLab
+for actions instead.
 
 ## Ports
 

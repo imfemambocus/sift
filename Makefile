@@ -1,12 +1,22 @@
 SHELL := /usr/bin/env bash
 
-.PHONY: help db backend stop clean
+.PHONY: help up logs db backend stop clean
 
 help:
-	@echo "make db        start postgres (creates .env on first run)"
-	@echo "make backend   run the backend against it, on http://localhost:7777"
+	@echo "make up        build and run everything, on http://localhost:7777"
+	@echo "make logs      follow the app's logs"
+	@echo "make db        start only postgres, for developing against"
+	@echo "make backend   run the backend from source against it, on http://localhost:7777"
 	@echo "make stop      stop containers, keep the data"
 	@echo "make clean     stop containers and delete the database volume"
+
+up: .env
+	@docker compose up --build -d
+	@echo
+	@echo "Sift is on http://localhost:7777"
+
+logs:
+	@docker compose logs -f app
 
 # only runs when .env is absent, so a real one is never overwritten
 .env:

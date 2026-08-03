@@ -1,0 +1,15 @@
+# keeping the build context small: node_modules alone is hundreds of megabytes, and every one of
+# these is either regenerated inside the image or must never enter it
+**/node_modules
+**/dist
+**/build
+**/.gradle
+.git
+.gitignore
+.env
+.env.local
+.claude
+CLAUDE.md
+docs
+README.md
+Makefile

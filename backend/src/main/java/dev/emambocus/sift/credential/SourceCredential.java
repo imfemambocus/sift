@@ -69,14 +69,48 @@ public class SourceCredential {
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
-	public static SourceCredential personalAccessToken(UUID userId, SourceType source, String instanceUrl, String token) {
+	public static SourceCredential personalAccessToken(UUID userId, SourceType source, String instanceUrl,
+			String token, Instant at) {
 		SourceCredential credential = new SourceCredential();
 		credential.userId = userId;
 		credential.source = source;
 		credential.credentialType = CredentialType.PERSONAL_ACCESS_TOKEN;
 		credential.instanceUrl = instanceUrl;
 		credential.accessToken = token;
-		credential.createdAt = Instant.now();
+		credential.createdAt = at;
 		return credential;
 	}
+
+	/** Reconnecting clears the previous failure, so the sweep starts picking it up again. */
+	public void replacePersonalAccessToken(String instanceUrl, String token) {
+		this.credentialType = CredentialType.PERSONAL_ACCESS_TOKEN;
+		this.instanceUrl = instanceUrl;
+		this.accessToken = token;
+		this.refreshToken = null;
+		this.expiresAt = null;
+		this.lastSyncStatus = SyncStatus.NEVER_RUN;
+		this.lastError = null;
+	}
+
+	public void recordSuccess(Instant at) {
+		this.lastSyncAt = at;
+		this.lastSyncStatus = SyncStatus.OK;
+		this.lastError = null;
+	}
+
+	public void recordFailure(Instant at, SyncStatus status, String message) {
+		this.lastSyncAt = at;
+		this.lastSyncStatus = status;
+		this.lastError = abbreviate(message);
+	}
+
+	// a stack-derived message can be enormous, and only the first line ever helps the user
+	private static String abbreviate(String message) {
+		if (message == null) {
+			return null;
+		}
+		return message.length() <= MAX_ERROR_LENGTH ? message : message.substring(0, MAX_ERROR_LENGTH) + "...";
+	}
+
+	private static final int MAX_ERROR_LENGTH = 500;
 }
