@@ -1,4 +1,8 @@
-# Sift
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/banner-light.png">
+  <img src="docs/banner-dark.png" alt="Sift: the few things that actually need you, in one place." width="100%">
+</picture>
 
 A quiet notification hub. Sift pulls the things that actually concern you out of a source's
 firehose, ranks them, and puts them in one feed you can search properly. GitLab first, with the
@@ -67,15 +71,15 @@ Sift is a backend-for-frontend. The browser only ever holds a session cookie; so
 server-side, encrypted, and every call to GitLab is proxied. There is no CORS configuration
 anywhere because the API and the bundle are served from one origin.
 
-Tokens are encrypted with AES-GCM through a JPA attribute converter, so they are never readable
-straight out of the database. On a local instance that mostly guards against casual snooping and
-stray volume backups; the same code path is what protects a hosted instance properly.
+Tokens are encrypted with AES-GCM before they reach the database, so they are never readable
+straight out of it. On a machine only you can reach, that mostly guards against casual snooping and
+stray backups; it is the same protection a hosted instance would rely on.
 
 ## Look
 
 Near-black in dark, warm off-white in light, with brass as the single accent. Light is designed
 rather than inverted. Type is Instrument Sans with IBM Plex Mono for metadata, both self-hosted.
 
-Themes are chosen from three states (light, dark, match system), default dark, persisted to
-`localStorage`. An inline script in `index.html` stamps the resolved theme onto `<html>` before
-first paint, so the page never flashes the wrong one.
+Pick from three states, light, dark, or match system. Dark is the default, your choice is
+remembered between visits, and the right theme is in place before the first paint, so the page
+never flashes the wrong one at you.
