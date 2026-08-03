@@ -47,6 +47,12 @@ export function dayGroup(iso: string, now: Date = new Date()): string {
 	return date.toLocaleDateString(undefined, { day: "numeric", month: "long" });
 }
 
+/** Prose form. `shortAgo` returns "now", and "now ago" is not a phrase. */
+export function agoPhrase(iso: string, now: number = Date.now()): string {
+	const short = shortAgo(iso, now);
+	return short === "now" ? "just now" : `${short} ago`;
+}
+
 export function fullTimestamp(iso: string): string {
 	return new Date(iso).toLocaleString();
 }

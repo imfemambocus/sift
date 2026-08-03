@@ -11,22 +11,33 @@ seams in place for more sources later.
 ## Why
 
 GitLab emails you whether or not a change concerns you, and finding anything in that pile
-afterwards means fighting your mail client's search. Sift reads GitLab's To-Do list instead,
-which is already scoped to you personally, applies your own mute and boost rules on top, and puts
-a fuzzy command palette over the result.
+afterwards means fighting your mail client's search. Sift works out what actually involves you,
+ranks it, and puts it in one feed with your own mute and boost rules on top.
+
+## What it tells you about
+
+- **Things asking for you**: assigned to you, your review requested, your approval needed, someone
+  naming you in a comment.
+- **Merge requests still waiting on you**, read from their current state rather than from a
+  notification. A review request stays visible even if the matching to-do was never raised or has
+  since been dismissed.
+- **Discussions moving on anything you are part of**: new replies on a thread, and new threads on a
+  merge request or issue you authored, are assigned, or are reviewing. One row per thread that
+  updates, not one per reply, so a busy discussion stays one thing to look at.
+- **Commits pushed to something you are reviewing**, which usually means look again.
+- **Things that broke**: a failed pipeline, a merge request that cannot merge.
+
+Your own comments never notify you, and neither does GitLab narrating itself.
 
 ## Status
 
-Built and verified:
-
-- accounts: register, sign in, sign out, session persistence
-- connecting GitLab from Settings with a personal access token, checked against the live instance
-- reading your GitLab to-do list on a schedule, ranked by how much it needs you
-- the feed itself, grouped by day, with priority shown as an edge marker rather than a badge
-- a visible warning when a token stops working, so an empty list is never mistaken for good news
+Built and verified: accounts, connecting GitLab from Settings, everything in the list above, the
+feed grouped by day with colour by event type, a Home dashboard summarising each source, and a
+visible warning when a token stops working so an empty list is never mistaken for good news.
 
 Not built yet: marking items read, mute and boost rules, the fuzzy command palette, browser
-notifications.
+notifications. Discussions on things you have only commented on, with no other involvement, are not
+watched yet either.
 
 ## Running it
 
@@ -84,6 +95,7 @@ Everything lives in `.env`, copied from `.env.example`.
 | --- | --- |
 | `SIFT_ENCRYPTION_KEY` | base64 of 32 random bytes. Required. Changing it makes every stored token undecryptable. |
 | `SIFT_ALLOWED_EMAIL_DOMAINS` | Comma separated. Empty lets any address register, which suits a local instance only. |
+| `SIFT_SYNC_INTERVAL` | How often each source is re-read, as an ISO-8601 duration. Defaults to `PT5M`. Drop it to something like `PT20S` while trying things out, so you are not waiting five minutes to see a change. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database credentials. |
 
 ## Shape
@@ -98,8 +110,14 @@ stray backups; it is the same protection a hosted instance would rely on.
 
 ## Look
 
-Near-black in dark, warm off-white in light, with brass as the single accent. Light is designed
-rather than inverted. Type is Instrument Sans with IBM Plex Mono for metadata, both self-hosted.
+Near-black in dark, warm off-white in light, with brass for the things that need you. Light is
+designed rather than inverted. Type is Instrument Sans with IBM Plex Mono for metadata, both
+self-hosted.
+
+Each row carries a coloured left edge for **why** it is in your list: needs review, assigned to you,
+you were named, a discussion moved, something broke. A small legend above the feed names whichever
+of those are currently on screen. How urgent it is reads as a word next to the person's name, and
+says nothing at all when there is nothing special about it.
 
 Pick from three states, light, dark, or match system. Dark is the default, your choice is
 remembered between visits, and the right theme is in place before the first paint, so the page

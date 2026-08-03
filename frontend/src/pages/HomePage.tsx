@@ -1,8 +1,9 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { useFeed } from "../feed/feed";
-import { FeedList } from "../feed/FeedList";
 import { FeedSkeleton } from "../feed/FeedSkeleton";
+import { SourceSummary } from "../home/SourceSummary";
 import { Page } from "../layout/Page";
 import { SourceAlerts } from "../sources/SourceAlerts";
 import { useSources } from "../sources/sources";
@@ -10,13 +11,32 @@ import { useSources } from "../sources/sources";
 export function HomePage() {
 	const { data: items, isPending } = useFeed();
 	const { data: sources } = useSources();
-	const nothingConnected = sources !== undefined && sources.length === 0;
-	const empty = nothingConnected ? <NothingConnected /> : <NothingWaiting />;
+
+	let body: ReactNode;
+	if (isPending || sources === undefined) {
+		body = <FeedSkeleton />;
+	}
+	else if (sources.length === 0) {
+		body = <NothingConnected />;
+	}
+	else {
+		body = (
+			<div className="grid gap-4 sm:grid-cols-2">
+				{sources.map((source) => (
+					<SourceSummary
+						key={source.source}
+						source={source}
+						items={(items ?? []).filter((item) => item.source === source.source)}
+					/>
+				))}
+			</div>
+		);
+	}
 
 	return (
-		<Page title="Home" description="Everything that needs you, from every source at once.">
+		<Page title="Home" description="How much is waiting, and where.">
 			<SourceAlerts />
-			{isPending ? <FeedSkeleton /> : <FeedList items={items ?? []} empty={empty} />}
+			{body}
 		</Page>
 	);
 }
@@ -34,15 +54,6 @@ function NothingConnected() {
 					Connect GitLab
 				</Link>
 			}
-		/>
-	);
-}
-
-function NothingWaiting() {
-	return (
-		<EmptyState
-			title="Nothing needs you"
-			description="Everything Sift can see has been dealt with. New items appear here on their own."
 		/>
 	);
 }

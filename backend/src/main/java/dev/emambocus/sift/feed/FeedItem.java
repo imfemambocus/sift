@@ -95,6 +95,13 @@ public class FeedItem {
 	@Column(name = "resolved_at")
 	private Instant resolvedAt;
 
+	/**
+	 * Whether absence from a sync means "dealt with". True for state a source keeps reporting, false
+	 * for an event that happened once. See {@code V5__resolve_when_absent.sql}.
+	 */
+	@Column(name = "resolve_when_absent", nullable = false)
+	private boolean resolveWhenAbsent = true;
+
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "raw_payload")
 	private String rawPayload;

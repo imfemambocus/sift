@@ -15,6 +15,14 @@ const LABELS: Record<string, string> = {
 	okr_checkin_requested: "Check-in requested",
 	marked: "You marked this",
 	member_access_requested: "Access requested",
+	// read from the merge request list rather than a to-do, so the wording says state not event
+	mr_review_requested: "Waiting for your review",
+	mr_assigned: "Assigned to you",
+
+	// participation: one row per thread, so the plural is honest
+	new_thread: "New thread",
+	new_comment: "New replies",
+	changes_pushed: "Changes pushed",
 };
 
 export function kindLabel(kind: string): string {

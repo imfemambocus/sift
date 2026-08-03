@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router";
 import { CreateAccountPage } from "./auth/CreateAccountPage";
 import { GuestOnly, RequireAuth } from "./auth/guards";
 import { SignInPage } from "./auth/SignInPage";
+import { WindowScrollbar } from "./components/WindowScrollbar";
 import { AppLayout } from "./layout/AppLayout";
 import { GitLabPage } from "./pages/GitLabPage";
 import { HomePage } from "./pages/HomePage";
@@ -12,6 +13,7 @@ export function App() {
 	return (
 		// honours the os reduced-motion setting for every animation in the app
 		<MotionConfig reducedMotion="user">
+			<WindowScrollbar />
 			<Routes>
 				<Route element={<GuestOnly />}>
 					<Route path="/sign-in" element={<SignInPage />} />
