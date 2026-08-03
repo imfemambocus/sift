@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: sift
+  datasource:
+    url: ${SIFT_DB_URL:jdbc:postgresql://localhost:5432/sift}
+    username: ${SIFT_DB_USER:sift}
+    password: ${SIFT_DB_PASSWORD:sift}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # flyway owns the schema; validate makes a drifted entity fail at boot instead of at runtime
+      ddl-auto: validate
+  session:
+    timeout: 7d
+    jdbc:
+      initialize-schema: never
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  # deliberately clear of 8080-8090, which local service stacks tend to occupy
+  port: ${SIFT_PORT:7777}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+sift:
+  # base64 of 32 random bytes; boot fails with an explanatory message when absent
+  encryption-key: ${SIFT_ENCRYPTION_KEY:}
+  registration:
+    # empty means any address may register, which is only appropriate for a local instance
+    allowed-email-domains: ${SIFT_ALLOWED_EMAIL_DOMAINS:}
