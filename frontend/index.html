@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Sift</title>
+		<meta name="description" content="The few things that actually need you, in one place." />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<script>
+			/*
+			 * resolves the stored preference to a concrete data-theme before first paint. without
+			 * this the page renders light for a frame before react mounts, on every single load.
+			 */
+			(function () {
+				var stored = null;
+				try {
+					stored = window.localStorage.getItem("sift-theme");
+				} catch (error) {
+					stored = null;
+				}
+
+				var preference = "dark";
+				if (stored === "light" || stored === "dark" || stored === "system") {
+					preference = stored;
+				}
+
+				var resolved = preference;
+				if (preference === "system") {
+					resolved = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+				}
+
+				document.documentElement.dataset.theme = resolved;
+			})();
+		</script>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script type="module" src="/src/main.tsx"></script>
+	</body>
+</html>
