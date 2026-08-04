@@ -153,6 +153,37 @@ if (refresh === null) {
   await shot("f06d-refresh-skeleton-gone-dark");
 }
 
+/*
+ * a theme swap fades, and the point is that everything fades on one clock. these three normally differ
+ * (a row has transition-colors, the rail nav has none, the search input has its own), so them agreeing
+ * during a swap is the invariant worth asserting. the flag going on and off is racy to catch from out
+ * here, so this sets it directly and checks the rule rather than the timing that turns it on.
+ */
+const swap = await page.evaluate(() => {
+  const parts = {
+    row: document.querySelector('a[href^="https://gitlab.example.org"]')?.parentElement,
+    rail: document.querySelector('nav[aria-label="Sections"]'),
+    search: document.querySelector('input[type="search"]'),
+  };
+  if (!parts.row || !parts.rail || !parts.search) return null;
+  const read = () => Object.fromEntries(
+    Object.entries(parts).map(([name, el]) => [name, getComputedStyle(el).transitionDuration]),
+  );
+  document.documentElement.setAttribute("data-theme-switching", "");
+  const during = read();
+  document.documentElement.removeAttribute("data-theme-switching");
+  return { during, after: read(), fade: getComputedStyle(document.documentElement).getPropertyValue("--theme-fade").trim() };
+});
+if (swap === null) {
+  problems.push("could not find the elements to check the theme fade against");
+} else {
+  const durations = [...new Set(Object.values(swap.during))];
+  console.log(`  theme fade ${swap.fade}; during a swap ${JSON.stringify(swap.during)}`);
+  if (durations.length !== 1) problems.push(`the theme fade is not uniform: ${JSON.stringify(swap.during)}`);
+  if (durations[0] === "0s") problems.push("the theme fade is instant, so nothing fades");
+  if (swap.after.rail !== "0s") problems.push("the fade rule leaked past the swap onto the rail");
+}
+
 // the tab itself carries the unread count until real notifications exist
 const tab = await page.evaluate(() => ({
   title: document.title,

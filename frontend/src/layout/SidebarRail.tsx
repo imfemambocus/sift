@@ -34,7 +34,7 @@ function RailLink({ to, label, icon: Icon }: RailItem) {
 						// one shared layoutId, so the marker slides between sections instead of blinking
 						<motion.span
 							layoutId="rail-active"
-							className="absolute left-0 h-5 w-[2px] rounded-r-full bg-accent"
+							className="absolute left-0 h-5 w-0.5 rounded-r-full bg-accent"
 							transition={{ type: "spring", stiffness: 520, damping: 42 }}
 						/>
 					)}
@@ -55,7 +55,7 @@ export function SidebarRail() {
 			className="sticky top-0 flex h-dvh w-14 flex-none flex-col items-center gap-1 border-r border-border bg-surface py-4"
 		>
 			<span className="mb-3 flex size-10 items-center justify-center text-accent">
-				<SiftMark className="size-[18px]" label="Sift" />
+				<SiftMark className="size-4.5" label="Sift" />
 			</span>
 
 			{SECTIONS.map((section) => (

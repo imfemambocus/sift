@@ -37,5 +37,29 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 	@Query("update FeedItem item set item.readAt = :readAt where item.id = :id and item.userId = :userId")
 	int updateReadAt(@Param("id") UUID id, @Param("userId") UUID userId, @Param("readAt") Instant readAt);
 
+	/*
+	 * one statement rather than the client patching every id, which for a full feed would be hundreds
+	 * of requests. only the unread are touched, so an item read yesterday keeps the timestamp it had,
+	 * and only the unresolved, so this cannot silently mark history nobody can see.
+	 *
+	 * two methods rather than one with a nullable source: passing null for an enum parameter leaves
+	 * hibernate guessing at the type, and the guess is not always the one the column wants.
+	 */
+	@Modifying
+	@Query("""
+			update FeedItem item set item.readAt = :readAt
+			 where item.userId = :userId and item.readAt is null and item.resolvedAt is null
+			""")
+	int markAllRead(@Param("userId") UUID userId, @Param("readAt") Instant readAt);
+
+	@Modifying
+	@Query("""
+			update FeedItem item set item.readAt = :readAt
+			 where item.userId = :userId and item.source = :source
+			   and item.readAt is null and item.resolvedAt is null
+			""")
+	int markAllRead(@Param("userId") UUID userId, @Param("source") SourceType source,
+			@Param("readAt") Instant readAt);
+
 	void deleteByUserIdAndSource(UUID userId, SourceType source);
 }

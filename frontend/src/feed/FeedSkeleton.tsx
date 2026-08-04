@@ -10,8 +10,8 @@ export function FeedSkeleton() {
 		<div aria-hidden className="flex animate-pulse flex-col gap-4">
 			{ROWS.map((row) => (
 				<div key={row.id} className="flex flex-col gap-2 border-l-2 border-l-border pl-4">
-					<span className="h-[10px] rounded-full bg-fg/10" style={{ width: `${row.title}%` }} />
-					<span className="h-[8px] rounded-full bg-fg/10" style={{ width: `${row.meta}%` }} />
+					<span className="h-2.5 rounded-full bg-fg/10" style={{ width: `${row.title}%` }} />
+					<span className="h-2 rounded-full bg-fg/10" style={{ width: `${row.meta}%` }} />
 				</div>
 			))}
 		</div>

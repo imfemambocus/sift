@@ -38,7 +38,7 @@ export function FeedGroupRow({ group }: { readonly group: FeedGroup }) {
 	const setRead = useSetRead();
 
 	const unread = groupUnread(group);
-	const { newest } = group;
+	const { lead } = group;
 
 	function toggleAll() {
 		const read = unread > 0;
@@ -60,7 +60,7 @@ export function FeedGroupRow({ group }: { readonly group: FeedGroup }) {
 		>
 			<div className="flex items-start transition-colors hover:bg-raised">
 				<a
-					href={newest.url}
+					href={lead.url}
 					target="_blank"
 					rel="noreferrer"
 					// opening the thing is reading everything that happened on it
@@ -68,24 +68,24 @@ export function FeedGroupRow({ group }: { readonly group: FeedGroup }) {
 					className="flex min-w-0 flex-1 flex-col gap-1 py-2.5 pl-4 pr-2"
 				>
 					<span className={`text-[13.5px] leading-snug ${unread === 0 ? "text-fg-muted" : "font-medium text-fg"}`}>
-						{newest.title}
+						{lead.title}
 					</span>
 
 					<span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px] text-fg-muted">
-						{newest.contextLabel !== null && (
+						{lead.contextLabel !== null && (
 							<>
-								<span className="font-mono text-[11px]">{newest.contextLabel}</span>
+								<span className="font-mono text-[11px]">{lead.contextLabel}</span>
 								<Dot />
 							</>
 						)}
 						<span>{group.items.length} updates</span>
 						<Dot />
 						<time
-							dateTime={newest.activityAt}
-							title={`Last activity ${fullTimestamp(newest.activityAt)}`}
+							dateTime={lead.activityAt}
+							title={`Last activity ${fullTimestamp(lead.activityAt)}`}
 							className="font-mono text-[11px]"
 						>
-							{shortAgo(newest.activityAt)}
+							{shortAgo(lead.activityAt)}
 						</time>
 					</span>
 				</a>
@@ -95,7 +95,7 @@ export function FeedGroupRow({ group }: { readonly group: FeedGroup }) {
 					onClick={() => setOpen(!open)}
 					aria-expanded={open}
 					aria-controls={eventsId}
-					aria-label={open ? `Collapse what happened on "${newest.title}"` : `Expand what happened on "${newest.title}"`}
+					aria-label={open ? `Collapse what happened on "${lead.title}"` : `Expand what happened on "${lead.title}"`}
 					className="mt-2.5 flex size-7 flex-none items-center justify-center rounded-control text-fg-muted/60 transition-colors hover:text-fg"
 				>
 					{open ? <ChevronDown size={14} strokeWidth={2} /> : <ChevronRight size={14} strokeWidth={2} />}
@@ -105,8 +105,8 @@ export function FeedGroupRow({ group }: { readonly group: FeedGroup }) {
 					read={unread === 0}
 					label={
 						unread === 0
-							? `Mark everything on "${newest.title}" as unread`
-							: `Mark everything on "${newest.title}" as read`
+							? `Mark everything on "${lead.title}" as unread`
+							: `Mark everything on "${lead.title}" as read`
 					}
 					onToggle={toggleAll}
 				/>

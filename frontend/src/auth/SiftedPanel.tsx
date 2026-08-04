@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { FAMILY_TEXT } from "../feed/events";
+import { EDGE_UNREAD } from "../feed/row";
 
 /*
  * the panel is the product's argument, not decoration: a dense unreadable wall of what a source
@@ -46,7 +47,7 @@ export function SiftedPanel() {
 				initial="hidden"
 				animate="visible"
 				variants={{ visible: { transition: { staggerChildren: 0.025, delayChildren: 0.12 } } }}
-				className="flex w-full max-w-[30rem] flex-col gap-10"
+				className="flex w-full max-w-120 flex-col gap-10"
 			>
 				<section className="flex flex-col gap-4">
 					<p className="eyebrow">What arrives</p>
@@ -54,8 +55,8 @@ export function SiftedPanel() {
 						{NOISE_ROWS.map((row) => (
 							<motion.div key={row.id} variants={ROW} style={{ marginTop: row.gap }}>
 								<div className="flex items-center gap-2.5" style={{ opacity: row.opacity }}>
-									<span className="h-[3px] rounded-full bg-fg" style={{ width: row.title }} />
-									<span className="h-[3px] rounded-full bg-fg" style={{ width: row.meta }} />
+									<span className="h-0.75 rounded-full bg-fg" style={{ width: row.title }} />
+									<span className="h-0.75 rounded-full bg-fg" style={{ width: row.meta }} />
 								</div>
 							</motion.div>
 						))}
@@ -69,7 +70,7 @@ export function SiftedPanel() {
 							<motion.div
 								key={item.id}
 								variants={ROW}
-								className="flex items-baseline gap-3 border-l-2 border-l-accent pl-3.5"
+								className={`flex items-baseline gap-3 border-l-2 pl-3.5 ${EDGE_UNREAD}`}
 							>
 								<p className={`text-[13px] font-medium ${FAMILY_TEXT[item.family]}`}>{item.kind}</p>
 								<p className="truncate font-mono text-[11px] text-fg-muted">{item.target}</p>

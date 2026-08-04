@@ -2,6 +2,7 @@ package dev.emambocus.sift.feed;
 
 import dev.emambocus.sift.credential.SourceType;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -38,5 +39,20 @@ public class FeedService {
 		if (changed == 0) {
 			throw new FeedItemNotFoundException(itemId);
 		}
+	}
+
+	/**
+	 * Everything still unread, for one source or for all of them.
+	 *
+	 * <p>Scoped to the source rather than to whatever the list happens to be filtered to: the client's
+	 * filter is a view, and "mark all read" that left rows behind because of one would be a worse
+	 * surprise than one that clears the tab you are looking at.
+	 *
+	 * @return how many rows it touched, which is zero when there was nothing unread
+	 */
+	@Transactional
+	public int markAllRead(UUID userId, SourceType source) {
+		Instant now = clock.instant();
+		return source == null ? items.markAllRead(userId, now) : items.markAllRead(userId, source, now);
 	}
 }

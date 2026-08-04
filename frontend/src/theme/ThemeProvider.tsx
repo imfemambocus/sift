@@ -14,6 +14,48 @@ function resolvePreference(preference: ThemePreference): ResolvedTheme {
 	return window.matchMedia(LIGHT_QUERY).matches ? "light" : "dark";
 }
 
+const SWITCHING_ATTRIBUTE = "data-theme-switching";
+const FADE_PROPERTY = "--theme-fade";
+
+/*
+ * one timer for the one <html> element, so a second toggle mid-fade extends the flag rather than an
+ * earlier removal cutting the newer fade short.
+ */
+let endOfFade: number | undefined;
+
+/**
+ * Fades the whole page to the new theme on one clock, by hanging {@code data-theme-switching} on
+ * {@code <html>} for exactly as long as the fade lasts. The rule it turns on lives in {@code index.css};
+ * it has to be imposed on everything for the length of the swap rather than left to each component,
+ * since what components declare for their hover states is all different.
+ *
+ * <p>Both attributes are set in the same task on purpose: the browser computes one style change, from
+ * the old colours to the new ones *with* the transition already declared, which is what starts it.
+ */
+function applyThemeWithFade(theme: ResolvedTheme) {
+	const root = document.documentElement;
+	if (root.dataset.theme === theme) {
+		// first mount: the inline script in index.html already resolved it, so there is nothing to fade
+		return;
+	}
+
+	root.setAttribute(SWITCHING_ATTRIBUTE, "");
+	root.dataset.theme = theme;
+
+	window.clearTimeout(endOfFade);
+	endOfFade = window.setTimeout(() => root.removeAttribute(SWITCHING_ATTRIBUTE), fadeMilliseconds(root));
+}
+
+/** Read back rather than duplicated, so reduced motion's 0ms is honoured without a second check. */
+function fadeMilliseconds(root: Element): number {
+	const declared = getComputedStyle(root).getPropertyValue(FADE_PROPERTY).trim();
+	const value = Number.parseFloat(declared);
+	if (Number.isNaN(value)) {
+		return 0;
+	}
+	return declared.endsWith("ms") ? value : value * 1000;
+}
+
 function readStoredPreference(): ThemePreference {
 	try {
 		const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -41,7 +83,7 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
 	useEffect(() => {
 		const apply = () => {
 			const next = resolvePreference(preference);
-			document.documentElement.dataset.theme = next;
+			applyThemeWithFade(next);
 			setResolved(next);
 		};
 		apply();

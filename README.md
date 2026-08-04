@@ -40,18 +40,22 @@ visible warning when a token stops working so an empty list is never mistaken fo
 
 Read and unread works the way you would expect. Opening a row marks it read, each row has a toggle
 for anything you want to skip or bring back, and something that moves again after you read it comes
-back unread. A count above the feed says how much is still waiting, and so does the browser tab, in
-its title and on its icon, while Sift is open in it.
+back unread. The counts above the feed are also the filter, so All, Unread and Read are one click
+away, and there is a button to clear everything unread at once. The browser tab carries the unread
+count too, in its title and on its icon, while Sift is open in it.
 
 When several things happen to one merge request, they arrive as one entry you can fold shut rather
-than as the same title four times over.
+than as the same title four times over. Long lists load fifty at a time.
+
+You can read the feed newest first, or oldest first when what you want is whatever has been waiting
+on you the longest.
 
 There is a search field at the top of every page. It searches everything from every connected source,
 not the tab you happen to be on, it forgives typos and words in the wrong order, and `is:unread`,
 `is:mr`, `project:` and `from:` narrow it down.
 
-Not built yet: filtering and sorting the feed by clicking rather than typing, marking everything read
-at once, mute and boost rules, browser notifications.
+Not built yet: mute and boost rules, browser notifications, and clearing out discussion rows you have
+already read so they do not pile up forever.
 
 ## Running it
 
@@ -119,14 +123,24 @@ Everything lives in `.env`, copied from `.env.example`.
 
 ## Checking it works
 
-`verify/` holds integration suites that drive the real backend over HTTP against a stand-in GitLab,
-on a real Postgres. Each one starts everything it needs and cleans up after itself:
+The test suite needs nothing but Docker:
+
+```
+cd backend && ./gradlew test
+```
+
+It runs against a real Postgres in a container it starts itself, and covers the parts where being
+quietly wrong would matter most: which items are still waiting on you, which have been dealt with,
+and never showing you somebody else's.
+
+`verify/` holds the rest, integration suites that drive the real backend over HTTP against a stand-in
+GitLab, including one that drives the UI in a browser:
 
 ```
 verify/verify-participation.sh
 ```
 
-Run one at a time. `verify/README.md` explains the rest, including the browser suite.
+Run those one at a time. `verify/README.md` explains what each covers.
 
 ## Shape
 
