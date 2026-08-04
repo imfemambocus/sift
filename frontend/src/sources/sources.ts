@@ -3,8 +3,8 @@ import { z } from "zod";
 import { FEED_KEY } from "../feed/feed";
 import { request } from "../lib/api";
 
-// status is a plain string for the same reason feed priority is: a value this build has not seen
-// must not fail the whole response and leave the settings page blank
+// status is a plain string for the same reason a feed item's kind is: a value this build has not
+// seen must not fail the whole response and leave the settings page blank
 const sourceStatusSchema = z.object({
 	source: z.string(),
 	instanceUrl: z.string(),

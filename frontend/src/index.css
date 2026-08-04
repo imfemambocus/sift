@@ -18,6 +18,7 @@
 	--accent-fg: #ffffff;
 	--accent-soft: #f0e7d5;
 	--danger: #b4342a;
+	--danger-fg: #ffffff;
 
 	/* event families. muted on purpose: six hues on a quiet page becomes a fruit salad fast */
 	--event-review: #5b4bc4;
@@ -41,6 +42,8 @@
 	--accent-fg: #17130a;
 	--accent-soft: #2a2318;
 	--danger: #e2685c;
+	/* dark on the lighter red, the same way accent-fg is dark on brass */
+	--danger-fg: #1a0d0b;
 
 	--event-review: #9a8ae0;
 	--event-assigned: #5c9ce0;
@@ -64,6 +67,7 @@
 	--color-accent-fg: var(--accent-fg);
 	--color-accent-soft: var(--accent-soft);
 	--color-danger: var(--danger);
+	--color-danger-fg: var(--danger-fg);
 
 	--color-event-review: var(--event-review);
 	--color-event-assigned: var(--event-assigned);

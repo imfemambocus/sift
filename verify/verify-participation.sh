@@ -37,7 +37,13 @@ cat > "$MRS" <<'JSON'
    "created_at": "2026-08-01T09:00:00.000Z", "updated_at": "2026-08-03T09:00:00.000Z",
    "author": {"id": 9, "username": "maxime", "name": "Maxime"},
    "references": {"full": "team/web!20"}}],
- "assigned": [], "authored": []}
+ "assigned": [],
+ "authored": [{"id": 800, "iid": 30, "title": "My own branch, nobody else on it",
+   "state": "opened", "draft": false, "sha": "ccc111", "project_id": 5, "user_notes_count": 0,
+   "web_url": "https://gl.example.org/team/web/-/merge_requests/30",
+   "created_at": "2026-08-01T09:00:00.000Z", "updated_at": "2026-08-03T09:00:00.000Z",
+   "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"},
+   "references": {"full": "team/web!30"}}]}
 JSON
 # one thread the user is in, already containing their own comment
 cat > "$DISC" <<'JSON'
@@ -114,6 +120,7 @@ check "kinds now" "changes_pushed mr_review_requested new_comment" "$(kinds)"
 check "one row for the thread, not one per reply" 1 "$(count new_comment)"
 check "commits noticed via sha" 1 "$(count changes_pushed)"
 check "commits are high, since he is the reviewer" '"HIGH"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["priority"] for i in json.load(sys.stdin) if i["kind"]=="changes_pushed")))')"
+check "the commits row names whose branch moved" '"Maxime"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="changes_pushed")))')"
 check "snippet is the reply, not the system note" '"Fixed, switched to the Okabe-Ito ramp and pushed."' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["body"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
 check "deep links to the note" '"https://gl.example.org/team/web/-/merge_requests/20#note_1002"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["url"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
 
@@ -173,6 +180,49 @@ PY
 connect
 check "one new_thread appeared" 1 "$(count new_thread)"
 check "the older thread row is untouched" 1 "$(count new_comment)"
+
+echo
+echo "--- pushing to my own merge request is not news ---"
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["authored"][0]["sha"] = "ddd222"
+data["authored"][0]["updated_at"] = "2026-08-03T14:00:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "my own push raised no row" 1 "$(count changes_pushed)"
+
+echo
+echo "--- merged: announced once, then there is nothing left to watch ---"
+python3 - "$MRS" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+merged = dict(data["review_requested"][0])
+merged.update({
+    "state": "merged",
+    "merged_at": "2026-08-03T15:00:00.000Z",
+    # a third person merged it, so reading merge_user rather than the author is what is under test
+    "merge_user": {"id": 11, "username": "david", "name": "David"},
+})
+# it leaves every opened list, which is the only thing the sweep sees directly
+data["review_requested"] = []
+data["single"] = {"5:20": merged}
+json.dump(data, open(path, "w"))
+PY
+connect
+check "a merged row appeared"                1        "$(count mr_merged)"
+check "named after whoever merged it"        '"David"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
+check "activity is when it was merged"       '"2026-08-03T15:00:00Z"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["activityAt"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
+check "the project path survived"            '"team/web"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["contextLabel"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
+check "the waiting-for-review row is gone"   0        "$(count mr_review_requested)"
+check "the thread rows stayed"               1        "$(count new_comment)"
+check "it is no longer watched"              1        "$(docker exec sift-p-db psql -U sift -d sift -qtAc 'select count(*) from gitlab_watched_resources' | tr -d ' ')"
+
+connect
+check "merged is not announced twice"        1        "$(count mr_merged)"
+check "and an event is not resolved away"    1        "$(docker exec sift-p-db psql -U sift -d sift -qtAc "select count(*) from feed_items where kind = 'mr_merged' and resolved_at is null" | tr -d ' ')"
 
 echo
 echo "--- an unchanged resource costs no discussion request ---"

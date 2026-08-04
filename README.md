@@ -5,8 +5,8 @@
 </picture>
 
 A quiet notification hub. Sift pulls the things that actually concern you out of a source's
-firehose, ranks them, and puts them in one feed you can search properly. GitLab first, with the
-seams in place for more sources later.
+firehose, ranks them, and puts them in one feed you can read through and search properly. GitLab
+first, with the seams in place for more sources later.
 
 ## Why
 
@@ -24,20 +24,27 @@ ranks it, and puts it in one feed with your own mute and boost rules on top.
 - **Discussions moving on anything you are part of**: new replies on a thread, and new threads on a
   merge request or issue you authored, are assigned, or are reviewing. One row per thread that
   updates, not one per reply, so a busy discussion stays one thing to look at.
-- **Commits pushed to something you are reviewing**, which usually means look again.
+- **Commits pushed to something you are reviewing**, named after whose branch moved, which usually
+  means look again.
+- **A merge request being merged**, and who merged it, so the thing that was waiting on you closes
+  out visibly instead of just disappearing.
 - **Things that broke**: a failed pipeline, a merge request that cannot merge.
 
-Your own comments never notify you, and neither does GitLab narrating itself.
+Your own comments and your own pushes never notify you, and neither does GitLab narrating itself.
 
 ## Status
 
-Built and verified: accounts, connecting GitLab from Settings, everything in the list above, the
-feed grouped by day with colour by event type, a Home dashboard summarising each source, and a
+Built: accounts, connecting GitLab from Settings, everything in the list above, the feed grouped by
+day with colour by event type, read and unread, a Home dashboard summarising each source, and a
 visible warning when a token stops working so an empty list is never mistaken for good news.
 
-Not built yet: marking items read, mute and boost rules, the fuzzy command palette, browser
-notifications. Discussions on things you have only commented on, with no other involvement, are not
-watched yet either.
+Read and unread works the way you would expect. Opening a row marks it read, each row has a toggle
+for anything you want to skip or bring back, and something that moves again after you read it comes
+back unread. A count above the feed says how much is still waiting.
+
+Not built yet: filtering and sorting the feed, marking everything read at once, mute and boost rules,
+the fuzzy command palette, browser notifications. Discussions on things you have only commented on,
+with no other involvement, are not watched yet either.
 
 ## Running it
 
@@ -74,8 +81,10 @@ straight away. After that Sift re-reads every five minutes.
 If a token later expires or is revoked, Sift says so on the feed itself rather than just going
 quiet, and Settings offers to replace it.
 
-**Check now** reads a source immediately instead of waiting for the next pass, from Settings or from
-the source's own tab. If it fails it tells you why, rather than appearing to do nothing.
+You never have to guess how current the list is. Each source's tab says when it was last synced and
+offers a refresh next to it, and Settings has the same thing as a **Check now** button. Either one
+reads the source immediately instead of waiting for the next pass, and if it fails it tells you why
+rather than appearing to do nothing.
 
 `read_api` is read-only on purpose. Marking a to-do done through the API would need GitLab's full
 `api` scope, which is read *and* write across everything you can see, so Sift links out to GitLab
@@ -128,10 +137,14 @@ Near-black in dark, warm off-white in light, with brass for the things that need
 designed rather than inverted. Type is Instrument Sans with IBM Plex Mono for metadata, both
 self-hosted.
 
-Each row carries a coloured left edge for **why** it is in your list: needs review, assigned to you,
-you were named, a discussion moved, something broke. A small legend above the feed names whichever
-of those are currently on screen. How urgent it is reads as a word next to the person's name, and
-says nothing at all when there is nothing special about it.
+Each row carries a left edge that is brass while you have not read it and grey once you have, so what
+is still waiting is the first thing you see down the page. **Why** it is in your list is written out
+next to the timestamp, coloured by kind: needs review, assigned to you, you were named, a discussion
+moved, something broke, or merged. A word rather than a colour to decode, and the colour groups those
+words so a long list still scans.
+
+Actions are styled by what they cost you. Checking a source, replacing a token and disconnecting one
+sit next to each other and look nothing alike, and the destructive one is red and asks twice.
 
 Pick from three states, light, dark, or match system. Dark is the default, your choice is
 remembered between visits, and the right theme is in place before the first paint, so the page

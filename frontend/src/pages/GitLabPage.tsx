@@ -1,11 +1,11 @@
 import { Link } from "react-router";
 import { EmptyState } from "../components/EmptyState";
-import { EventLegend } from "../feed/EventLegend";
+import { FeedCounts } from "../feed/FeedCounts";
 import { useFeed } from "../feed/feed";
 import { FeedList } from "../feed/FeedList";
 import { FeedSkeleton } from "../feed/FeedSkeleton";
 import { Page } from "../layout/Page";
-import { CheckNowButton } from "../sources/CheckNowButton";
+import { LastSynced } from "../sources/LastSynced";
 import { SourceAlerts } from "../sources/SourceAlerts";
 import { useSource } from "../sources/sources";
 
@@ -19,8 +19,8 @@ export function GitLabPage() {
 			<SourceAlerts only="gitlab" />
 			{/* reachable from where the feed is, not buried in settings */}
 			<div className="flex flex-wrap items-center justify-between gap-3">
-				<EventLegend items={items ?? []} />
-				{source !== undefined && <CheckNowButton source="gitlab" />}
+				<FeedCounts items={items ?? []} />
+				{source !== undefined && <LastSynced source={source} />}
 			</div>
 			{isPending ? <FeedSkeleton /> : <FeedList items={items ?? []} empty={empty} />}
 		</Page>

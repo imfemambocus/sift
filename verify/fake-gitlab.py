@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A stand-in GitLab instance: /api/v4/user and a paginated /api/v4/todos.
+"""A stand-in GitLab instance: /api/v4/user, a paginated /api/v4/todos, merge requests and threads.
 
 The todo dataset is re-read from disk on every request, so the test can change what the instance
 returns between phases without restarting anything.
@@ -74,6 +74,17 @@ class Handler(BaseHTTPRequestHandler):
             parts = parsed.path.split("/")
             key = f"{parts[5]}:{parts[4]}:{parts[6]}"
             self._send(200, load(DISCUSSIONS_FILE).get(key, []), {"X-Next-Page": ""})
+            return
+
+        # one merge request by project and iid, which is how the app asks what became of something
+        # that left the opened lists. absent from the fixture means 404, ie. gone or not visible.
+        parts = parsed.path.split("/")
+        if len(parts) == 7 and parts[3] == "projects" and parts[5] == "merge_requests":
+            single = load(MRS_FILE).get("single", {}).get(f"{parts[4]}:{parts[6]}")
+            if single is None:
+                self._send(404, {"message": "404 Not Found"})
+            else:
+                self._send(200, single)
             return
 
         if parsed.path == "/api/v4/merge_requests":

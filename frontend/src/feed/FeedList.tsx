@@ -43,8 +43,8 @@ export function FeedList({ items, empty }: FeedListProps) {
 			{intoDays(items).map((section) => (
 				<section key={section.label} className="flex flex-col gap-2">
 					<h2 className="eyebrow pl-4">{section.label}</h2>
-					{/* a hairline gap so consecutive same-priority edges read as one marker each,
-					    rather than merging into a single bar that looks like a section bracket */}
+					{/* a hairline gap so a run of unread edges reads as one marker each, rather than
+					    merging into a single bar that looks like a section bracket */}
 					<div className="flex flex-col gap-1">
 						{section.items.map((item) => (
 							<FeedRow key={item.id} item={item} />

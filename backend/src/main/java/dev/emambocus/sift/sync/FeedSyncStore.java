@@ -137,8 +137,19 @@ public class FeedSyncStore {
 		 * fail the whole sync. one guard here beats one per adapter.
 		 */
 		Instant created = item.sourceCreatedAt() == null ? now : item.sourceCreatedAt();
+		Instant activity = item.activityAt() == null ? created : item.activityAt();
+
+		/*
+		 * something that moved again after you read it is a new thing to look at, not one you have
+		 * dealt with, so the read mark is dropped. only forward movement counts: a source that
+		 * reports a slightly older timestamp on a later sweep must not un-read the row every pass.
+		 */
+		if (stored.getActivityAt() != null && activity.isAfter(stored.getActivityAt())) {
+			stored.setReadAt(null);
+		}
+
 		stored.setSourceCreatedAt(created);
-		stored.setActivityAt(item.activityAt() == null ? created : item.activityAt());
+		stored.setActivityAt(activity);
 
 		stored.setRawPayload(item.rawPayload());
 		stored.setResolveWhenAbsent(item.resolveWhenAbsent());

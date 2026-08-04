@@ -23,6 +23,7 @@ const LABELS: Record<string, string> = {
 	new_thread: "New thread",
 	new_comment: "New replies",
 	changes_pushed: "Changes pushed",
+	mr_merged: "Merged",
 };
 
 export function kindLabel(kind: string): string {

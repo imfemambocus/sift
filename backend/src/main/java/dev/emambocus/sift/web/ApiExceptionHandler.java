@@ -3,6 +3,7 @@ package dev.emambocus.sift.web;
 import dev.emambocus.sift.auth.EmailAlreadyRegisteredException;
 import dev.emambocus.sift.auth.EmailDomainNotAllowedException;
 import dev.emambocus.sift.credential.UnknownSourceException;
+import dev.emambocus.sift.feed.FeedItemNotFoundException;
 import dev.emambocus.sift.sources.InvalidSourceUrlException;
 import dev.emambocus.sift.sync.SourceAuthException;
 import dev.emambocus.sift.sync.SourceUnavailableException;
@@ -35,6 +36,11 @@ public class ApiExceptionHandler {
 	@ExceptionHandler({ InvalidSourceUrlException.class, UnknownSourceException.class })
 	public ProblemDetail handleBadSourceRequest(RuntimeException ex) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+	}
+
+	@ExceptionHandler(FeedItemNotFoundException.class)
+	public ProblemDetail handleFeedItemNotFound(FeedItemNotFoundException ex) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
 	}
 
 	/** The request was well formed; the credential in it was not accepted by the source. */

@@ -1,3 +1,4 @@
+import { LogOut } from "lucide-react";
 import { useSession, useSignOut } from "../auth/session";
 import { Button } from "../components/Button";
 import { Page } from "../layout/Page";
@@ -29,6 +30,7 @@ export function SettingsPage() {
 					</div>
 				</dl>
 				<Button variant="ghost" onClick={() => signOut.mutate()} disabled={signOut.isPending}>
+					<LogOut size={14} strokeWidth={1.75} aria-hidden />
 					Sign out
 				</Button>
 			</section>

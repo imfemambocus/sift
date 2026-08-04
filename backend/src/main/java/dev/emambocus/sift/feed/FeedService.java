@@ -1,6 +1,7 @@
 package dev.emambocus.sift.feed;
 
 import dev.emambocus.sift.credential.SourceType;
+import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -10,9 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class FeedService {
 
 	private final FeedItemRepository items;
+	private final Clock clock;
 
-	FeedService(FeedItemRepository items) {
+	FeedService(FeedItemRepository items, Clock clock) {
 		this.items = items;
+		this.clock = clock;
 	}
 
 	/** Resolved items are left out: the feed is what still wants attention, not a history. */
@@ -23,5 +26,17 @@ public class FeedService {
 				: items.findByUserIdAndSourceAndResolvedAtIsNullOrderByActivityAtDesc(userId, source);
 
 		return found.stream().map(FeedItemResponse::of).toList();
+	}
+
+	/**
+	 * Read is a per-item timestamp rather than a flag, so unread is "no timestamp" and a later sync
+	 * can put an item back to unread by clearing it.
+	 */
+	@Transactional
+	public void setRead(UUID userId, UUID itemId, boolean read) {
+		int changed = items.updateReadAt(itemId, userId, read ? clock.instant() : null);
+		if (changed == 0) {
+			throw new FeedItemNotFoundException(itemId);
+		}
 	}
 }

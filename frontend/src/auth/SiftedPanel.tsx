@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { FAMILY_TEXT } from "../feed/events";
 
 /*
  * the panel is the product's argument, not decoration: a dense unreadable wall of what a source
@@ -26,16 +27,12 @@ const NOISE_ROWS = [
 	{ id: "n14", title: 164, meta: 62, opacity: 0.21, gap: 17 },
 ] as const;
 
+// the same three signals a real row carries: brass edge for unread, and the type in its own colour
 const SIFTED = [
-	{ id: "s1", kind: "Review requested", target: "sift / backend", when: "12m", priority: "high" },
-	{ id: "s2", kind: "You were mentioned", target: "sift / frontend", when: "1h", priority: "normal" },
-	{ id: "s3", kind: "Pipeline failed on your branch", target: "sift / backend", when: "3h", priority: "normal" },
+	{ id: "s1", kind: "Review requested", family: "review", target: "sift / backend", when: "12m" },
+	{ id: "s2", kind: "You were mentioned", family: "mention", target: "sift / frontend", when: "1h" },
+	{ id: "s3", kind: "Pipeline failed on your branch", family: "blocked", target: "sift / backend", when: "3h" },
 ] as const;
-
-const PRIORITY_EDGE: Record<"high" | "normal", string> = {
-	high: "border-l-accent",
-	normal: "border-l-border",
-};
 
 const ROW = {
 	hidden: { opacity: 0, y: -8 },
@@ -72,9 +69,9 @@ export function SiftedPanel() {
 							<motion.div
 								key={item.id}
 								variants={ROW}
-								className={`flex items-baseline gap-3 border-l-2 pl-3.5 ${PRIORITY_EDGE[item.priority]}`}
+								className="flex items-baseline gap-3 border-l-2 border-l-accent pl-3.5"
 							>
-								<p className="text-[13px] text-fg">{item.kind}</p>
+								<p className={`text-[13px] font-medium ${FAMILY_TEXT[item.family]}`}>{item.kind}</p>
 								<p className="truncate font-mono text-[11px] text-fg-muted">{item.target}</p>
 								<p className="ml-auto shrink-0 font-mono text-[11px] text-fg-muted">{item.when}</p>
 							</motion.div>

@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,6 +96,35 @@ class GitLabClient {
 		return paged(client(instanceUrl, token), "/api/v4/issues",
 				Map.of("scope", scope, "state", "opened"),
 				ISSUE_LIST, maxPages, "issues (" + scope + ")");
+	}
+
+	/**
+	 * One merge request, for working out what became of something that left the opened lists.
+	 *
+	 * <p>Empty rather than an exception for 403 and 404: "it is gone, or this token can no longer see
+	 * it" is an answer to that question and not a failure of the sweep.
+	 */
+	Optional<GitLabResponses.MergeRequest> fetchMergeRequest(String instanceUrl, String token, long projectId,
+			long iid) {
+
+		String what = "merge request %d in project %d".formatted(iid, projectId);
+		return execute(() -> {
+			try {
+				return Optional.ofNullable(client(instanceUrl, token)
+						.get()
+						.uri("/api/v4/projects/{project}/merge_requests/{iid}", projectId, iid)
+						.retrieve()
+						.body(GitLabResponses.MergeRequest.class));
+			}
+			catch (RestClientResponseException ex) {
+				int status = ex.getStatusCode().value();
+				if (status == 403 || status == 404) {
+					return Optional.<GitLabResponses.MergeRequest>empty();
+				}
+				// anything else is a real failure, so let the shared translation have it
+				throw ex;
+			}
+		}, what);
 	}
 
 	/** Threads on one resource. Only called when the resource's own timestamp says something moved. */

@@ -6,10 +6,13 @@ import dev.emambocus.sift.sync.IncomingItem;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +43,9 @@ class GitLabParticipation {
 			String projectPath,
 			Instant updatedAt,
 			String sha,
+			Long authorId,
+			String authorName,
+			String authorAvatarUrl,
 			boolean reviewing) {
 
 		String key() {
@@ -67,8 +73,10 @@ class GitLabParticipation {
 		List<IncomingItem> items = new ArrayList<>();
 		List<GitLabWatchedResource> resourceUpdates = new ArrayList<>();
 		List<GitLabWatchedDiscussion> threadUpdates = new ArrayList<>();
+		Set<String> stillListed = new HashSet<>();
 
 		for (Watched resource : deduplicate(watched)) {
+			stillListed.add(resource.key());
 			GitLabWatchedResource known = knownResources.get(resource.key());
 			boolean firstSight = known == null;
 
@@ -76,7 +84,7 @@ class GitLabParticipation {
 				known = GitLabWatchedResource.of(userId, resource.type(), resource.projectId(),
 						resource.iid(), resource.title(), resource.webUrl(), now);
 			}
-			else if (commitsChanged(resource, known)) {
+			else if (commitsChanged(resource, known) && !Objects.equals(resource.authorId(), selfId)) {
 				items.add(changesPushed(resource, now));
 			}
 
@@ -91,8 +99,49 @@ class GitLabParticipation {
 			resourceUpdates.add(known);
 		}
 
+		List<GitLabWatchedResource> finished = new ArrayList<>();
+		for (GitLabWatchedResource known : knownResources.values()) {
+			if (stillListed.contains(known.key())) {
+				continue;
+			}
+			settle(credential, known, items, finished, now);
+		}
+
 		store.save(resourceUpdates, threadUpdates);
+		store.forget(finished);
 		return items;
+	}
+
+	/*
+	 * a merge request that has left the opened lists has either been merged, been closed, or stopped
+	 * involving you. only the first is news, and the answer needs one request, which is why it is
+	 * asked here rather than guessed from the absence.
+	 */
+	private void settle(SourceCredential credential, GitLabWatchedResource known, List<IncomingItem> items,
+			List<GitLabWatchedResource> finished, Instant now) {
+
+		if (known.getResourceType() != GitLabResourceType.MERGE_REQUEST) {
+			finished.add(known);
+			return;
+		}
+
+		Optional<GitLabResponses.MergeRequest> found;
+		try {
+			found = client.fetchMergeRequest(credential.getInstanceUrl(), credential.getAccessToken(),
+					known.getProjectId(), known.getResourceIid());
+		}
+		catch (RuntimeException ex) {
+			// as with an unreadable thread: report it, leave the watch row alone, and try again later
+			log.warn("could not read merge request {} in project {}: {}",
+					known.getResourceIid(), known.getProjectId(), ex.getMessage());
+			return;
+		}
+
+		found.filter(GitLabResponses.MergeRequest::isMerged)
+				.ifPresent(mergeRequest -> items.add(merged(known, mergeRequest, now)));
+
+		// gone, closed, merged or no longer yours: either way there is nothing left to watch
+		finished.add(known);
 	}
 
 	private void readThreads(SourceCredential credential, Long selfId, Watched resource, boolean firstSight,
@@ -171,6 +220,12 @@ class GitLabParticipation {
 				&& !known.getLastSha().equals(resource.sha());
 	}
 
+	/*
+	 * the name is the merge request's author, which is whose branch moved. GitLab's list response does
+	 * not say who pushed, and asking would cost a request per push for a distinction that only differs
+	 * when someone commits to a branch that is not theirs. a push to your own merge request is not
+	 * reported at all, for the same reason your own replies are not.
+	 */
 	private static IncomingItem changesPushed(Watched resource, Instant now) {
 		Priority priority = resource.reviewing() ? Priority.HIGH : Priority.NORMAL;
 		return new IncomingItem(
@@ -179,8 +234,8 @@ class GitLabParticipation {
 				priority,
 				resource.title(),
 				"New commits since Sift last looked.",
-				null,
-				null,
+				resource.authorName(),
+				resource.authorAvatarUrl(),
 				resource.projectPath(),
 				null,
 				resource.webUrl(),
@@ -188,6 +243,34 @@ class GitLabParticipation {
 				resource.updatedAt() == null ? now : resource.updatedAt(),
 				null,
 				// commits landing is an event; it does not un-happen on the next sweep
+				false);
+	}
+
+	private static IncomingItem merged(GitLabWatchedResource known, GitLabResponses.MergeRequest mergeRequest,
+			Instant now) {
+
+		GitLabResponses.User by = mergeRequest.whoMerged();
+		Instant at = mergeRequest.mergedAt();
+		if (at == null) {
+			at = mergeRequest.updatedAt() == null ? now : mergeRequest.updatedAt();
+		}
+
+		return new IncomingItem(
+				"mr-merged:" + known.getProjectId() + ":" + known.getResourceIid(),
+				"mr_merged",
+				// nothing is waiting on you any more; this is the row that says so
+				Priority.NORMAL,
+				mergeRequest.title() == null ? known.getTitle() : mergeRequest.title(),
+				null,
+				by == null ? null : by.name(),
+				by == null ? null : by.avatarUrl(),
+				GitLabUrls.projectPath(mergeRequest.references()),
+				GitLabUrls.projectUrl(mergeRequest.webUrl()),
+				mergeRequest.webUrl() == null ? known.getWebUrl() : mergeRequest.webUrl(),
+				mergeRequest.createdAt() == null ? at : mergeRequest.createdAt(),
+				at,
+				null,
+				// it was merged once. the next sweep not mentioning it says nothing.
 				false);
 	}
 

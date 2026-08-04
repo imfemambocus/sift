@@ -1,8 +1,10 @@
+import { Unplug } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "../components/Button";
 import { Field } from "../components/Field";
 import { FormError } from "../components/FormError";
+import { Spinner } from "../components/Spinner";
 import { errorMessage } from "../lib/api";
 import { CheckNowButton } from "./CheckNowButton";
 import { agoPhrase } from "../lib/time";
@@ -32,7 +34,8 @@ function statusLine(source: SourceStatus): { tone: Tone; text: string } {
 	if (source.lastSyncAt === null) {
 		return { tone: "ok", text: "Connected." };
 	}
-	return { tone: "ok", text: `Connected. Last read ${agoPhrase(source.lastSyncAt)}.` };
+	// "synced" rather than "read": items are read or unread now, and one word cannot mean both
+	return { tone: "ok", text: `Connected. Last synced ${agoPhrase(source.lastSyncAt)}.` };
 }
 
 /*
@@ -73,19 +76,30 @@ function SourceCard({ source, canReplace, onReplace, onDisconnect, disconnecting
 				{source.itemCount} {source.itemCount === 1 ? "item" : "items"} in your feed.
 			</p>
 
+			{/*
+			  * three different weights on purpose: checking is the safe one, replacing the token is a
+			  * detour, and disconnecting throws this source's items away
+			  */}
 			<div className="flex flex-wrap items-center gap-2">
 				<CheckNowButton source={source.source} />
 				{canReplace && (
-					<Button variant="ghost" onClick={onReplace}>
+					<Button variant="subtle" onClick={onReplace}>
 						Replace token
 					</Button>
 				)}
 				{confirming ? (
-					<Button variant="danger" onClick={onDisconnect} disabled={disconnecting}>
-						Confirm disconnect
-					</Button>
+					<>
+						<Button variant="dangerSolid" onClick={onDisconnect} disabled={disconnecting}>
+							{disconnecting && <Spinner />}
+							{disconnecting ? "Disconnecting" : "Yes, disconnect"}
+						</Button>
+						<Button variant="subtle" onClick={() => setConfirming(false)} disabled={disconnecting}>
+							Keep it
+						</Button>
+					</>
 				) : (
-					<Button variant="ghost" onClick={() => setConfirming(true)}>
+					<Button variant="danger" onClick={() => setConfirming(true)}>
+						<Unplug size={14} strokeWidth={1.75} aria-hidden />
 						Disconnect
 					</Button>
 				)}
@@ -183,10 +197,11 @@ export function ConnectGitLab() {
 
 					<div className="flex items-center gap-2">
 						<Button type="submit" disabled={connect.isPending}>
+							{connect.isPending && <Spinner />}
 							{connect.isPending ? "Connecting" : "Connect GitLab"}
 						</Button>
 						{replacing && (
-							<Button type="button" variant="ghost" onClick={() => setReplacing(false)}>
+							<Button type="button" variant="subtle" onClick={() => setReplacing(false)}>
 								Cancel
 							</Button>
 						)}

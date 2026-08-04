@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { FeedItem } from "../feed/feed";
+import { unreadCount } from "../feed/feed";
 import type { EventFamily } from "../feed/events";
 import { eventFamily, FAMILY_FILL, FAMILY_LABEL, FAMILY_ORDER } from "../feed/events";
 import { agoPhrase } from "../lib/time";
@@ -22,7 +23,7 @@ type SourceSummaryProps = {
 export function SourceSummary({ source, items }: SourceSummaryProps) {
 	const counts = countByFamily(items);
 	const present = FAMILY_ORDER.filter((family) => counts[family] > 0);
-	const high = items.filter((item) => item.priority === "HIGH").length;
+	const unread = unreadCount(items);
 	const rejected = source.status === "AUTH_FAILED";
 
 	return (
@@ -66,9 +67,9 @@ export function SourceSummary({ source, items }: SourceSummaryProps) {
 			)}
 
 			<div className="flex flex-wrap items-baseline gap-x-2 text-[12px] text-fg-muted">
-				{high > 0 && <span className="text-accent">{high} need you</span>}
-				{high > 0 && <span aria-hidden className="text-fg-muted/45">&middot;</span>}
-				<span>{source.lastSyncAt === null ? "Not read yet" : `Read ${agoPhrase(source.lastSyncAt)}`}</span>
+				{unread > 0 && <span className="text-accent">{unread} unread</span>}
+				{unread > 0 && <span aria-hidden className="text-fg-muted/45">&middot;</span>}
+				<span>{source.lastSyncAt === null ? "Not synced yet" : `Synced ${agoPhrase(source.lastSyncAt)}`}</span>
 			</div>
 		</Link>
 	);
