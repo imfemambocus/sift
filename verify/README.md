@@ -10,6 +10,7 @@ Each script starts everything it needs and tears it down again.
 ./verify-sync.sh              connect, priority mapping, paging, resolve, disconnect, a revoked token
 ./verify-mr.sh                merge requests read as state, and the three de-duplications
 ./verify-participation.sh     threads, replies, pushed commits, and everything that must NOT be emitted
+./verify-read.sh              marking items read, tenancy on it, and what a later sync un-reads
 ./verify-unreadable-token.sh  a token that will not decrypt, and "check now"
 ./verify-feed-ui.sh           the same flow driven in a browser, with screenshots
 ```

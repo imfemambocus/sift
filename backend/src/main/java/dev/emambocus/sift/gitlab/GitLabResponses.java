@@ -47,6 +47,10 @@ final class GitLabResponses {
 	record References(String full) {
 	}
 
+	/**
+	 * {@code mergeUser} is the current field for who pressed merge and {@code mergedBy} the older one
+	 * it replaced; both are read because which one an instance sends depends on its version.
+	 */
 	record MergeRequest(
 			Long id,
 			Long iid,
@@ -60,8 +64,22 @@ final class GitLabResponses {
 			@JsonProperty("web_url") String webUrl,
 			@JsonProperty("created_at") Instant createdAt,
 			@JsonProperty("updated_at") Instant updatedAt,
+			@JsonProperty("merged_at") Instant mergedAt,
+			@JsonProperty("merge_user") User mergeUser,
+			@JsonProperty("merged_by") User mergedBy,
 			User author,
 			References references) {
+
+		boolean isMerged() {
+			return "merged".equals(state);
+		}
+
+		User whoMerged() {
+			if (mergeUser != null) {
+				return mergeUser;
+			}
+			return mergedBy == null ? author : mergedBy;
+		}
 	}
 
 	record Issue(

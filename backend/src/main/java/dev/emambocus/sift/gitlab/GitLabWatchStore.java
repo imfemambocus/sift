@@ -46,4 +46,16 @@ public class GitLabWatchStore {
 			discussions.saveAll(changedDiscussions);
 		}
 	}
+
+	/**
+	 * Drops watch state for resources that have finished. Their discussion watermarks are left
+	 * behind on purpose: they are keyed by discussion id, so if the resource ever comes back they
+	 * stop it re-announcing threads that were read months ago.
+	 */
+	@Transactional
+	public void forget(List<GitLabWatchedResource> finished) {
+		if (!finished.isEmpty()) {
+			resources.deleteAll(finished);
+		}
+	}
 }

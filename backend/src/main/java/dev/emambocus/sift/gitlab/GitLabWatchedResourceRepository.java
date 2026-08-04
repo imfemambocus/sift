@@ -13,4 +13,6 @@ interface GitLabWatchedResourceRepository extends Repository<GitLabWatchedResour
 	List<GitLabWatchedResource> findByUserId(UUID userId);
 
 	<S extends GitLabWatchedResource> List<S> saveAll(Iterable<S> resources);
+
+	void deleteAll(Iterable<? extends GitLabWatchedResource> resources);
 }

@@ -1,9 +1,13 @@
 package dev.emambocus.sift.feed;
 
 import dev.emambocus.sift.credential.SourceType;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Extends the bare {@link Repository} rather than {@code JpaRepository} on purpose: every method is
@@ -22,6 +26,16 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 			UUID userId, SourceType source);
 
 	long countByUserIdAndSourceAndResolvedAtIsNull(UUID userId, SourceType source);
+
+	/*
+	 * a targeted update rather than loading the entity and saving it back, for the same reason the
+	 * sync outcome is written this way: marking one row read must not rewrite every other column.
+	 * the user id is in the where clause so another tenant's item cannot be reached by id alone, and
+	 * the row count is what tells the caller whether it existed.
+	 */
+	@Modifying
+	@Query("update FeedItem item set item.readAt = :readAt where item.id = :id and item.userId = :userId")
+	int updateReadAt(@Param("id") UUID id, @Param("userId") UUID userId, @Param("readAt") Instant readAt);
 
 	void deleteByUserIdAndSource(UUID userId, SourceType source);
 }

@@ -153,9 +153,12 @@ public class GitLabSource implements NotificationSource {
 					mergeRequest.iid(),
 					titleOr(mergeRequest.title()),
 					mergeRequest.webUrl(),
-					projectPath(mergeRequest.references()),
+					GitLabUrls.projectPath(mergeRequest.references()),
 					mergeRequest.updatedAt(),
 					mergeRequest.sha(),
+					mergeRequest.author() == null ? null : mergeRequest.author().id(),
+					mergeRequest.author() == null ? null : mergeRequest.author().name(),
+					mergeRequest.author() == null ? null : mergeRequest.author().avatarUrl(),
 					reviewing));
 		}
 	}
@@ -173,9 +176,12 @@ public class GitLabSource implements NotificationSource {
 					issue.iid(),
 					titleOr(issue.title()),
 					issue.webUrl(),
-					projectPath(issue.references()),
+					GitLabUrls.projectPath(issue.references()),
 					issue.updatedAt(),
 					null,
+					issue.author() == null ? null : issue.author().id(),
+					issue.author() == null ? null : issue.author().name(),
+					issue.author() == null ? null : issue.author().avatarUrl(),
 					false));
 		}
 	}
@@ -226,31 +232,14 @@ public class GitLabSource implements NotificationSource {
 				summary(mergeRequest),
 				mergeRequest.author() == null ? null : mergeRequest.author().name(),
 				mergeRequest.author() == null ? null : mergeRequest.author().avatarUrl(),
-				projectPath(mergeRequest.references()),
-				projectUrl(mergeRequest.webUrl()),
+				GitLabUrls.projectPath(mergeRequest.references()),
+				GitLabUrls.projectUrl(mergeRequest.webUrl()),
 				mergeRequest.webUrl(),
 				mergeRequest.createdAt(),
 				mergeRequest.updatedAt() == null ? mergeRequest.createdAt() : mergeRequest.updatedAt(),
 				rawPayload(mergeRequest),
 				// an open merge request that stops being listed has been merged or closed
 				true);
-	}
-
-	// the merge request API never returns the project path directly, only inside references.full
-	private static String projectPath(GitLabResponses.References references) {
-		if (references == null || references.full() == null) {
-			return null;
-		}
-		int separator = references.full().indexOf('!');
-		return separator < 0 ? references.full() : references.full().substring(0, separator);
-	}
-
-	private static String projectUrl(String mergeRequestUrl) {
-		if (mergeRequestUrl == null) {
-			return null;
-		}
-		int marker = mergeRequestUrl.indexOf("/-/merge_requests");
-		return marker < 0 ? null : mergeRequestUrl.substring(0, marker);
 	}
 
 	private IncomingItem toIncomingItem(GitLabResponses.Todo todo) {

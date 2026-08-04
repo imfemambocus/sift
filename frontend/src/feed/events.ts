@@ -29,6 +29,8 @@ const FAMILY_BY_KIND: Record<string, EventFamily> = {
 
 	marked: "other",
 	member_access_requested: "other",
+	// merged is the one row that wants nothing from you, so it stays the quiet grey
+	mr_merged: "other",
 };
 
 export const FAMILY_ORDER: readonly EventFamily[] = [
@@ -49,13 +51,17 @@ export const FAMILY_LABEL: Record<EventFamily, string> = {
 	other: "Everything else",
 };
 
-export const FAMILY_EDGE: Record<EventFamily, string> = {
-	review: "border-l-event-review",
-	assigned: "border-l-event-assigned",
-	mention: "border-l-event-mention",
-	discussion: "border-l-event-discussion",
-	blocked: "border-l-event-blocked",
-	other: "border-l-event-other",
+/*
+ * the family colours the wording of the kind rather than an edge on the row. the left edge says
+ * whether a row is unread, which is the one thing worth the app's own accent.
+ */
+export const FAMILY_TEXT: Record<EventFamily, string> = {
+	review: "text-event-review",
+	assigned: "text-event-assigned",
+	mention: "text-event-mention",
+	discussion: "text-event-discussion",
+	blocked: "text-event-blocked",
+	other: "text-event-other",
 };
 
 export const FAMILY_FILL: Record<EventFamily, string> = {
@@ -69,19 +75,4 @@ export const FAMILY_FILL: Record<EventFamily, string> = {
 
 export function eventFamily(kind: string): EventFamily {
 	return FAMILY_BY_KIND[kind] ?? "other";
-}
-
-/*
- * Only the ends of the scale are labelled. Writing "Normal" on almost every row is noise, and its
- * absence is the clearest way to say "nothing special about this one".
- */
-const PRIORITY_LABEL: Record<string, string> = { HIGH: "High", LOW: "Low" };
-const PRIORITY_CLASS: Record<string, string> = { HIGH: "text-accent", LOW: "text-fg-muted/55" };
-
-export function priorityBadge(priority: string): { label: string; className: string } | null {
-	const label = PRIORITY_LABEL[priority];
-	if (label === undefined) {
-		return null;
-	}
-	return { label, className: PRIORITY_CLASS[priority] ?? "text-fg-muted" };
 }
