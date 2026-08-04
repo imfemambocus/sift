@@ -7,6 +7,21 @@
  */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/*
+ * how long a theme change takes, read back by ThemeProvider so the flag it sets comes off exactly when
+ * the fade ends: one value, not one here and one in the TypeScript to drift apart.
+ */
+:root {
+	--theme-fade: 220ms;
+}
+
+/* a colour fade is not motion, but someone who asked for less of it is asking for less of this too */
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--theme-fade: 0ms;
+	}
+}
+
 :root[data-theme="light"] {
 	--bg: #fbfaf8;
 	--surface: #ffffff;
@@ -123,6 +138,27 @@
 	/* webkit puts its own clear button on a search input, next to the one SearchField draws */
 	input[type="search"]::-webkit-search-cancel-button {
 		appearance: none;
+	}
+
+	/*
+	 * a theme change fades, and every element fades on the same clock. that is the whole reason this is
+	 * imposed on `*` for the length of the swap rather than left to each component: the hover states put
+	 * `transition-colors` on seventeen elements, Button transitions filter too and the scrollbar runs at
+	 * 200ms, while the page background, every border and every icon have none at all, so relying on what
+	 * components happen to declare had some things snap and the rest drift in behind them.
+	 *
+	 * only colour-ish properties, never `all`, which would animate layout. !important because it has to
+	 * beat utilities in a later layer. motion is untouched: it animates through the Web Animations API.
+	 */
+	:root[data-theme-switching],
+	:root[data-theme-switching] *,
+	:root[data-theme-switching] *::before,
+	:root[data-theme-switching] *::after {
+		transition-property: background-color, border-color, color, fill, stroke, outline-color,
+			text-decoration-color, box-shadow !important;
+		transition-duration: var(--theme-fade) !important;
+		transition-timing-function: ease !important;
+		transition-delay: 0s !important;
 	}
 
 	:focus-visible {

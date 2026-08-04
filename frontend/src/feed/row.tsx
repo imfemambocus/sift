@@ -10,7 +10,8 @@ export const ROW_MOTION = {
 	visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } },
 } as const;
 
-const EDGE_UNREAD = "border-l-accent";
+/** Exported because `SiftedPanel` wears the real row treatment, and it must not drift from it. */
+export const EDGE_UNREAD = "border-l-accent";
 // grey rather than the theme's border colour, which is faint enough to read as no edge at all
 const EDGE_READ = "border-l-fg-muted/30";
 
@@ -27,7 +28,7 @@ export function UnreadDot({ read }: { readonly read: boolean }) {
 	return (
 		<span
 			aria-hidden
-			className={`mt-[7px] size-1.5 flex-none rounded-full ${read ? "bg-fg-muted/40" : "bg-accent"}`}
+			className={`mt-1.75 size-1.5 flex-none rounded-full ${read ? "bg-fg-muted/40" : "bg-accent"}`}
 		/>
 	);
 }

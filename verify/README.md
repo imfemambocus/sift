@@ -59,3 +59,10 @@ Two routes share one fixture key. `single`, keyed `project:iid`, answers both
 `GET /projects/:id/merge_requests?iids[]=` (the resources found in the activity feed). Absent means
 404 for the first and simply missing from the second, and `state` is honoured on the list, so
 flipping a record to `merged` or `closed` is how a suite makes something depart.
+
+## The Testcontainers suite is separate
+
+`cd backend && ./gradlew test` runs 29 in-process tests against a real Postgres 17 container: the
+diffing rules, tenancy, the credential sync outcome and the GitLab adapter's de-duplications. It needs
+no shell script and no free ports, so it is the one to reach for first. The suites here cover what it
+cannot: real HTTP, a real browser, and the packaged container.

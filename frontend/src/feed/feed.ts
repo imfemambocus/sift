@@ -55,6 +55,33 @@ export function unreadCount(items: readonly FeedItem[]): number {
 	return items.filter((item) => !item.read).length;
 }
 
+type CachedFeeds = readonly (readonly [readonly unknown[], FeedItem[] | undefined])[];
+
+/**
+ * Writes `read` onto every cached item the predicate picks, and hands back what was there so an error
+ * can put it all back. Shared by the two read mutations, which differ only in what they select.
+ */
+async function optimisticRead(
+	queryClient: ReturnType<typeof useQueryClient>,
+	picks: (item: FeedItem) => boolean,
+	read: boolean,
+): Promise<CachedFeeds> {
+	// by prefix, so it still holds if a narrowed feed query is ever added beside the one
+	await queryClient.cancelQueries({ queryKey: [FEED_KEY] });
+	const previous = queryClient.getQueriesData<FeedItem[]>({ queryKey: [FEED_KEY] });
+
+	queryClient.setQueriesData<FeedItem[]>({ queryKey: [FEED_KEY] }, (feed) =>
+		feed?.map((item) => (picks(item) ? { ...item, read } : item)),
+	);
+	return previous;
+}
+
+function rollback(queryClient: ReturnType<typeof useQueryClient>, previous: CachedFeeds | undefined) {
+	for (const [key, feed] of previous ?? []) {
+		queryClient.setQueryData(key, feed);
+	}
+}
+
 /** Several ids at once, so clearing a whole group is one gesture and one cache write. */
 type SetReadInput = { readonly ids: readonly string[]; readonly read: boolean };
 
@@ -73,22 +100,41 @@ export function useSetRead() {
 		},
 
 		onMutate: async ({ ids, read }) => {
-			// by prefix, so it still holds if a narrowed feed query is ever added beside the one
-			await queryClient.cancelQueries({ queryKey: [FEED_KEY] });
-			const previous = queryClient.getQueriesData<FeedItem[]>({ queryKey: [FEED_KEY] });
-
 			const changing = new Set(ids);
-			queryClient.setQueriesData<FeedItem[]>({ queryKey: [FEED_KEY] }, (feed) =>
-				feed?.map((item) => (changing.has(item.id) ? { ...item, read } : item)),
-			);
-			return { previous };
+			return { previous: await optimisticRead(queryClient, (item) => changing.has(item.id), read) };
 		},
 
-		onError: (_error, _input, context) => {
-			for (const [key, feed] of context?.previous ?? []) {
-				queryClient.setQueryData(key, feed);
-			}
+		onError: (_error, _input, context) => rollback(queryClient, context?.previous),
+
+		onSettled: async () => {
+			await queryClient.invalidateQueries({ queryKey: [FEED_KEY] });
 		},
+	});
+}
+
+/**
+ * Clears a whole source in one request. The client cannot do this by patching each id: a full feed
+ * would be hundreds of requests, which is the reason the endpoint exists at all.
+ */
+export function useMarkAllRead(source?: string) {
+	const queryClient = useQueryClient();
+	const path = source === undefined
+		? "/api/feed/read-all"
+		: `/api/feed/read-all?source=${encodeURIComponent(source)}`;
+
+	return useMutation({
+		mutationFn: () => request<null>(path, { method: "POST" }),
+
+		// the server clears the source, not the current filter, so the optimistic write matches it
+		onMutate: async () => ({
+			previous: await optimisticRead(
+				queryClient,
+				(item) => source === undefined || item.source === source,
+				true,
+			),
+		}),
+
+		onError: (_error, _input, context) => rollback(queryClient, context?.previous),
 
 		onSettled: async () => {
 			await queryClient.invalidateQueries({ queryKey: [FEED_KEY] });

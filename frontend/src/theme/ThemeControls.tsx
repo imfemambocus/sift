@@ -52,7 +52,7 @@ export function ThemeChoice() {
 						type="button"
 						onClick={() => setPreference(option)}
 						aria-pressed={selected}
-						className={`flex items-center gap-2 rounded-[4px] px-3 py-1.5 text-[13px] transition-colors ${
+						className={`flex items-center gap-2 rounded-sm px-3 py-1.5 text-[13px] transition-colors ${
 							selected ? "bg-accent text-accent-fg" : "text-fg-muted hover:text-fg"
 						}`}
 					>

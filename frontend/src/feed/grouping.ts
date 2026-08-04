@@ -7,14 +7,18 @@ import type { FeedItem } from "./feed";
  */
 export type FeedGroup = {
 	readonly key: string;
-	/** The most recent of them, which is where the group sits in the list and what it is titled by. */
-	readonly newest: FeedItem;
+	/**
+	 * Whichever of them comes first in the order the list is in, so it is what the group is titled and
+	 * dated by and where it sits. The newest under "latest activity", the oldest under "longest
+	 * waiting", which is the right answer in both cases.
+	 */
+	readonly lead: FeedItem;
 	readonly items: readonly FeedItem[];
 };
 
-type Building = { readonly key: string; readonly newest: FeedItem; readonly items: FeedItem[] };
+type Building = { readonly key: string; readonly lead: FeedItem; readonly items: FeedItem[] };
 
-/** Relies on the API's order, newest activity first, and keeps it for the groups and within them. */
+/** Keeps the order it is handed, both between groups and inside them. */
 export function intoGroups(items: readonly FeedItem[]): FeedGroup[] {
 	const groups: Building[] = [];
 	const byKey = new Map<string, Building>();
@@ -22,7 +26,7 @@ export function intoGroups(items: readonly FeedItem[]): FeedGroup[] {
 	for (const item of items) {
 		const existing = byKey.get(item.groupKey);
 		if (existing === undefined) {
-			const group: Building = { key: item.groupKey, newest: item, items: [item] };
+			const group: Building = { key: item.groupKey, lead: item, items: [item] };
 			groups.push(group);
 			byKey.set(item.groupKey, group);
 		}
