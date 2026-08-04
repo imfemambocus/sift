@@ -1,19 +1,22 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { EmptyState } from "../components/EmptyState";
-import { useFeed } from "../feed/feed";
+import { bySource, useFeed } from "../feed/feed";
 import { FeedSkeleton } from "../feed/FeedSkeleton";
 import { SourceSummary } from "../home/SourceSummary";
 import { Page } from "../layout/Page";
+import { useMinimumDuration } from "../lib/minimumDuration";
 import { SourceAlerts } from "../sources/SourceAlerts";
 import { useSources } from "../sources/sources";
 
 export function HomePage() {
 	const { data: items, isPending } = useFeed();
 	const { data: sources } = useSources();
+	const loading = useMinimumDuration(isPending || sources === undefined);
 
 	let body: ReactNode;
-	if (isPending || sources === undefined) {
+	// the undefined check is repeated rather than left to the hook, which cannot narrow the type
+	if (loading || sources === undefined) {
 		body = <FeedSkeleton />;
 	}
 	else if (sources.length === 0) {
@@ -23,11 +26,7 @@ export function HomePage() {
 		body = (
 			<div className="grid gap-4 sm:grid-cols-2">
 				{sources.map((source) => (
-					<SourceSummary
-						key={source.source}
-						source={source}
-						items={(items ?? []).filter((item) => item.source === source.source)}
-					/>
+					<SourceSummary key={source.source} source={source} items={bySource(items ?? [], source.source)} />
 				))}
 			</div>
 		);

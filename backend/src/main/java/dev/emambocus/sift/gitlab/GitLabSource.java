@@ -54,13 +54,15 @@ public class GitLabSource implements NotificationSource {
 
 	private final GitLabClient client;
 	private final GitLabParticipation participation;
+	private final GitLabCommentedOn commentedOn;
 	private final ObjectMapper objectMapper;
 	private final int maxPages;
 
-	GitLabSource(GitLabClient client, GitLabParticipation participation, ObjectMapper objectMapper,
-			SiftProperties properties) {
+	GitLabSource(GitLabClient client, GitLabParticipation participation, GitLabCommentedOn commentedOn,
+			ObjectMapper objectMapper, SiftProperties properties) {
 		this.client = client;
 		this.participation = participation;
+		this.commentedOn = commentedOn;
 		this.objectMapper = objectMapper;
 		this.maxPages = properties.sync().maxPages();
 	}
@@ -126,11 +128,16 @@ public class GitLabSource implements NotificationSource {
 		 * watched but never emitted as items of their own; to-dos already cover being assigned one.
 		 */
 		List<GitLabParticipation.Watched> watched = new ArrayList<>();
-		addWatched(watched, reviewing, true);
-		addWatched(watched, assigned, false);
-		addWatched(watched, authored, false);
-		addWatchedIssues(watched, assignedIssues);
-		addWatchedIssues(watched, authoredIssues);
+		addWatched(watched, reviewing, GitLabWatchReason.REVIEWING);
+		addWatched(watched, assigned, GitLabWatchReason.INVOLVED);
+		addWatched(watched, authored, GitLabWatchReason.INVOLVED);
+		addWatchedIssues(watched, assignedIssues, GitLabWatchReason.INVOLVED);
+		addWatchedIssues(watched, authoredIssues, GitLabWatchReason.INVOLVED);
+
+		// and the ones no list above can find: nobody put you on them, you just replied to them
+		GitLabCommentedOn.Found commented = commentedOn.discover(credential, keys(watched), maxPages);
+		addWatched(watched, commented.mergeRequests(), GitLabWatchReason.COMMENTED);
+		addWatchedIssues(watched, commented.issues(), GitLabWatchReason.COMMENTED);
 
 		for (IncomingItem item : participation.collect(credential, me.id(), watched, maxPages)) {
 			items.putIfAbsent(item.sourceId(), item);
@@ -139,8 +146,14 @@ public class GitLabSource implements NotificationSource {
 		return List.copyOf(items.values());
 	}
 
+	private static Set<String> keys(List<GitLabParticipation.Watched> watched) {
+		return watched.stream()
+				.map(GitLabParticipation.Watched::key)
+				.collect(Collectors.toUnmodifiableSet());
+	}
+
 	private static void addWatched(List<GitLabParticipation.Watched> watched,
-			List<GitLabResponses.MergeRequest> mergeRequests, boolean reviewing) {
+			List<GitLabResponses.MergeRequest> mergeRequests, GitLabWatchReason reason) {
 
 		for (GitLabResponses.MergeRequest mergeRequest : mergeRequests) {
 			// without a project id and iid there is no path to read its discussions from
@@ -159,12 +172,12 @@ public class GitLabSource implements NotificationSource {
 					mergeRequest.author() == null ? null : mergeRequest.author().id(),
 					mergeRequest.author() == null ? null : mergeRequest.author().name(),
 					mergeRequest.author() == null ? null : mergeRequest.author().avatarUrl(),
-					reviewing));
+					reason));
 		}
 	}
 
 	private static void addWatchedIssues(List<GitLabParticipation.Watched> watched,
-			List<GitLabResponses.Issue> issues) {
+			List<GitLabResponses.Issue> issues, GitLabWatchReason reason) {
 
 		for (GitLabResponses.Issue issue : issues) {
 			if (issue.webUrl() == null || issue.projectId() == null || issue.iid() == null) {
@@ -182,7 +195,7 @@ public class GitLabSource implements NotificationSource {
 					issue.author() == null ? null : issue.author().id(),
 					issue.author() == null ? null : issue.author().name(),
 					issue.author() == null ? null : issue.author().avatarUrl(),
-					false));
+					reason));
 		}
 	}
 

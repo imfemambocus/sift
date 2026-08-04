@@ -46,9 +46,14 @@ class GitLabParticipation {
 			Long authorId,
 			String authorName,
 			String authorAvatarUrl,
-			boolean reviewing) {
+			GitLabWatchReason reason) {
 
 		String key() {
+			return key(type, projectId, iid);
+		}
+
+		/** Also how a caller asks whether something is watched before spending a request on it. */
+		static String key(GitLabResourceType type, long projectId, long iid) {
 			return type + ":" + projectId + ":" + iid;
 		}
 	}
@@ -84,7 +89,7 @@ class GitLabParticipation {
 				known = GitLabWatchedResource.of(userId, resource.type(), resource.projectId(),
 						resource.iid(), resource.title(), resource.webUrl(), now);
 			}
-			else if (commitsChanged(resource, known) && !Objects.equals(resource.authorId(), selfId)) {
+			else if (announcesPush(resource, known, selfId)) {
 				items.add(changesPushed(resource, now));
 			}
 
@@ -213,21 +218,27 @@ class GitLabParticipation {
 		return resource.updatedAt().isAfter(known.getLastUpdatedAt());
 	}
 
-	private static boolean commitsChanged(Watched resource, GitLabWatchedResource known) {
-		return resource.type() == GitLabResourceType.MERGE_REQUEST
+	/*
+	 * a branch moving is news to whoever is expected to look at it, so a resource watched only because
+	 * you once replied to it stays quiet: the replies to you are what you were kept for. your own
+	 * pushes are never news, for the same reason your own replies are not.
+	 */
+	private static boolean announcesPush(Watched resource, GitLabWatchedResource known, Long selfId) {
+		return resource.reason().announcesPushes()
+				&& resource.type() == GitLabResourceType.MERGE_REQUEST
 				&& resource.sha() != null
 				&& known.getLastSha() != null
-				&& !known.getLastSha().equals(resource.sha());
+				&& !known.getLastSha().equals(resource.sha())
+				&& !Objects.equals(resource.authorId(), selfId);
 	}
 
 	/*
 	 * the name is the merge request's author, which is whose branch moved. GitLab's list response does
 	 * not say who pushed, and asking would cost a request per push for a distinction that only differs
-	 * when someone commits to a branch that is not theirs. a push to your own merge request is not
-	 * reported at all, for the same reason your own replies are not.
+	 * when someone commits to a branch that is not theirs.
 	 */
 	private static IncomingItem changesPushed(Watched resource, Instant now) {
-		Priority priority = resource.reviewing() ? Priority.HIGH : Priority.NORMAL;
+		Priority priority = resource.reason() == GitLabWatchReason.REVIEWING ? Priority.HIGH : Priority.NORMAL;
 		return new IncomingItem(
 				"mr-commits:" + resource.projectId() + ":" + resource.iid(),
 				"changes_pushed",
@@ -308,12 +319,12 @@ class GitLabParticipation {
 		return flat.substring(0, SNIPPET_LENGTH).trim() + "...";
 	}
 
-	/** The same resource arrives from several lists; being a reviewer is the fact worth keeping. */
+	/** The same resource arrives from several lists; the strongest reason is the one worth keeping. */
 	private static List<Watched> deduplicate(List<Watched> watched) {
 		Map<String, Watched> unique = new LinkedHashMap<>();
 		for (Watched resource : watched) {
 			Watched existing = unique.get(resource.key());
-			if (existing == null || (!existing.reviewing() && resource.reviewing())) {
+			if (existing == null || resource.reason().compareTo(existing.reason()) < 0) {
 				unique.put(resource.key(), resource);
 			}
 		}

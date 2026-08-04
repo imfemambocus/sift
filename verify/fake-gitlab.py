@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""A stand-in GitLab instance: /api/v4/user, a paginated /api/v4/todos, merge requests and threads.
+"""A stand-in GitLab instance: /api/v4/user, a paginated /api/v4/todos, merge requests, issues,
+threads and the caller's own activity feed.
 
-The todo dataset is re-read from disk on every request, so the test can change what the instance
-returns between phases without restarting anything.
+Every dataset is re-read from disk on every request, so a test can change what the instance returns
+between phases without restarting anything.
 """
 import json
 import os
@@ -14,6 +15,7 @@ TODOS_FILE = os.environ["TODOS_FILE"]
 MRS_FILE = os.environ.get("MRS_FILE")
 ISSUES_FILE = os.environ.get("ISSUES_FILE")
 DISCUSSIONS_FILE = os.environ.get("DISCUSSIONS_FILE")
+EVENTS_FILE = os.environ.get("EVENTS_FILE")
 # touching this file makes the instance reject every token, standing in for a revoked PAT
 REVOKE_FILE = os.environ.get("REVOKE_FILE", "/nonexistent")
 GOOD_TOKEN = "good-token"
@@ -70,15 +72,41 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, groups.get(query.get("scope", [""])[0], []), {"X-Next-Page": ""})
             return
 
+        # the caller's own activity, which is the only way to find something they only commented on
+        if parsed.path == "/api/v4/events":
+            events = load(EVENTS_FILE) or []
+            action = query.get("action", [""])[0]
+            # GitLab spells it back as "commented on", so the filter is a contains, as it were
+            if action:
+                events = [e for e in events if action in (e.get("action_name") or "")]
+            self._send(200, events, {"X-Next-Page": ""})
+            return
+
         if parsed.path.startswith("/api/v4/projects/") and parsed.path.endswith("/discussions"):
             parts = parsed.path.split("/")
             key = f"{parts[5]}:{parts[4]}:{parts[6]}"
             self._send(200, load(DISCUSSIONS_FILE).get(key, []), {"X-Next-Page": ""})
             return
 
+        parts = parsed.path.split("/")
+
+        # a project's merge requests or issues narrowed to iids[], which is how the app turns the
+        # resources found in the activity feed into one request per project. answered from the same
+        # "single" fixture as the lookup below, keyed project:iid.
+        if len(parts) == 6 and parts[3] == "projects" and parts[5] in ("merge_requests", "issues"):
+            fixture = load(MRS_FILE if parts[5] == "merge_requests" else ISSUES_FILE)
+            wanted_state = query.get("state", [""])[0]
+            found = []
+            for iid in query.get("iids[]", []):
+                record = fixture.get("single", {}).get(f"{parts[4]}:{iid}")
+                if record is None or (wanted_state and record.get("state") != wanted_state):
+                    continue
+                found.append(record)
+            self._send(200, found, {"X-Next-Page": ""})
+            return
+
         # one merge request by project and iid, which is how the app asks what became of something
         # that left the opened lists. absent from the fixture means 404, ie. gone or not visible.
-        parts = parsed.path.split("/")
         if len(parts) == 7 and parts[3] == "projects" and parts[5] == "merge_requests":
             single = load(MRS_FILE).get("single", {}).get(f"{parts[4]}:{parts[6]}")
             if single is None:

@@ -21,6 +21,12 @@ const page = await browser.newPage();
 page.on("console", (m) => { if (m.type() === "error") problems.push(`console: ${m.text()}`); });
 page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 
+// the app holds one feed query for every page; GET only, so marking read does not count
+let feedReads = 0;
+page.on("request", (r) => {
+  if (r.method() === "GET" && r.url().includes("/api/feed")) feedReads += 1;
+});
+
 const setTheme = (t) => page.evaluate((v) => window.localStorage.setItem("sift-theme", v), t);
 async function shot(name) {
   await settle(900);
@@ -83,10 +89,64 @@ await page.reload({ waitUntil: "networkidle0" });
 await page.waitForSelector('a[href="/gitlab"]', { timeout: 15000 });
 await shot("f05-home-cards-light");
 
+// a cold load of a source tab: the skeleton must be seen, and it must cost exactly one feed read
 await setTheme("dark");
-await page.goto(`${BASE}/gitlab`, { waitUntil: "networkidle0" });
+const readsBefore = feedReads;
+await page.goto(`${BASE}/gitlab`, { waitUntil: "domcontentloaded" });
+const skeleton = await page.waitForSelector("div.animate-pulse", { timeout: 5000 }).catch(() => null);
 await page.waitForSelector("time", { timeout: 15000 });
+// long enough that a second query would have fired, and well short of the 30s poll
+await settle(1500);
+console.log(`  skeleton ${skeleton === null ? "NEVER APPEARED" : "appeared"}, feed reads on load: ${feedReads - readsBefore}`);
+if (skeleton === null) problems.push("the loading skeleton never appeared, so a fast load flashes instead");
+if (feedReads - readsBefore > 1) problems.push(`opening a source tab cost ${feedReads - readsBefore} feed reads, not one`);
 await shot("f06-gitlab-feed-dark");
+
+// the reply lands on the same merge request as its review request, so there must be a group
+const chevron = await page.$('button[aria-expanded="true"]');
+if (chevron === null) {
+  problems.push("no expandable group on the feed, so grouping did not happen");
+} else {
+  await chevron.click();
+  await shot("f06a-group-collapsed-dark");
+  await chevron.click();
+  await settle(400);
+}
+
+// the search field: one place, every source, forgiving of how you typed it
+const SEARCH = 'input[type="search"]';
+const heading = () => page.$eval("h1", (el) => el.textContent);
+async function searchFor(text) {
+  await page.click(SEARCH, { clickCount: 3 });
+  await page.keyboard.press("Backspace");
+  await page.type(SEARCH, text);
+  await settle(500);
+  return { heading: await heading(), rows: (await page.$$('a[href^="https://gitlab.example.org"]')).length };
+}
+
+const typo = await searchFor("reveiw requsted");
+console.log(`  fuzzy "reveiw requsted": ${typo.rows} rows under "${typo.heading}"`);
+if (typo.rows === 0) problems.push("a two-typo query matched nothing");
+await shot("f06b-search-fuzzy-dark");
+
+const scoped = await searchFor("project:frontend is:unread");
+console.log(`  scoped "project:frontend is:unread": ${scoped.rows} rows`);
+if (scoped.rows === 0) problems.push("the scope prefixes matched nothing");
+await shot("f06c-search-scoped-dark");
+
+await page.keyboard.press("Escape");
+await settle(500);
+const handedBack = await heading();
+console.log(`  escape handed the page back to "${handedBack}"`);
+if (handedBack !== "GitLab") problems.push(`escape left the page on "${handedBack}"`);
+
+// the tab itself carries the unread count until real notifications exist
+const tab = await page.evaluate(() => ({
+  title: document.title,
+  icon: document.querySelector('link[rel="icon"]')?.getAttribute("href"),
+}));
+console.log(`  tab title "${tab.title}", favicon ${tab.icon}`);
+if (!/^\(\d+\) Sift$/.test(tab.title)) problems.push(`the tab title carries no unread count: "${tab.title}"`);
 
 // mobile
 await page.setViewport({ width: 430, height: 900, deviceScaleFactor: 2 });

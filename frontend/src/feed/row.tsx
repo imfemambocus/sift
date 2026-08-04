@@ -1,0 +1,66 @@
+import { Check, Circle } from "lucide-react";
+
+/*
+ * the pieces a feed row and a grouped one both wear, kept here so the two cannot drift apart: the
+ * left edge is the unread marker and the tick is how you clear it by hand.
+ */
+
+export const ROW_MOTION = {
+	hidden: { opacity: 0, y: -4 },
+	visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } },
+} as const;
+
+const EDGE_UNREAD = "border-l-accent";
+// grey rather than the theme's border colour, which is faint enough to read as no edge at all
+const EDGE_READ = "border-l-fg-muted/30";
+
+export function edgeClass(read: boolean): string {
+	return read ? EDGE_READ : EDGE_UNREAD;
+}
+
+/*
+ * inside a group the edge is spent on the group as a whole, so an event within one says unread with a
+ * dot instead. a second 2px edge a few pixels to the right of the first reads as a misaligned row
+ * rather than as a child of it, which is the whole thing this avoids.
+ */
+export function UnreadDot({ read }: { readonly read: boolean }) {
+	return (
+		<span
+			aria-hidden
+			className={`mt-[7px] size-1.5 flex-none rounded-full ${read ? "bg-fg-muted/40" : "bg-accent"}`}
+		/>
+	);
+}
+
+type ReadToggleProps = {
+	readonly read: boolean;
+	readonly label: string;
+	readonly onToggle: () => void;
+	/** For an event inside a group, whose lines are shorter than a row's title. */
+	readonly tight?: boolean;
+};
+
+/** Always a sibling of the row's link, never inside it: a button nested in an anchor is invalid. */
+export function ReadToggle({ read, label, onToggle, tight = false }: ReadToggleProps) {
+	// whole strings rather than an appended override, which tailwind cannot resolve by order
+	const offset = tight ? "mt-1 mr-2" : "mt-2.5 mr-2";
+
+	return (
+		<button
+			type="button"
+			onClick={onToggle}
+			aria-label={label}
+			className={`${offset} flex size-7 flex-none items-center justify-center rounded-control text-fg-muted/60 transition-colors hover:text-fg`}
+		>
+			{read ? <Circle size={13} strokeWidth={1.75} /> : <Check size={14} strokeWidth={2} />}
+		</button>
+	);
+}
+
+export function Dot() {
+	return (
+		<span aria-hidden className="text-fg-muted/45">
+			&middot;
+		</span>
+	);
+}

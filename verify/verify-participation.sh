@@ -11,6 +11,7 @@ TODOS="$WORK/p-todos.json"
 MRS="$WORK/p-mrs.json"
 ISSUES="$WORK/p-issues.json"
 DISC="$WORK/p-disc.json"
+EVENTS="$WORK/p-events.json"
 BASE=http://localhost:7779
 FAKE=http://127.0.0.1:7788
 PASS=0; FAIL=0
@@ -29,6 +30,7 @@ check() {
 
 # self is user 42 in the stub; 9 is a colleague
 echo '[]' > "$TODOS"
+echo '[]' > "$EVENTS"
 echo '{"assigned_to_me": [], "created_by_me": []}' > "$ISSUES"
 cat > "$MRS" <<'JSON'
 {"review_requested": [{"id": 700, "iid": 20, "title": "Chart V2: Line chart color encoding",
@@ -54,7 +56,7 @@ cat > "$DISC" <<'JSON'
 JSON
 
 PORT=7788 TODOS_FILE="$TODOS" MRS_FILE="$MRS" ISSUES_FILE="$ISSUES" DISCUSSIONS_FILE="$DISC" \
-  python3 "$HERE/fake-gitlab.py" &
+  EVENTS_FILE="$EVENTS" python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
 for _ in $(seq 1 30); do curl -sf -o /dev/null -H 'PRIVATE-TOKEN: good-token' "$FAKE/api/v4/user" && break; sleep 1; done
 
@@ -81,6 +83,8 @@ post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json'
 connect() { post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null; }
 kinds() { api "$BASE/api/feed" | python3 -c 'import json,sys; print(" ".join(sorted(i["kind"] for i in json.load(sys.stdin))))'; }
 count() { api "$BASE/api/feed" | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1'))"; }
+titled() { api "$BASE/api/feed" | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['title']=='$1'))"; }
+watched() { docker exec sift-p-db psql -U sift -d sift -qtAc 'select count(*) from gitlab_watched_resources' | tr -d ' '; }
 
 api "$BASE/actuator/health" >/dev/null
 post -d '{"email":"a@b.co","displayName":"A","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
@@ -194,6 +198,14 @@ connect
 check "my own push raised no row" 1 "$(count changes_pushed)"
 
 echo
+echo "--- several events on one merge request collapse into one entry ---"
+check "every row about MR 20 shares its group key" 4 "$(api "$BASE/api/feed" | python3 -c 'import json,sys
+feed = json.load(sys.stdin)
+key = next(i["groupKey"] for i in feed if i["kind"] == "mr_review_requested")
+print(sum(1 for i in feed if i["groupKey"] == key))')"
+check "the note anchor is not part of the key" '"gitlab:https://gl.example.org/team/web/-/merge_requests/20"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["groupKey"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
+
+echo
 echo "--- merged: announced once, then there is nothing left to watch ---"
 python3 - "$MRS" <<'PY'
 import json, sys
@@ -218,7 +230,7 @@ check "activity is when it was merged"       '"2026-08-03T15:00:00Z"' "$(api "$B
 check "the project path survived"            '"team/web"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["contextLabel"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
 check "the waiting-for-review row is gone"   0        "$(count mr_review_requested)"
 check "the thread rows stayed"               1        "$(count new_comment)"
-check "it is no longer watched"              1        "$(docker exec sift-p-db psql -U sift -d sift -qtAc 'select count(*) from gitlab_watched_resources' | tr -d ' ')"
+check "it is no longer watched"              1        "$(watched)"
 
 connect
 check "merged is not announced twice"        1        "$(count mr_merged)"
@@ -229,6 +241,90 @@ echo "--- an unchanged resource costs no discussion request ---"
 BEFORE=$(grep -c "discussions" "$WORK/p-boot.log")
 connect
 check "no extra discussion reads when updated_at is unchanged" "$BEFORE" "$(grep -c 'discussions' "$WORK/p-boot.log")"
+
+echo
+echo "--- stage two: something I am part of only because I commented on it ---"
+TITLE="Rewrite the ingest retry loop"
+# nobody put the user on this one: not the author, not a reviewer, not assigned, and no to-do
+python3 - "$MRS" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+data.setdefault("single", {})["5:40"] = {
+    "id": 900, "iid": 40, "title": "Rewrite the ingest retry loop",
+    "state": "opened", "draft": False, "sha": "eee111", "project_id": 5, "user_notes_count": 4,
+    "web_url": "https://gl.example.org/team/api/-/merge_requests/40",
+    "created_at": "2026-08-01T09:00:00.000Z", "updated_at": "2026-08-03T16:00:00.000Z",
+    "author": {"id": 11, "username": "david", "name": "David"},
+    "references": {"full": "team/api!40"},
+}
+json.dump(data, open(path, "w"))
+PY
+cat > "$EVENTS" <<'JSON'
+[{"project_id": 5, "action_name": "commented on", "created_at": "2026-08-03T16:00:00.000Z",
+  "note": {"id": 3001, "body": "Does this retry on a 500 as well?", "system": false,
+           "noteable_type": "MergeRequest", "noteable_iid": 40,
+           "created_at": "2026-08-03T16:00:00.000Z", "author": {"id": 42, "name": "Isfaaq"}}},
+ {"project_id": 5, "action_name": "commented on", "created_at": "2026-08-03T16:05:00.000Z",
+  "note": {"id": 3002, "body": "Nice cleanup.", "system": false,
+           "noteable_type": "Commit", "noteable_iid": null,
+           "created_at": "2026-08-03T16:05:00.000Z", "author": {"id": 42, "name": "Isfaaq"}}}]
+JSON
+python3 - "$DISC" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["merge_requests:5:40"] = [
+  {"id": "d3", "notes": [
+    {"id": 3001, "body": "Does this retry on a 500 as well?", "system": False,
+     "created_at": "2026-08-03T16:00:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}}]}]
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "the commented-on merge request is watched"  2 "$(watched)"
+check "first sight of it only baselines"           0 "$(titled "$TITLE")"
+
+python3 - "$DISC" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["merge_requests:5:40"][0]["notes"].append(
+    {"id": 3003, "body": "Only on 5xx, yes.", "system": False,
+     "created_at": "2026-08-03T17:00:00.000Z", "author": {"id": 11, "username": "david", "name": "David"}})
+json.dump(data, open(sys.argv[1], "w"))
+PY
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["single"]["5:40"]["updated_at"] = "2026-08-03T17:00:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "the reply to my comment reaches me"         1 "$(titled "$TITLE")"
+check "as a discussion row"                        '"new_comment"' "$(api "$BASE/api/feed" | python3 -c "import json,sys; print(json.dumps(next(i['kind'] for i in json.load(sys.stdin) if i['title']=='$TITLE')))")"
+check "named after whoever replied"                '"David"' "$(api "$BASE/api/feed" | python3 -c "import json,sys; print(json.dumps(next(i['actorName'] for i in json.load(sys.stdin) if i['title']=='$TITLE')))")"
+
+# a branch moving is news to a reviewer. it is not news to someone who left one comment.
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["single"]["5:40"]["sha"] = "eee222"
+data["single"]["5:40"]["updated_at"] = "2026-08-03T18:00:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "a push on it raised no commits row"         1 "$(count changes_pushed)"
+check "and still only the one row about it"        1 "$(titled "$TITLE")"
+
+echo
+echo "--- a comment-only resource that closes stops being watched ---"
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["single"]["5:40"]["state"] = "closed"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "closed, so it left the watch list"          1 "$(watched)"
+check "closing it announced nothing"               1 "$(count mr_merged)"
 
 echo
 echo "RESULT: $PASS passed, $FAIL failed"

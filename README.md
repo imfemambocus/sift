@@ -22,8 +22,8 @@ ranks it, and puts it in one feed with your own mute and boost rules on top.
   notification. A review request stays visible even if the matching to-do was never raised or has
   since been dismissed.
 - **Discussions moving on anything you are part of**: new replies on a thread, and new threads on a
-  merge request or issue you authored, are assigned, or are reviewing. One row per thread that
-  updates, not one per reply, so a busy discussion stays one thing to look at.
+  merge request or issue you authored, are assigned, are reviewing, or have simply left a comment on.
+  One row per thread that updates, not one per reply, so a busy discussion stays one thing to look at.
 - **Commits pushed to something you are reviewing**, named after whose branch moved, which usually
   means look again.
 - **A merge request being merged**, and who merged it, so the thing that was waiting on you closes
@@ -40,11 +40,18 @@ visible warning when a token stops working so an empty list is never mistaken fo
 
 Read and unread works the way you would expect. Opening a row marks it read, each row has a toggle
 for anything you want to skip or bring back, and something that moves again after you read it comes
-back unread. A count above the feed says how much is still waiting.
+back unread. A count above the feed says how much is still waiting, and so does the browser tab, in
+its title and on its icon, while Sift is open in it.
 
-Not built yet: filtering and sorting the feed, marking everything read at once, mute and boost rules,
-the fuzzy command palette, browser notifications. Discussions on things you have only commented on,
-with no other involvement, are not watched yet either.
+When several things happen to one merge request, they arrive as one entry you can fold shut rather
+than as the same title four times over.
+
+There is a search field at the top of every page. It searches everything from every connected source,
+not the tab you happen to be on, it forgives typos and words in the wrong order, and `is:unread`,
+`is:mr`, `project:` and `from:` narrow it down.
+
+Not built yet: filtering and sorting the feed by clicking rather than typing, marking everything read
+at once, mute and boost rules, browser notifications.
 
 ## Running it
 
