@@ -54,8 +54,10 @@ There is a search field at the top of every page. It searches everything from ev
 not the tab you happen to be on, it forgives typos and words in the wrong order, and `is:unread`,
 `is:mr`, `project:` and `from:` narrow it down.
 
-Not built yet: mute and boost rules, browser notifications, and clearing out discussion rows you have
-already read so they do not pile up forever.
+Nothing is ever deleted. Rows you have read stay where they are, which is what loading in pages is for.
+
+Not built yet: mute and boost rules, signing in to GitLab instead of pasting a token, and email as a
+second source, both Outlook and Gmail.
 
 ## Running it
 
