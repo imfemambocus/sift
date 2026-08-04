@@ -56,7 +56,8 @@ not the tab you happen to be on, it forgives typos and words in the wrong order,
 
 Nothing is ever deleted. Rows you have read stay where they are, which is what loading in pages is for.
 
-Not built yet: mute and boost rules, signing in to GitLab instead of pasting a token, and email as a
+Not built yet: seeing the things that are already done, which drop out of the feed once GitLab stops
+reporting them; mute and boost rules; signing in to GitLab instead of pasting a token; and email as a
 second source, both Outlook and Gmail.
 
 ## Running it
