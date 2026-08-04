@@ -95,16 +95,34 @@ final class GitLabResponses {
 			References references) {
 	}
 
-	/** A note with {@code system: true} is GitLab narrating itself, not a person commenting. */
+	/**
+	 * A note with {@code system: true} is GitLab narrating itself, not a person commenting.
+	 *
+	 * <p>{@code noteableType} and {@code noteableIid} say what the note hangs off. Only the activity
+	 * feed sends them, since a discussion was asked for by resource in the first place.
+	 */
 	record Note(
 			Long id,
 			String body,
 			Boolean system,
 			@JsonProperty("created_at") Instant createdAt,
+			@JsonProperty("noteable_type") String noteableType,
+			@JsonProperty("noteable_iid") Long noteableIid,
 			User author) {
 	}
 
 	record Discussion(String id, java.util.List<Note> notes) {
+	}
+
+	/**
+	 * One of the token owner's own activities. Only {@code action=commented} is read, and only for
+	 * the note it carries: it is the one place GitLab says what someone replied to.
+	 */
+	record Event(
+			@JsonProperty("project_id") Long projectId,
+			@JsonProperty("action_name") String actionName,
+			@JsonProperty("created_at") Instant createdAt,
+			Note note) {
 	}
 
 	record Todo(

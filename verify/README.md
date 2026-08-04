@@ -9,10 +9,10 @@ Each script starts everything it needs and tears it down again.
 ```
 ./verify-sync.sh              connect, priority mapping, paging, resolve, disconnect, a revoked token
 ./verify-mr.sh                merge requests read as state, and the three de-duplications
-./verify-participation.sh     threads, replies, pushed commits, and everything that must NOT be emitted
+./verify-participation.sh     threads, replies, pushed commits, grouping, and what must NOT be emitted
 ./verify-read.sh              marking items read, tenancy on it, and what a later sync un-reads
 ./verify-unreadable-token.sh  a token that will not decrypt, and "check now"
-./verify-feed-ui.sh           the same flow driven in a browser, with screenshots
+./verify-feed-ui.sh           the same flow in a browser, plus search, grouping and the tab badge
 ```
 
 ## Two rules
@@ -45,10 +45,17 @@ before assuming the suite can run.
 
 ## The stand-in GitLab
 
-`fake-gitlab.py` serves `/api/v4/user`, `todos`, `merge_requests`, `issues` and a resource's
-`discussions`, from JSON fixtures it re-reads on every request, so a test can change what the
-instance returns between sweeps. `make-todos.py` and `make-mrs.py` write those fixtures. Touching the
-file named by `REVOKE_FILE` makes it reject every token, which stands in for a revoked PAT.
+`fake-gitlab.py` serves `/api/v4/user`, `todos`, `merge_requests`, `issues`, a resource's
+`discussions` and the caller's own `events`, from JSON fixtures it re-reads on every request, so a
+test can change what the instance returns between sweeps. `make-todos.py` and `make-mrs.py` write
+those fixtures. Touching the file named by `REVOKE_FILE` makes it reject every token, which stands in
+for a revoked PAT.
 
 Unconfigured routes answer with an empty list rather than 404, so a suite that does not care about
-issues or discussions is not broken by the app reading them.
+issues, discussions or the activity feed is not broken by the app reading them.
+
+Two routes share one fixture key. `single`, keyed `project:iid`, answers both
+`GET /projects/:id/merge_requests/:iid` (what became of something that left the opened lists) and
+`GET /projects/:id/merge_requests?iids[]=` (the resources found in the activity feed). Absent means
+404 for the first and simply missing from the second, and `state` is honoured on the list, so
+flipping a record to `merged` or `closed` is how a suite makes something depart.

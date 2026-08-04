@@ -1,0 +1,12 @@
+<!--
+  the same sieve with a badge. the shortest line is pulled left rather than the disc being ringed in a
+  background colour, because a favicon sits on a tab strip whose colour is the browser's, not ours.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <g stroke="#d6a250" stroke-width="3.2" stroke-linecap="round" fill="none">
+    <line x1="5" y1="9" x2="27" y2="9" />
+    <line x1="9.5" y1="16" x2="19" y2="16" />
+    <line x1="9.5" y1="23" x2="13" y2="23" />
+  </g>
+  <circle cx="25" cy="24" r="6.5" fill="#d6a250" />
+</svg>

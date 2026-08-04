@@ -4,9 +4,9 @@ import dev.emambocus.sift.sync.SourceAuthException;
 import dev.emambocus.sift.sync.SourceUnavailableException;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -17,6 +17,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -39,6 +41,10 @@ class GitLabClient {
 			};
 
 	private static final ParameterizedTypeReference<List<GitLabResponses.Discussion>> DISCUSSION_LIST =
+			new ParameterizedTypeReference<>() {
+			};
+
+	private static final ParameterizedTypeReference<List<GitLabResponses.Event>> EVENT_LIST =
 			new ParameterizedTypeReference<>() {
 			};
 
@@ -65,7 +71,7 @@ class GitLabClient {
 	}
 
 	List<GitLabResponses.Todo> fetchPendingTodos(String instanceUrl, String token, int maxPages) {
-		return paged(client(instanceUrl, token), "/api/v4/todos", Map.of("state", "pending"),
+		return paged(client(instanceUrl, token), "/api/v4/todos", query("state", "pending"),
 				TODO_LIST, maxPages, "todos");
 	}
 
@@ -76,26 +82,66 @@ class GitLabClient {
 	List<GitLabResponses.MergeRequest> fetchReviewRequested(String instanceUrl, String token, long userId,
 			int maxPages) {
 		return paged(client(instanceUrl, token), "/api/v4/merge_requests",
-				Map.of("scope", "all", "state", "opened", "reviewer_id", Long.toString(userId)),
+				query("scope", "all", "state", "opened", "reviewer_id", Long.toString(userId)),
 				MERGE_REQUEST_LIST, maxPages, "review-requested merge requests");
 	}
 
 	List<GitLabResponses.MergeRequest> fetchAssignedToMe(String instanceUrl, String token, int maxPages) {
 		return paged(client(instanceUrl, token), "/api/v4/merge_requests",
-				Map.of("scope", "assigned_to_me", "state", "opened"),
+				query("scope", "assigned_to_me", "state", "opened"),
 				MERGE_REQUEST_LIST, maxPages, "assigned merge requests");
 	}
 
 	List<GitLabResponses.MergeRequest> fetchAuthoredMergeRequests(String instanceUrl, String token, int maxPages) {
 		return paged(client(instanceUrl, token), "/api/v4/merge_requests",
-				Map.of("scope", "created_by_me", "state", "opened"),
+				query("scope", "created_by_me", "state", "opened"),
 				MERGE_REQUEST_LIST, maxPages, "your own merge requests");
 	}
 
 	List<GitLabResponses.Issue> fetchIssues(String instanceUrl, String token, String scope, int maxPages) {
 		return paged(client(instanceUrl, token), "/api/v4/issues",
-				Map.of("scope", scope, "state", "opened"),
+				query("scope", scope, "state", "opened"),
 				ISSUE_LIST, maxPages, "issues (" + scope + ")");
+	}
+
+	/**
+	 * The token owner's own comments, which is the only way to find a resource they are part of purely
+	 * because they replied to it: no to-do, no assignee and no reviewer relationship points at it.
+	 *
+	 * <p>{@code after} is exclusive of the date given, which is close enough for a window measured in
+	 * days.
+	 */
+	List<GitLabResponses.Event> fetchCommentedEvents(String instanceUrl, String token, LocalDate after,
+			int maxPages) {
+		return paged(client(instanceUrl, token), "/api/v4/events",
+				query("action", "commented", "after", after.toString()),
+				EVENT_LIST, maxPages, "your own comments");
+	}
+
+	/**
+	 * Open merge requests by iid within one project. {@code iids[]} is what turns a list of resources
+	 * discovered from the activity feed into one request per project rather than one per resource.
+	 */
+	List<GitLabResponses.MergeRequest> fetchMergeRequestsByIid(String instanceUrl, String token, long projectId,
+			List<Long> iids, int maxPages) {
+		return byIid(instanceUrl, token, projectId, GitLabResourceType.MERGE_REQUEST, iids, MERGE_REQUEST_LIST,
+				maxPages);
+	}
+
+	List<GitLabResponses.Issue> fetchIssuesByIid(String instanceUrl, String token, long projectId,
+			List<Long> iids, int maxPages) {
+		return byIid(instanceUrl, token, projectId, GitLabResourceType.ISSUE, iids, ISSUE_LIST, maxPages);
+	}
+
+	private <T> List<T> byIid(String instanceUrl, String token, long projectId, GitLabResourceType type,
+			List<Long> iids, ParameterizedTypeReference<List<T>> listType, int maxPages) {
+
+		MultiValueMap<String, String> params = query("state", "opened");
+		params.addAll("iids[]", iids.stream().map(String::valueOf).toList());
+
+		return paged(client(instanceUrl, token),
+				"/api/v4/projects/%d/%s".formatted(projectId, type.pathSegment()), params, listType, maxPages,
+				"%d %s in project %d".formatted(iids.size(), type.pathSegment(), projectId));
 	}
 
 	/**
@@ -132,11 +178,20 @@ class GitLabClient {
 			GitLabResourceType type, long iid, int maxPages) {
 
 		String path = "/api/v4/projects/%d/%s/%d/discussions".formatted(projectId, type.pathSegment(), iid);
-		return paged(client(instanceUrl, token), path, Map.of(), DISCUSSION_LIST, maxPages,
+		return paged(client(instanceUrl, token), path, query(), DISCUSSION_LIST, maxPages,
 				"discussions on %s %d".formatted(type.pathSegment(), iid));
 	}
 
-	private <T> List<T> paged(RestClient client, String path, Map<String, String> params,
+	/** Multi-valued because GitLab takes {@code iids[]} repeated rather than comma separated. */
+	private static MultiValueMap<String, String> query(String... keysAndValues) {
+		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+		for (int i = 0; i < keysAndValues.length; i += 2) {
+			params.add(keysAndValues[i], keysAndValues[i + 1]);
+		}
+		return params;
+	}
+
+	private <T> List<T> paged(RestClient client, String path, MultiValueMap<String, String> params,
 			ParameterizedTypeReference<List<T>> type, int maxPages, String what) {
 
 		List<T> collected = new ArrayList<>();
@@ -147,7 +202,8 @@ class GitLabClient {
 					.get()
 					.uri(uri -> {
 						uri.path(path).queryParam("per_page", PER_PAGE).queryParam("page", current);
-						params.forEach(uri::queryParam);
+						// one value at a time: repeated keys are the only form GitLab reads iids[] in
+						params.forEach((name, values) -> values.forEach(value -> uri.queryParam(name, value)));
 						return uri.build();
 					})
 					.retrieve()

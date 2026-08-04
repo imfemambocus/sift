@@ -1,17 +1,21 @@
 import { Link } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { FeedCounts } from "../feed/FeedCounts";
-import { useFeed } from "../feed/feed";
+import { bySource, useFeed } from "../feed/feed";
 import { FeedList } from "../feed/FeedList";
 import { FeedSkeleton } from "../feed/FeedSkeleton";
 import { Page } from "../layout/Page";
+import { useMinimumDuration } from "../lib/minimumDuration";
 import { LastSynced } from "../sources/LastSynced";
 import { SourceAlerts } from "../sources/SourceAlerts";
 import { useSource } from "../sources/sources";
 
 export function GitLabPage() {
-	const { data: items, isPending } = useFeed("gitlab");
+	const { data: feed, isPending } = useFeed();
 	const { data: source } = useSource("gitlab");
+	// narrowed here rather than by a second request; see useFeed
+	const items = bySource(feed ?? [], "gitlab");
+	const loading = useMinimumDuration(isPending);
 	const empty = source === undefined ? <NotConnected /> : <AllClear />;
 
 	return (
@@ -19,10 +23,10 @@ export function GitLabPage() {
 			<SourceAlerts only="gitlab" />
 			{/* reachable from where the feed is, not buried in settings */}
 			<div className="flex flex-wrap items-center justify-between gap-3">
-				<FeedCounts items={items ?? []} />
+				<FeedCounts items={items} />
 				{source !== undefined && <LastSynced source={source} />}
 			</div>
-			{isPending ? <FeedSkeleton /> : <FeedList items={items ?? []} empty={empty} />}
+			{loading ? <FeedSkeleton /> : <FeedList items={items} empty={empty} />}
 		</Page>
 	);
 }
