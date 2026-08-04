@@ -140,6 +140,19 @@ const handedBack = await heading();
 console.log(`  escape handed the page back to "${handedBack}"`);
 if (handedBack !== "GitLab") problems.push(`escape left the page on "${handedBack}"`);
 
+// a refresh someone pressed must skeleton the list, which a background sweep must not
+const refresh = await page.$('button[aria-label^="Check GitLab"]');
+if (refresh === null) {
+  problems.push("no refresh button on the feed page");
+} else {
+  await refresh.click();
+  const onRefresh = await page.waitForSelector("div.animate-pulse", { timeout: 3000 }).catch(() => null);
+  console.log(`  refresh skeleton ${onRefresh === null ? "NEVER APPEARED" : "appeared"}`);
+  if (onRefresh === null) problems.push("pressing refresh did not skeleton the list");
+  await page.waitForSelector("time", { timeout: 20000 });
+  await shot("f06d-refresh-skeleton-gone-dark");
+}
+
 // the tab itself carries the unread count until real notifications exist
 const tab = await page.evaluate(() => ({
   title: document.title,

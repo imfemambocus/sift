@@ -8,14 +8,20 @@ import { Page } from "../layout/Page";
 import { useMinimumDuration } from "../lib/minimumDuration";
 import { LastSynced } from "../sources/LastSynced";
 import { SourceAlerts } from "../sources/SourceAlerts";
-import { useSource } from "../sources/sources";
+import { useIsSyncing, useSource } from "../sources/sources";
 
 export function GitLabPage() {
 	const { data: feed, isPending } = useFeed();
 	const { data: source } = useSource("gitlab");
 	// narrowed here rather than by a second request; see useFeed
 	const items = bySource(feed ?? [], "gitlab");
-	const loading = useMinimumDuration(isPending);
+	/*
+	 * a refresh someone pressed skeletons the list, so the wait is visible where the new rows will
+	 * be. the background sweep never does: replacing the list every thirty seconds unasked would be
+	 * a flicker rather than an answer. called on its own line, since `||` would short-circuit a hook.
+	 */
+	const syncing = useIsSyncing("gitlab");
+	const loading = useMinimumDuration(isPending || syncing);
 	const empty = source === undefined ? <NotConnected /> : <AllClear />;
 
 	return (

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { FEED_KEY } from "../feed/feed";
 import { request } from "../lib/api";
@@ -59,19 +59,35 @@ export function useConnectSource(source: string) {
 	});
 }
 
+const SYNC_KEY = "sync-source";
+
 /** Reads the source now rather than waiting for the sweep. */
 export function useSyncSource(source: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
+		// keyed so a feed page can skeleton itself while this runs, wherever it was triggered from
+		mutationKey: [SYNC_KEY, source],
 		mutationFn: async () => {
 			const payload = await request<unknown>(`/api/sources/${source}/sync`, { method: "POST" });
 			return sourceStatusSchema.parse(payload);
 		},
+		// awaited, so the mutation stays pending until the refetched feed has actually landed
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
 			await queryClient.invalidateQueries({ queryKey: [FEED_KEY] });
 		},
 	});
+}
+
+/**
+ * Whether a refresh someone asked for is in flight, for one source or for any of them.
+ *
+ * <p>Read off the mutation cache rather than passed down, because the button that starts it is a
+ * sibling of the list in one place and a whole page away in the other.
+ */
+export function useIsSyncing(source?: string): boolean {
+	const mutationKey = source === undefined ? [SYNC_KEY] : [SYNC_KEY, source];
+	return useIsMutating({ mutationKey }) > 0;
 }
 
 export function useDisconnectSource(source: string) {

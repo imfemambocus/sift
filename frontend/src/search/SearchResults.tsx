@@ -5,6 +5,7 @@ import { FeedList } from "../feed/FeedList";
 import { FeedSkeleton } from "../feed/FeedSkeleton";
 import { Page } from "../layout/Page";
 import { useMinimumDuration } from "../lib/minimumDuration";
+import { useIsSyncing } from "../sources/sources";
 import { searchFeed } from "./search";
 
 /** The whole working set, not the tab you happen to be on: one place to find a thing you half remember. */
@@ -13,7 +14,8 @@ export function SearchResults({ query }: { readonly query: string }) {
 	// on `items`, never on a `?? []` fallback: a fresh array every render would defeat the memo
 	const matches = useMemo(() => searchFeed(items ?? [], query), [items, query]);
 	const total = items?.length ?? 0;
-	const loading = useMinimumDuration(isPending);
+	const syncing = useIsSyncing();
+	const loading = useMinimumDuration(isPending || syncing);
 
 	return (
 		<Page title="Search" description={`${matches.length} of ${total} across every connected source`}>

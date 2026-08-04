@@ -7,12 +7,14 @@ import { SourceSummary } from "../home/SourceSummary";
 import { Page } from "../layout/Page";
 import { useMinimumDuration } from "../lib/minimumDuration";
 import { SourceAlerts } from "../sources/SourceAlerts";
-import { useSources } from "../sources/sources";
+import { useIsSyncing, useSources } from "../sources/sources";
 
 export function HomePage() {
 	const { data: items, isPending } = useFeed();
 	const { data: sources } = useSources();
-	const loading = useMinimumDuration(isPending || sources === undefined);
+	// any source, since a card here summarises each of them
+	const syncing = useIsSyncing();
+	const loading = useMinimumDuration(isPending || sources === undefined || syncing);
 
 	let body: ReactNode;
 	// the undefined check is repeated rather than left to the hook, which cannot narrow the type
