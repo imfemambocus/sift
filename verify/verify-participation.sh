@@ -6,6 +6,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 # scratch: logs, cookies and the fixtures a run mutates. kept out of the repo.
 WORK="${SIFT_VERIFY_WORK:-$(mktemp -d)}"
+mkdir -p "$WORK"
 JAR="$WORK/p-cookies.txt"
 TODOS="$WORK/p-todos.json"
 MRS="$WORK/p-mrs.json"
@@ -83,6 +84,7 @@ post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json'
 connect() { post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null; }
 kinds() { api "$BASE/api/feed" | python3 -c 'import json,sys; print(" ".join(sorted(i["kind"] for i in json.load(sys.stdin))))'; }
 count() { api "$BASE/api/feed" | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1'))"; }
+settled() { api "$BASE/api/feed" | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1' and i['resolved']))"; }
 titled() { api "$BASE/api/feed" | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['title']=='$1'))"; }
 watched() { docker exec sift-p-db psql -U sift -d sift -qtAc 'select count(*) from gitlab_watched_resources' | tr -d ' '; }
 
@@ -228,7 +230,9 @@ check "a merged row appeared"                1        "$(count mr_merged)"
 check "named after whoever merged it"        '"David"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
 check "activity is when it was merged"       '"2026-08-03T15:00:00Z"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["activityAt"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
 check "the project path survived"            '"team/web"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["contextLabel"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
-check "the waiting-for-review row is gone"   0        "$(count mr_review_requested)"
+# it is history now rather than a row that vanishes: still there, marked as no longer waiting
+check "the waiting-for-review row stayed"    1        "$(count mr_review_requested)"
+check "and it reads as settled"              1        "$(settled mr_review_requested)"
 check "the thread rows stayed"               1        "$(count new_comment)"
 check "it is no longer watched"              1        "$(watched)"
 

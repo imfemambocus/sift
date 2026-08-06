@@ -1,9 +1,9 @@
 import { motion } from "motion/react";
 import type { FeedItem } from "./feed";
 import { useSetRead } from "./feed";
-import { eventFamily, FAMILY_TEXT } from "./events";
+import { FAMILY_TEXT, rowFamily } from "./events";
 import { kindLabel } from "./kinds";
-import { Dot, edgeClass, ReadToggle, ROW_MOTION } from "./row";
+import { Dot, DoneTag, edgeClass, ReadToggle, ROW_MOTION } from "./row";
 import { fullTimestamp, shortAgo } from "../lib/time";
 
 /*
@@ -12,7 +12,7 @@ import { fullTimestamp, shortAgo } from "../lib/time";
  * decode.
  */
 export function FeedRow({ item }: { readonly item: FeedItem }) {
-	const family = eventFamily(item.kind);
+	const family = rowFamily(item.kind, item.resolved);
 	const setRead = useSetRead();
 
 	function toggleRead() {
@@ -64,6 +64,13 @@ export function FeedRow({ item }: { readonly item: FeedItem }) {
 					)}
 
 					<span className={`font-medium ${FAMILY_TEXT[family]}`}>{kindLabel(item.kind)}</span>
+
+					{item.resolved && (
+						<>
+							<Dot />
+							<DoneTag />
+						</>
+					)}
 
 					<Dot />
 					{/* the time shown is the last activity, not the creation date: an MR opened last

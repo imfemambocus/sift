@@ -7,6 +7,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 # scratch: logs, cookies and the fixtures a run mutates. kept out of the repo.
 WORK="${SIFT_VERIFY_WORK:-$(mktemp -d)}"
+mkdir -p "$WORK"
 JAR="$WORK/u-cookies.txt"
 LOG="$WORK/u-boot.log"
 BASE=http://localhost:7779

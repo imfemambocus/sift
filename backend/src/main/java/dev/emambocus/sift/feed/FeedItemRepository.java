@@ -20,10 +20,13 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 
 	List<FeedItem> findByUserIdAndSource(UUID userId, SourceType source);
 
-	List<FeedItem> findByUserIdAndResolvedAtIsNullOrderByActivityAtDesc(UUID userId);
+	/*
+	 * resolved rows are deliberately included. the feed is the whole history, and read against unread
+	 * is the only axis it narrows on, so a completed to-do stays in the list instead of leaving it.
+	 */
+	List<FeedItem> findByUserIdOrderByActivityAtDesc(UUID userId);
 
-	List<FeedItem> findByUserIdAndSourceAndResolvedAtIsNullOrderByActivityAtDesc(
-			UUID userId, SourceType source);
+	List<FeedItem> findByUserIdAndSourceOrderByActivityAtDesc(UUID userId, SourceType source);
 
 	long countByUserIdAndSourceAndResolvedAtIsNull(UUID userId, SourceType source);
 
@@ -39,8 +42,11 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 
 	/*
 	 * one statement rather than the client patching every id, which for a full feed would be hundreds
-	 * of requests. only the unread are touched, so an item read yesterday keeps the timestamp it had,
-	 * and only the unresolved, so this cannot silently mark history nobody can see.
+	 * of requests. only the unread are touched, so an item read yesterday keeps the timestamp it had.
+	 *
+	 * resolved rows are no longer excluded: they are in the feed now, so leaving them behind would be
+	 * a "mark all read" that visibly did not. nothing invisible is reached either way, because a row
+	 * is stamped read at the moment it resolves.
 	 *
 	 * two methods rather than one with a nullable source: passing null for an enum parameter leaves
 	 * hibernate guessing at the type, and the guess is not always the one the column wants.
@@ -48,15 +54,14 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 	@Modifying
 	@Query("""
 			update FeedItem item set item.readAt = :readAt
-			 where item.userId = :userId and item.readAt is null and item.resolvedAt is null
+			 where item.userId = :userId and item.readAt is null
 			""")
 	int markAllRead(@Param("userId") UUID userId, @Param("readAt") Instant readAt);
 
 	@Modifying
 	@Query("""
 			update FeedItem item set item.readAt = :readAt
-			 where item.userId = :userId and item.source = :source
-			   and item.readAt is null and item.resolvedAt is null
+			 where item.userId = :userId and item.source = :source and item.readAt is null
 			""")
 	int markAllRead(@Param("userId") UUID userId, @Param("source") SourceType source,
 			@Param("readAt") Instant readAt);

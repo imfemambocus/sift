@@ -12,7 +12,8 @@ Each script starts everything it needs and tears it down again.
 ./verify-participation.sh     threads, replies, pushed commits, grouping, and what must NOT be emitted
 ./verify-read.sh              marking items read, tenancy on it, and what a later sync un-reads
 ./verify-unreadable-token.sh  a token that will not decrypt, and "check now"
-./verify-feed-ui.sh           the same flow in a browser, plus search, grouping and the tab badge
+./verify-feed-ui.sh           the same flow in a browser, plus search, grouping, the tab badge, and
+                              an item completed upstream that stays in the feed as history
 ```
 
 ## Two rules
@@ -24,6 +25,10 @@ look like application bugs and are not. If everything fails at once, check the b
 
 **Those ports are chosen to miss a running instance.** `compose` publishes Postgres on 5433 and the
 app on 7777, so nothing here can touch an instance you are using.
+
+`verify-feed-ui.sh` refuses to start if something already serves 5174, rather than kill it. A dev server
+someone else started would otherwise be driven instead of its own, and the whole run would go at that
+person's backend. Stop yours, or wait for a previous run to clean up, and start it again.
 
 ## Scratch and screenshots
 
@@ -62,7 +67,7 @@ flipping a record to `merged` or `closed` is how a suite makes something depart.
 
 ## The Testcontainers suite is separate
 
-`cd backend && ./gradlew test` runs 29 in-process tests against a real Postgres 17 container: the
+`cd backend && ./gradlew test` runs 36 in-process tests against a real Postgres 17 container: the
 diffing rules, tenancy, the credential sync outcome and the GitLab adapter's de-duplications. It needs
 no shell script and no free ports, so it is the one to reach for first. The suites here cover what it
 cannot: real HTTP, a real browser, and the packaged container.

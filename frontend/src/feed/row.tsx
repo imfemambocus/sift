@@ -58,6 +58,15 @@ export function ReadToggle({ read, label, onToggle, tight = false }: ReadToggleP
 	);
 }
 
+/*
+ * a row the source has stopped reporting. the greyed kind wording says it is no longer live, and this
+ * says what became of it, which the kind alone cannot: "Assigned to you" is past tense once the to-do
+ * has been completed.
+ */
+export function DoneTag() {
+	return <span className="font-mono text-[11px] text-fg-muted/70">done</span>;
+}
+
 export function Dot() {
 	return (
 		<span aria-hidden className="text-fg-muted/45">

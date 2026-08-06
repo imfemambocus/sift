@@ -76,3 +76,14 @@ export const FAMILY_FILL: Record<EventFamily, string> = {
 export function eventFamily(kind: string): EventFamily {
 	return FAMILY_BY_KIND[kind] ?? "other";
 }
+
+/**
+ * What a row in the list wears, which is not the same question as what its kind means.
+ *
+ * <p>A resolved row is history: the to-do was completed, the merge request was merged. It wants
+ * nothing from anyone, so it reads as the quiet grey whatever it was asking for while it was live.
+ * Both the plain row and an event inside a group go through here so the two cannot drift.
+ */
+export function rowFamily(kind: string, resolved: boolean): EventFamily {
+	return resolved ? "other" : eventFamily(kind);
+}

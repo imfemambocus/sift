@@ -5,6 +5,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 WORK="${SIFT_VERIFY_WORK:-$(mktemp -d)}"
+mkdir -p "$WORK"
 LOG="$WORK/read-boot.log"
 JAR_A="$WORK/read-cookies-a.txt"
 JAR_B="$WORK/read-cookies-b.txt"

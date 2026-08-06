@@ -42,13 +42,18 @@ class FeedServiceTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("resolved items leave the feed, since it is what still wants attention")
-	void resolvedAreHidden() {
+	@DisplayName("a resolved item stays in the feed, flagged, because the history is not filtered")
+	void resolvedStayInTheFeed() {
 		UUID user = newUser("resolved@uni.lu");
 		store.persist(user, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY)));
 		store.persist(user, SourceType.GITLAB, List.of());
 
-		assertThat(feed.feed(user, null)).isEmpty();
+		List<FeedItemResponse> all = feed.feed(user, null);
+
+		assertThat(all).hasSize(1);
+		assertThat(all.get(0).resolved()).isTrue();
+		// it wants nothing from anyone, so it must not sit in the unread count for ever either
+		assertThat(all.get(0).read()).isTrue();
 	}
 
 	@Test
@@ -158,13 +163,14 @@ class FeedServiceTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("a resolved row is not silently marked read: it is not in the feed to be cleared")
-	void markAllReadIgnoresResolved() {
+	@DisplayName("a row was read the moment it resolved, so mark-all-read has nothing left to do")
+	void markAllReadAfterResolving() {
 		UUID user = newUser("gone@uni.lu");
 		store.persist(user, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY)));
 		store.persist(user, SourceType.GITLAB, List.of());
 
 		assertThat(feed.markAllRead(user, null)).isZero();
+		assertThat(feed.feed(user, null).get(0).read()).isTrue();
 	}
 
 	private static IncomingItem item(String sourceId, Instant created, Instant activity) {
