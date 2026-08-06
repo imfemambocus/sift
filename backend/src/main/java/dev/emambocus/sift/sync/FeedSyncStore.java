@@ -6,6 +6,7 @@ import dev.emambocus.sift.credential.SourceType;
 import dev.emambocus.sift.credential.SyncStatus;
 import dev.emambocus.sift.feed.FeedItem;
 import dev.emambocus.sift.feed.FeedItemRepository;
+import dev.emambocus.sift.feed.GroupKeys;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -140,6 +141,8 @@ public class FeedSyncStore {
 		stored.setContextLabel(item.contextLabel());
 		stored.setContextUrl(item.contextUrl());
 		stored.setUrl(item.url());
+		// recomputed rather than set once, since a source may correct the url of a row it already sent
+		stored.setGroupKey(GroupKeys.of(stored.getSource(), item.url()));
 		/*
 		 * both columns are NOT NULL, and a source that omits a timestamp must degrade rather than
 		 * fail the whole sync. one guard here beats one per adapter.

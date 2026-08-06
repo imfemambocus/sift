@@ -1,22 +1,11 @@
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
-import { useState } from "react";
 import type { FeedItem } from "./feed";
 import { FeedGroupRow } from "./FeedGroupRow";
 import { FeedRow } from "./FeedRow";
 import type { FeedGroup } from "./grouping";
 import { intoGroups } from "./grouping";
 import { dayGroup } from "../lib/time";
-
-/*
- * paged over groups, never over items, so a merge request's events cannot be split across the boundary
- * with half of them behind a button.
- *
- * this bounds what is rendered, not what is transferred: the whole working set is still fetched in one
- * request, because the search field and the tab badge are over all of it. server-side paging is the next
- * move if the corpus ever outgrows shipping it, and `GET /api/feed?source=` is already there for it.
- */
-const PAGE = 50;
 
 type Section = { readonly label: string; readonly groups: readonly FeedGroup[] };
 
@@ -38,25 +27,25 @@ function intoDays(groups: readonly FeedGroup[]): Section[] {
 	return sections;
 }
 
+/*
+ * paged over groups, never over items, so a merge request's events cannot be split across the
+ * boundary with half of them behind a button. the server does that paging now and hands back whole
+ * groups, so this asks for the next page rather than slicing a list it is already holding.
+ */
 type FeedListProps = {
 	readonly items: readonly FeedItem[];
 	readonly empty: ReactNode;
+	readonly hasMore?: boolean;
+	readonly onMore?: () => void;
+	readonly loadingMore?: boolean;
 };
 
-export function FeedList({ items, empty }: FeedListProps) {
-	/*
-	 * deliberately not reset when the filter or the query changes. it is "how much am I willing to
-	 * see", which survives narrowing perfectly well, and resetting it would mean either remounting the
-	 * list on every keystroke of a search or replaying the entry animation each time.
-	 */
-	const [limit, setLimit] = useState(PAGE);
-
+export function FeedList({ items, empty, hasMore = false, onMore, loadingMore = false }: FeedListProps) {
 	if (items.length === 0) {
 		return <>{empty}</>;
 	}
 
-	const groups = intoGroups(items);
-	const shown = groups.slice(0, limit);
+	const shown = intoGroups(items);
 
 	return (
 		<div className="flex flex-col gap-7">
@@ -80,18 +69,19 @@ export function FeedList({ items, empty }: FeedListProps) {
 				))}
 			</motion.div>
 
-			{groups.length > shown.length && (
+			{hasMore && (
 				<div className="flex items-center gap-3 pl-4">
 					<button
 						type="button"
-						onClick={() => setLimit(limit + PAGE)}
-						className="rounded-control border border-border px-3 py-1.5 text-[12px] text-fg transition-colors hover:bg-raised"
+						onClick={onMore}
+						disabled={loadingMore}
+						className="rounded-control border border-border px-3 py-1.5 text-[12px] text-fg transition-colors hover:bg-raised disabled:cursor-not-allowed disabled:opacity-55"
 					>
-						Show more
+						{loadingMore ? "Loading" : "Show more"}
 					</button>
-					<span className="font-mono text-[11px] text-fg-muted">
-						{shown.length} of {groups.length}
-					</span>
+					{/* how much is on screen, not how much there is: the total is a count the page
+					    would have to ask for separately, and nothing here needs it */}
+					<span className="font-mono text-[11px] text-fg-muted">{shown.length} shown</span>
 				</div>
 			)}
 		</div>

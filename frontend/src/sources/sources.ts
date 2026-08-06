@@ -1,6 +1,6 @@
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { FEED_KEY } from "../feed/feed";
+import { invalidateFeed } from "../feed/feed";
 import { request } from "../lib/api";
 
 // status is a plain string for the same reason a feed item's kind is: a value this build has not
@@ -54,7 +54,7 @@ export function useConnectSource(source: string) {
 		// connecting runs a first sync server-side, so the feed has something new to show
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
-			await queryClient.invalidateQueries({ queryKey: [FEED_KEY] });
+			await invalidateFeed(queryClient);
 		},
 	});
 }
@@ -74,7 +74,7 @@ export function useSyncSource(source: string) {
 		// awaited, so the mutation stays pending until the refetched feed has actually landed
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
-			await queryClient.invalidateQueries({ queryKey: [FEED_KEY] });
+			await invalidateFeed(queryClient);
 		},
 	});
 }
@@ -96,7 +96,7 @@ export function useDisconnectSource(source: string) {
 		mutationFn: () => request<null>(`/api/sources/${source}`, { method: "DELETE" }),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
-			await queryClient.invalidateQueries({ queryKey: [FEED_KEY] });
+			await invalidateFeed(queryClient);
 		},
 	});
 }

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { EmptyState } from "../components/EmptyState";
-import { bySource, useFeed } from "../feed/feed";
+import { summaryFor, useFeedSummary } from "../feed/feed";
 import { FeedSkeleton } from "../feed/FeedSkeleton";
 import { SourceSummary } from "../home/SourceSummary";
 import { Page } from "../layout/Page";
@@ -10,7 +10,8 @@ import { SourceAlerts } from "../sources/SourceAlerts";
 import { useIsSyncing, useSources } from "../sources/sources";
 
 export function HomePage() {
-	const { data: items, isPending } = useFeed();
+	// counts, not rows: a card says how much is waiting, and the rows are a page away
+	const { data: summary, isPending } = useFeedSummary();
 	const { data: sources } = useSources();
 	// any source, since a card here summarises each of them
 	const syncing = useIsSyncing();
@@ -28,7 +29,7 @@ export function HomePage() {
 		body = (
 			<div className="grid gap-4 sm:grid-cols-2">
 				{sources.map((source) => (
-					<SourceSummary key={source.source} source={source} items={bySource(items ?? [], source.source)} />
+					<SourceSummary key={source.source} source={source} counts={summaryFor(summary, source.source)} />
 				))}
 			</div>
 		);

@@ -7,7 +7,9 @@ non-obvious bug in this project so far.
 Each script starts everything it needs and tears it down again.
 
 ```
-./verify-sync.sh              connect, priority mapping, paging, resolve, disconnect, a revoked token
+./verify-sync.sh              connect, priority mapping, resolve, disconnect, a revoked token, and
+                              everything the server now does to the feed: the filters, the two
+                              orders, the search, the page bound, the cursor, and the counts
 ./verify-mr.sh                merge requests read as state, and the three de-duplications
 ./verify-participation.sh     threads, replies, pushed commits, grouping, and what must NOT be emitted
 ./verify-read.sh              marking items read, tenancy on it, and what a later sync un-reads
@@ -67,7 +69,15 @@ flipping a record to `merged` or `closed` is how a suite makes something depart.
 
 ## The Testcontainers suite is separate
 
-`cd backend && ./gradlew test` runs 36 in-process tests against a real Postgres 17 container: the
-diffing rules, tenancy, the credential sync outcome and the GitLab adapter's de-duplications. It needs
-no shell script and no free ports, so it is the one to reach for first. The suites here cover what it
-cannot: real HTTP, a real browser, and the packaged container.
+`cd backend && ./gradlew test` runs 49 in-process tests against a real Postgres 17 container: the
+diffing rules, tenancy, the credential sync outcome, the GitLab adapter's de-duplications, and the
+paging, narrowing and search of the feed query. It needs no shell script and no free ports, so it is
+the one to reach for first. The suites here cover what it cannot: real HTTP, a real browser, and the
+packaged container.
+
+## One thing the suites have to remember
+
+`GET /api/feed` answers `{ "items": [...], "nextCursor": ... }` and one page of groups, not a bare
+array of everything. Each script therefore has a `feed` helper that asks for a page large enough to
+hold its fixtures and unwraps the items. Use it rather than calling the endpoint directly, except
+where the point of the check is the paging itself.

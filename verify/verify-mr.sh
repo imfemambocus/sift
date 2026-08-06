@@ -61,6 +61,9 @@ echo "backend up"; echo
 
 csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
 api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
+# the feed is paged over groups now, so a suite asks for one page large enough to hold every fixture
+# and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
+feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
 
 api "$BASE/actuator/health" >/dev/null
@@ -68,7 +71,7 @@ post -d '{"email":"a@b.co","displayName":"A","password":"correct-horse-battery"}
 post -d '{"email":"a@b.co","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
 CONNECT=$(post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect")
 
-FEED=$(api "$BASE/api/feed")
+FEED=$(feed)
 echo "$FEED" | python3 -c '
 import json, sys
 for i in json.load(sys.stdin):

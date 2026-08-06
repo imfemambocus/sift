@@ -73,6 +73,10 @@ public class FeedItem {
 	@Column(nullable = false)
 	private String url;
 
+	/** What this row is about. See {@link GroupKeys}: the feed pages over these, not over items. */
+	@Column(name = "group_key", nullable = false)
+	private String groupKey;
+
 	/** When the underlying thing was created. Kept for context, not for ordering. */
 	@Column(name = "source_created_at", nullable = false)
 	private Instant sourceCreatedAt;

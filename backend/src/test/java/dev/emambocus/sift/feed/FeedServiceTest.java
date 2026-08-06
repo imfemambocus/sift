@@ -35,7 +35,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 				item("mr:1", MONDAY.minus(7, ChronoUnit.DAYS), MONDAY.plus(2, ChronoUnit.HOURS)),
 				item("todo:2", MONDAY, MONDAY.plus(1, ChronoUnit.HOURS))));
 
-		List<FeedItemResponse> ordered = feed.feed(user, null);
+		List<FeedItemResponse> ordered = items(user);
 
 		assertThat(ordered).extracting(FeedItemResponse::kind).hasSize(2);
 		assertThat(ordered.get(0).activityAt()).isAfter(ordered.get(1).activityAt());
@@ -48,7 +48,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 		store.persist(user, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY)));
 		store.persist(user, SourceType.GITLAB, List.of());
 
-		List<FeedItemResponse> all = feed.feed(user, null);
+		List<FeedItemResponse> all = items(user);
 
 		assertThat(all).hasSize(1);
 		assertThat(all.get(0).resolved()).isTrue();
@@ -66,7 +66,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 				at("thread:d1", mergeRequest + "#note_1002"),
 				at("todo:9", mergeRequest + "#note_998")));
 
-		List<FeedItemResponse> all = feed.feed(user, null);
+		List<FeedItemResponse> all = items(user);
 
 		assertThat(all).extracting(FeedItemResponse::groupKey)
 				.containsOnly("gitlab:" + mergeRequest);
@@ -80,7 +80,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 				at("mr:700", "https://gl.example.org/team/web/-/merge_requests/20"),
 				at("mr:701", "https://gl.example.org/team/web/-/merge_requests/21")));
 
-		assertThat(feed.feed(user, null)).extracting(FeedItemResponse::groupKey).doesNotHaveDuplicates();
+		assertThat(items(user)).extracting(FeedItemResponse::groupKey).doesNotHaveDuplicates();
 	}
 
 	@Test
@@ -89,12 +89,12 @@ class FeedServiceTest extends SiftIntegrationTest {
 		UUID mine = newUser("mine@uni.lu");
 		UUID theirs = newUser("theirs@uni.lu");
 		store.persist(mine, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY)));
-		UUID itemId = feed.feed(mine, null).get(0).id();
+		UUID itemId = items(mine).get(0).id();
 
 		assertThatThrownBy(() -> feed.setRead(theirs, itemId, true))
 				.isInstanceOf(FeedItemNotFoundException.class);
 
-		assertThat(feed.feed(mine, null).get(0).read()).isFalse();
+		assertThat(items(mine).get(0).read()).isFalse();
 	}
 
 	@Test
@@ -111,13 +111,13 @@ class FeedServiceTest extends SiftIntegrationTest {
 	void unreadClearsTheTimestamp() {
 		UUID user = newUser("toggle@uni.lu");
 		store.persist(user, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY)));
-		UUID itemId = feed.feed(user, null).get(0).id();
+		UUID itemId = items(user).get(0).id();
 
 		feed.setRead(user, itemId, true);
-		assertThat(feed.feed(user, null).get(0).read()).isTrue();
+		assertThat(items(user).get(0).read()).isTrue();
 
 		feed.setRead(user, itemId, false);
-		assertThat(feed.feed(user, null).get(0).read()).isFalse();
+		assertThat(items(user).get(0).read()).isFalse();
 	}
 
 	@Test
@@ -128,7 +128,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 				item("todo:1", MONDAY, MONDAY), item("todo:2", MONDAY, MONDAY), item("todo:3", MONDAY, MONDAY)));
 
 		assertThat(feed.markAllRead(user, null)).isEqualTo(3);
-		assertThat(feed.feed(user, null)).allMatch(FeedItemResponse::read);
+		assertThat(items(user)).allMatch(FeedItemResponse::read);
 	}
 
 	@Test
@@ -136,7 +136,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 	void markAllReadSkipsWhatIsAlreadyRead() {
 		UUID user = newUser("already@uni.lu");
 		store.persist(user, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY), item("todo:2", MONDAY, MONDAY)));
-		feed.setRead(user, feed.feed(user, null).get(0).id(), true);
+		feed.setRead(user, items(user).get(0).id(), true);
 
 		// only the one that was still unread is touched, which is what the row count says
 		assertThat(feed.markAllRead(user, null)).isEqualTo(1);
@@ -151,7 +151,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 		store.persist(theirs, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY)));
 
 		assertThat(feed.markAllRead(mine, SourceType.GITLAB)).isEqualTo(1);
-		assertThat(feed.feed(theirs, null).get(0).read()).isFalse();
+		assertThat(items(theirs).get(0).read()).isFalse();
 	}
 
 	@Test
@@ -170,7 +170,16 @@ class FeedServiceTest extends SiftIntegrationTest {
 		store.persist(user, SourceType.GITLAB, List.of());
 
 		assertThat(feed.markAllRead(user, null)).isZero();
-		assertThat(feed.feed(user, null).get(0).read()).isTrue();
+		assertThat(items(user).get(0).read()).isTrue();
+	}
+
+	/** The whole feed, unnarrowed, which is what most of these assertions are about. */
+	private List<FeedItemResponse> items(UUID user) {
+		return feed.page(all(user)).items();
+	}
+
+	private static FeedRequest all(UUID user) {
+		return new FeedRequest(user, null, FeedFilter.ALL, FeedOrder.LATEST, FeedSearch.NONE, null, 50);
 	}
 
 	private static IncomingItem item(String sourceId, Instant created, Instant activity) {

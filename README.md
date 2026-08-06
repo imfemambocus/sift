@@ -58,22 +58,25 @@ Read and unread behaves like this:
 
 Several events can happen on one merge request. Sift puts them in one entry, and you can collapse
 that entry. The list does not repeat the same title four times. A long list loads fifty entries at
-a time.
+a time, and Sift asks the server for each page as you ask for it. A long history therefore does not
+make the app slower.
 
 You can read the feed with the newest activity first. You can also read it with the oldest first.
 Use the second order to find the item that has waited longest.
 
-Every page has a search field at the top. It searches every connected source. It does not search
-only the tab you are on. It forgives a typo. It forgives words in the wrong order. `is:unread`,
-`is:mr`, `project:` and `from:` make a search narrow.
+Every page has a search field at the top. It searches every connected source, and it searches your
+whole history. It does not search only the tab you are on, and it does not search only the part of
+the list on screen. It forgives a typo. It forgives words in the wrong order. `is:unread`, `is:mr`,
+`project:` and `from:` make a search narrow.
 
 Sift deletes nothing, and nothing drops out of the feed. Somebody completes a to-do, or a merge
 request merges. The row stays in the list. It turns grey and it says "done". The feed is your whole
 history. Read and unread is the only axis you filter it on. Finished work does not count as unread,
 because nothing waits for you there.
 
-These parts are not built yet: a GitLab sign-in in place of a pasted token, and email as a second
-source. Email covers Outlook and Gmail.
+These parts are not built yet. The first is a GitLab connection that asks GitLab for permission,
+instead of a token you paste. Your Sift account stays an email address and a password. No source
+ever becomes your way in. The second is email as a second source. Email covers Outlook and Gmail.
 
 ## Run it
 
@@ -86,6 +89,10 @@ make up        # builds and runs everything on http://localhost:7777
 
 That is the whole setup. On the first run Sift writes a `.env` file with a new encryption key. It
 waits for the database. It applies the migrations. It then serves the app.
+
+The search uses the `fuzzystrmatch` extension of Postgres, and a migration creates it. The bundled
+database allows this. If you point Sift at a database of your own, give its user permission to
+create that extension.
 
 To work on the code, start the parts separately. Both sides then reload.
 
@@ -149,8 +156,8 @@ cd backend && ./gradlew test
 ```
 
 It runs against a real Postgres in a container, and it starts that container itself. It covers the
-parts where a silent error costs most: which items still wait for you, which items are complete, and
-the rule that you never see the items of another person.
+parts where a silent error costs most: which items still wait for you, which items are complete, the
+search and the order of the list, and the rule that you never see the items of another person.
 
 `verify/` holds the integration suites. They drive the real backend over HTTP against a stand-in
 GitLab. One of them drives the user interface in a browser.
