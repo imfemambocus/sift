@@ -6,6 +6,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 # scratch: logs, cookies and the fixtures a run mutates. kept out of the repo.
 WORK="${SIFT_VERIFY_WORK:-$(mktemp -d)}"
+mkdir -p "$WORK"
 TODOS="$WORK/todos.json"
 
 cleanup() {
@@ -50,8 +51,14 @@ for _ in $(seq 1 150); do
 done
 echo "backend up"
 
-pkill -f "vite" 2>/dev/null; sleep 1
-(cd "$ROOT/frontend" && SIFT_BACKEND_URL=http://localhost:7779 npm run dev >"$WORK/feed-vite.log" 2>&1) &
+# refuse to run rather than kill whatever holds 5174: a dev server someone else started would
+# otherwise be driven instead of ours, proxying the whole suite at their backend
+if curl -sf -o /dev/null http://localhost:5174/; then
+  echo "something is already serving http://localhost:5174 - stop it and run this again"; exit 1
+fi
+# exec vite itself rather than `npm run dev`, so VITE_PID is the server and not a wrapper whose
+# death leaves it listening on 5174 for the next run to drive by mistake
+(cd "$ROOT/frontend" && SIFT_BACKEND_URL=http://localhost:7779 exec ./node_modules/.bin/vite >"$WORK/feed-vite.log" 2>&1) &
 VITE_PID=$!
 for _ in $(seq 1 60); do curl -sf -o /dev/null http://localhost:5174/ && break; sleep 1; done
 echo "vite up"

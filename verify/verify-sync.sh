@@ -6,6 +6,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 # scratch: logs, cookies and the fixtures a run mutates. kept out of the repo.
 WORK="${SIFT_VERIFY_WORK:-$(mktemp -d)}"
+mkdir -p "$WORK"
 LOG="$WORK/sync-boot.log"
 JAR="$WORK/sync-cookies.txt"
 TODOS="$WORK/todos.json"
@@ -123,10 +124,14 @@ check "feed?source=gitlab count" 8 "$(api "$BASE/api/feed?source=gitlab" | pytho
 check "feed?source=nope" 400 "$(code "$BASE/api/feed?source=nope")"
 
 echo
-echo "--- items that disappear upstream are resolved, not deleted ---"
+echo "--- items that disappear upstream are resolved, and stay in the feed as history ---"
 python3 "$HERE/make-todos.py" shrunk "$TODOS" >/dev/null
-RECONNECT=$(post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect")
-check "feed shrinks to 6" 6 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
+check "the feed still holds all 8" 8 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+check "two of them read as resolved" 2 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if i["resolved"]))')"
+# nothing is waiting on a finished item, so it must not sit in the unread count for ever
+check "resolving read them" 2 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if i["resolved"] and i["read"]))')"
+check "and left the others unread" 6 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if not i["read"]))')"
 check "rows kept in the table" 8 "$(docker exec sift-sync-db psql -U sift -d sift -qtAc 'select count(*) from feed_items' | tr -d ' ')"
 check "two rows marked resolved" 2 "$(docker exec sift-sync-db psql -U sift -d sift -qtAc 'select count(*) from feed_items where resolved_at is not null' | tr -d ' ')"
 check "first_seen_at preserved on survivors" 6 "$(docker exec sift-sync-db psql -U sift -d sift -qtAc 'select count(*) from feed_items where resolved_at is null and first_seen_at < last_seen_at' | tr -d ' ')"
@@ -135,7 +140,8 @@ echo
 echo "--- pagination past one page of 100 ---"
 python3 "$HERE/make-todos.py" many:150 "$TODOS" >/dev/null
 post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
-check "all 150 read across 2 pages" 150 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+# the earlier eight are still in the feed as resolved history, so the live rows are what counts here
+check "all 150 read across 2 pages" 150 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if not i["resolved"]))')"
 
 echo
 echo "--- sources listing and disconnect ---"

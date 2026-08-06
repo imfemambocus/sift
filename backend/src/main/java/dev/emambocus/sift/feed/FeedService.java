@@ -19,12 +19,19 @@ public class FeedService {
 		this.clock = clock;
 	}
 
-	/** Resolved items are left out: the feed is what still wants attention, not a history. */
+	/**
+	 * Everything the user has ever been sent, newest activity first.
+	 *
+	 * <p>Resolved rows are included. Read against unread is the only axis this list narrows on, so a
+	 * to-do somebody completed and a merge request that was merged stay in it. {@code resolvedAt}
+	 * still records that the source stopped reporting an item, and it is still what counts how many
+	 * are waiting; it no longer decides what the list contains.
+	 */
 	@Transactional(readOnly = true)
 	public List<FeedItemResponse> feed(UUID userId, SourceType source) {
 		List<FeedItem> found = source == null
-				? items.findByUserIdAndResolvedAtIsNullOrderByActivityAtDesc(userId)
-				: items.findByUserIdAndSourceAndResolvedAtIsNullOrderByActivityAtDesc(userId, source);
+				? items.findByUserIdOrderByActivityAtDesc(userId)
+				: items.findByUserIdAndSourceOrderByActivityAtDesc(userId, source);
 
 		return found.stream().map(FeedItemResponse::of).toList();
 	}

@@ -52,6 +52,31 @@ class FeedSyncStoreTest extends SiftIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("resolving reads a row nobody opened, so finished work leaves the unread count")
+	void resolvingReadsWhatWasNeverOpened() {
+		UUID user = newUser("finished@uni.lu");
+		store.persist(user, SourceType.GITLAB, List.of(item("todo:1", "assigned", MONDAY, true)));
+		assertThat(find(user, "todo:1").getReadAt()).isNull();
+
+		store.persist(user, SourceType.GITLAB, List.of());
+
+		assertThat(find(user, "todo:1").getReadAt()).isNotNull();
+	}
+
+	@Test
+	@DisplayName("resolving keeps the read time a row already had")
+	void resolvingKeepsAnEarlierReadTime() {
+		UUID user = newUser("finished2@uni.lu");
+		store.persist(user, SourceType.GITLAB, List.of(item("todo:1", "assigned", MONDAY, true)));
+		feed.setRead(user, find(user, "todo:1").getId(), true);
+		Instant read = find(user, "todo:1").getReadAt();
+
+		store.persist(user, SourceType.GITLAB, List.of());
+
+		assertThat(find(user, "todo:1").getReadAt()).isEqualTo(read);
+	}
+
+	@Test
 	@DisplayName("an item that comes back is live again, and keeps the day it was first seen")
 	void reappearing() {
 		UUID user = newUser("back@uni.lu");

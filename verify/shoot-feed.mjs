@@ -18,7 +18,16 @@ const browser = await puppeteer.launch({
   defaultViewport: { width: 1440, height: 1000, deviceScaleFactor: 2 },
 });
 const page = await browser.newPage();
-page.on("console", (m) => { if (m.type() === "error") problems.push(`console: ${m.text()}`); });
+/*
+ * the session probe answers 401 before anyone has signed in, by design, and chromium logs every failed
+ * request to the console. ignoring that one url is what makes a clean run actually read as clean.
+ */
+const EXPECTED_401 = "/api/auth/me";
+page.on("console", (m) => {
+  if (m.type() !== "error") return;
+  if (m.location().url?.includes(EXPECTED_401)) return;
+  problems.push(`console: ${m.text()}`);
+});
 page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 
 // the app holds one feed query for every page; GET only, so marking read does not count
@@ -116,9 +125,17 @@ if (chevron === null) {
 // the search field: one place, every source, forgiving of how you typed it
 const SEARCH = 'input[type="search"]';
 const heading = () => page.$eval("h1", (el) => el.textContent);
+/*
+ * the previous query is selected through setSelectionRange, not a triple click or cmd+A: both left it
+ * in the field and the next query was appended to it, so a scoped search silently became nonsense.
+ * headless chromium does not implement the platform select-all shortcut at all.
+ */
 async function searchFor(text) {
-  await page.click(SEARCH, { clickCount: 3 });
+  await page.click(SEARCH);
+  await page.$eval(SEARCH, (el) => el.setSelectionRange(0, el.value.length));
   await page.keyboard.press("Backspace");
+  const left = await page.$eval(SEARCH, (el) => el.value);
+  if (left !== "") problems.push(`the search field would not clear, so "${text}" was typed onto "${left}"`);
   await page.type(SEARCH, text);
   await settle(500);
   return { heading: await heading(), rows: (await page.$$('a[href^="https://gitlab.example.org"]')).length };
@@ -191,6 +208,49 @@ const tab = await page.evaluate(() => ({
 }));
 console.log(`  tab title "${tab.title}", favicon ${tab.icon}`);
 if (!/^\(\d+\) Sift$/.test(tab.title)) problems.push(`the tab title carries no unread count: "${tab.title}"`);
+
+/*
+ * a to-do somebody completes upstream is history, not something that disappears: the row stays in the
+ * feed, says so, and stops counting as unread. the tab badge is what proves the second half.
+ */
+const FINISHED = "Add rate limiting to the sync sweep";
+const todosPath = `${WORK}/todos.json`;
+const todos = JSON.parse(readFileSync(todosPath, "utf8"));
+writeFileSync(todosPath, JSON.stringify(todos.filter((t) => t.target?.title !== FINISHED)));
+await page.goto(`${BASE}/gitlab`, { waitUntil: "networkidle0" });
+await page.click('button[aria-label^="Check GitLab"]');
+await page.waitForSelector("time", { timeout: 20000 });
+await settle(1200);
+
+const settled = await page.evaluate((title) => {
+  const row = [...document.querySelectorAll('a[href^="https://gitlab.example.org"]')]
+    .find((a) => a.textContent.includes(title));
+  if (row === undefined) return null;
+  return {
+    done: [...row.querySelectorAll("span")].some((s) => s.textContent === "done"),
+    title: document.title,
+  };
+}, FINISHED);
+
+if (settled === null) {
+  problems.push(`"${FINISHED}" left the feed when it was completed, instead of staying as history`);
+} else {
+  console.log(`  completed upstream: still listed, done tag ${settled.done}, tab "${settled.title}"`);
+  if (!settled.done) problems.push("a resolved row does not say it is done, so it reads as still waiting");
+  if (settled.title !== "(11) Sift") problems.push(`the unread count still holds finished work: "${settled.title}"`);
+}
+await shot("f06e-resolved-history-dark");
+
+// and Home counts what is waiting, which is no longer the size of the feed
+await page.click('a[aria-label="Home"]');
+// the rail links to /gitlab as well, so the card is the one that talks about waiting
+await page.waitForFunction(() => [...document.querySelectorAll('a[href="/gitlab"]')]
+  .some((el) => el.textContent.includes("waiting")), { timeout: 15000 });
+const card = await page.evaluate(() => [...document.querySelectorAll('a[href="/gitlab"]')]
+  .map((el) => el.textContent).find((text) => text.includes("waiting")) ?? "");
+const waiting = /(\d+)\s*(?:item )?waiting/.exec(card);
+console.log(`  home says ${waiting?.[1]} waiting, out of 12 in the feed`);
+if (waiting?.[1] !== "11") problems.push(`Home counts history as waiting: "${card}"`);
 
 // mobile
 await page.setViewport({ width: 430, height: 900, deviceScaleFactor: 2 });

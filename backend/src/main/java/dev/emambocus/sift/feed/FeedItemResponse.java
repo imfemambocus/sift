@@ -28,7 +28,13 @@ public record FeedItemResponse(
 		Instant createdAt,
 		/** When it last moved. What the list orders by and shows. */
 		Instant activityAt,
-		boolean read) {
+		boolean read,
+		/**
+		 * The source has stopped reporting it: a to-do somebody completed, a merge request that was
+		 * merged or closed. It stays in the feed, and this is what lets the row read as settled rather
+		 * than as something still waiting.
+		 */
+		boolean resolved) {
 
 	static FeedItemResponse of(FeedItem item) {
 		return new FeedItemResponse(
@@ -46,7 +52,8 @@ public record FeedItemResponse(
 				groupKey(item),
 				item.getSourceCreatedAt(),
 				item.getActivityAt(),
-				item.getReadAt() != null);
+				item.getReadAt() != null,
+				item.getResolvedAt() != null);
 	}
 
 	/*

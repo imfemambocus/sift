@@ -21,9 +21,14 @@ type SourceSummaryProps = {
 };
 
 export function SourceSummary({ source, items }: SourceSummaryProps) {
-	const counts = countByFamily(items);
+	/*
+	 * the feed holds the whole history now, so what is waiting is only the part the source still
+	 * reports. a merged merge request belongs in the list; it does not belong in this number.
+	 */
+	const waiting = items.filter((item) => !item.resolved);
+	const counts = countByFamily(waiting);
 	const present = FAMILY_ORDER.filter((family) => counts[family] > 0);
-	const unread = unreadCount(items);
+	const unread = unreadCount(waiting);
 	const rejected = source.status === "AUTH_FAILED";
 
 	return (
@@ -38,8 +43,8 @@ export function SourceSummary({ source, items }: SourceSummaryProps) {
 			</div>
 
 			<div className="flex items-baseline gap-2">
-				<span className="text-[32px] font-semibold leading-none tracking-[-0.03em] text-fg">{items.length}</span>
-				<span className="text-[13px] text-fg-muted">{items.length === 1 ? "item waiting" : "waiting"}</span>
+				<span className="text-[32px] font-semibold leading-none tracking-[-0.03em] text-fg">{waiting.length}</span>
+				<span className="text-[13px] text-fg-muted">{waiting.length === 1 ? "item waiting" : "waiting"}</span>
 			</div>
 
 			{present.length > 0 && (
@@ -49,7 +54,7 @@ export function SourceSummary({ source, items }: SourceSummaryProps) {
 							<span
 								key={family}
 								className={FAMILY_FILL[family]}
-								style={{ width: `${(counts[family] / items.length) * 100}%` }}
+								style={{ width: `${(counts[family] / waiting.length) * 100}%` }}
 							/>
 						))}
 					</div>

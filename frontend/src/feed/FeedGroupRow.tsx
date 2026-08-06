@@ -3,11 +3,11 @@ import { motion } from "motion/react";
 import { useId, useState } from "react";
 import type { FeedItem } from "./feed";
 import { useSetRead } from "./feed";
-import { eventFamily, FAMILY_TEXT } from "./events";
+import { FAMILY_TEXT, rowFamily } from "./events";
 import type { FeedGroup } from "./grouping";
 import { groupUnread } from "./grouping";
 import { kindLabel } from "./kinds";
-import { Dot, edgeClass, ReadToggle, ROW_MOTION, UnreadDot } from "./row";
+import { Dot, DoneTag, edgeClass, ReadToggle, ROW_MOTION, UnreadDot } from "./row";
 import { fullTimestamp, shortAgo } from "../lib/time";
 
 /*
@@ -141,7 +141,7 @@ export function FeedGroupRow({ group }: { readonly group: FeedGroup }) {
 
 /** The title is already above it, so what this line is for is which event it was, and when. */
 function GroupedEvent({ item }: { readonly item: FeedItem }) {
-	const family = eventFamily(item.kind);
+	const family = rowFamily(item.kind, item.resolved);
 	const setRead = useSetRead();
 
 	function toggleRead() {
@@ -169,6 +169,13 @@ function GroupedEvent({ item }: { readonly item: FeedItem }) {
 				<span className="flex min-w-0 flex-col gap-0.5">
 					<span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px] text-fg-muted">
 						<span className={`${item.read ? "" : "font-medium"} ${FAMILY_TEXT[family]}`}>{kindLabel(item.kind)}</span>
+
+						{item.resolved && (
+							<>
+								<Dot />
+								<DoneTag />
+							</>
+						)}
 
 						{item.actorName !== null && (
 							<>

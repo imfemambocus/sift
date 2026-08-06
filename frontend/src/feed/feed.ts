@@ -23,6 +23,8 @@ const feedItemSchema = z.object({
 	createdAt: z.string(),
 	activityAt: z.string(),
 	read: z.boolean(),
+	/** The source stopped reporting it: done, merged or closed. It stays in the feed, on purpose. */
+	resolved: z.boolean(),
 });
 
 const feedSchema = z.array(feedItemSchema);

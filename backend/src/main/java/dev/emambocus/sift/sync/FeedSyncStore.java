@@ -102,6 +102,14 @@ public class FeedSyncStore {
 			}
 			if (!seen.contains(stored.getSourceId()) && stored.getResolvedAt() == null) {
 				stored.setResolvedAt(now);
+				/*
+				 * resolved rows stay in the feed, so one that finished upstream before anyone opened it
+				 * would sit there unread for ever and count towards the tab badge. it wants nothing from
+				 * anybody, and finishing is what dealt with it. an existing read time is left alone.
+				 */
+				if (stored.getReadAt() == null) {
+					stored.setReadAt(now);
+				}
 				touched.add(stored);
 				resolved++;
 			}

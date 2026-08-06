@@ -54,11 +54,14 @@ There is a search field at the top of every page. It searches everything from ev
 not the tab you happen to be on, it forgives typos and words in the wrong order, and `is:unread`,
 `is:mr`, `project:` and `from:` narrow it down.
 
-Nothing is ever deleted. Rows you have read stay where they are, which is what loading in pages is for.
+Nothing is ever deleted, and nothing drops out. A to-do somebody completes, or a merge request that
+gets merged, stays in the list and is marked "done" in grey. So the feed is the whole history, and the
+only thing you filter it on is whether you have read it. Finished work does not count as unread, because
+nothing is waiting on you. Rows you have read stay where they are, which is what loading in pages is
+for.
 
-Not built yet: seeing the things that are already done, which drop out of the feed once GitLab stops
-reporting them; mute and boost rules; signing in to GitLab instead of pasting a token; and email as a
-second source, both Outlook and Gmail.
+Not built yet: signing in to GitLab instead of pasting a token, and email as a second source, both
+Outlook and Gmail.
 
 ## Running it
 
