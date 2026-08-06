@@ -6,10 +6,12 @@ import { kindLabel } from "../feed/kinds";
  * One search over everything, however you half remember it. This is one of the two complaints the app
  * started from: Outlook held the mail but could not find anything in it.
  *
- * intraIns allows one typo inside a term, and terms may be typed in any order up to four of them, so
+ * intraMode 1 is uFuzzy's one-error-per-term mode, and all four error kinds are needed rather than
+ * insertions alone: "requsted" is an omission and did match, but "reveiw" is a transposition and did
+ * not, which is the typo people actually make. Terms may be typed in any order up to four of them, so
  * "color chart" finds "Chart V2: Line chart color encoding".
  */
-const uf = new uFuzzy({ intraIns: 1 });
+const uf = new uFuzzy({ intraMode: 1, intraIns: 1, intraSub: 1, intraTrn: 1, intraDel: 1 });
 const PERMUTE_UP_TO = 4;
 
 const PREFIX = /^(is|project|from):(.+)$/i;
