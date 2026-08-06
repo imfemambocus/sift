@@ -4,78 +4,90 @@
   <img src="docs/banner-dark.png" alt="Sift: the few things that actually need you, in one place." width="100%">
 </picture>
 
-A quiet notification hub. Sift pulls the things that actually concern you out of a source's
-firehose, ranks them, and puts them in one feed you can read through and search properly. GitLab
-first, with the seams in place for more sources later.
+Sift is a notification hub. A source sends you many notifications, and most of them do not concern
+you. Sift finds the ones that do. It ranks them. It puts them in one feed. You can read that feed
+and you can search it properly. GitLab is the first source. The seams for more sources are in place.
 
 ## Why
 
-GitLab emails you whether or not a change concerns you, and finding anything in that pile
-afterwards means fighting your mail client's search. Sift works out what actually involves you,
-ranks it, and puts it in one feed with your own mute and boost rules on top.
+GitLab sends you an email about a change whether or not the change concerns you. Your mail client
+then holds a large pile of mail. Its search is poor. You cannot find an item in the pile again.
+
+Sift reads the source itself. It decides which items involve you. It shows you those items in one
+feed.
 
 ## What it tells you about
 
-- **Things asking for you**: assigned to you, your review requested, your approval needed, someone
-  naming you in a comment.
-- **Merge requests still waiting on you**, read from their current state rather than from a
-  notification. A review request stays visible even if the matching to-do was never raised or has
-  since been dismissed.
-- **Discussions moving on anything you are part of**: new replies on a thread, and new threads on a
-  merge request or issue you authored, are assigned, are reviewing, or have simply left a comment on.
-  One row per thread that updates, not one per reply, so a busy discussion stays one thing to look at.
-- **Commits pushed to something you are reviewing**, named after whose branch moved, which usually
-  means look again.
-- **A merge request being merged**, and who merged it, so the thing that was waiting on you closes
-  out visibly instead of just disappearing.
-- **Things that broke**: a failed pipeline, a merge request that cannot merge.
+- **Work that asks for you.** Somebody assigns an item to you. Somebody requests your review.
+  Somebody requests your approval. Somebody names you in a comment.
+- **Merge requests that still wait for you.** Sift reads the current state of each one. It does not
+  depend on a notification. You see a review request even when GitLab raised no to-do. You also see
+  it when somebody dismissed the to-do.
+- **Discussions on an item you are part of.** This covers a new reply in a thread. It also covers a
+  new thread. You are part of an item when you are the author, the assignee or a reviewer. One
+  comment of yours is also enough. Each thread gets one row. A thread with twelve replies stays one
+  row.
+- **Commits on a merge request you review.** The row names the author of the branch.
+- **A merge request that merges.** The row names the person who merged it. The item leaves your list
+  in a visible way.
+- **A failure.** A pipeline fails. A merge request cannot merge.
 
-Your own comments and your own pushes never notify you, and neither does GitLab narrating itself.
+Your own comments never notify you. Your own commits never notify you. GitLab writes system notes
+about itself, and Sift ignores them.
 
 ## Status
 
-Built: accounts, connecting GitLab from Settings, everything in the list above, the feed grouped by
-day with colour by event type, read and unread, a Home dashboard summarising each source, and a
-visible warning when a token stops working so an empty list is never mistaken for good news.
+These parts are built:
 
-Read and unread works the way you would expect. Opening a row marks it read, each row has a toggle
-for anything you want to skip or bring back, and something that moves again after you read it comes
-back unread. The counts above the feed are also the filter, so All, Unread and Read are one click
-away, and there is a button to clear everything unread at once. The browser tab carries the unread
-count too, in its title and on its icon, while Sift is open in it.
+- accounts, and a GitLab connection from Settings
+- every item in the list above
+- the feed in day groups, with a colour for each type of event
+- read and unread
+- a Home page with one card for each source
+- a warning when a token no longer works. An empty list then never looks like good news.
 
-When several things happen to one merge request, they arrive as one entry you can fold shut rather
-than as the same title four times over. Long lists load fifty at a time.
+Read and unread behaves like this:
 
-You can read the feed newest first, or oldest first when what you want is whatever has been waiting
-on you the longest.
+- If you open a row, Sift marks it read.
+- Each row has a control. Use it to skip an item. Use it again to bring the item back.
+- If an item moves again after you read it, it becomes unread again.
+- The counts above the feed are also the filter. All, Unread and Read are one click each.
+- One button clears every unread item at once.
+- The browser tab shows the unread count in its title and on its icon. It shows the count only while
+  Sift is open in that tab.
 
-There is a search field at the top of every page. It searches everything from every connected source,
-not the tab you happen to be on, it forgives typos and words in the wrong order, and `is:unread`,
-`is:mr`, `project:` and `from:` narrow it down.
+Several events can happen on one merge request. Sift puts them in one entry, and you can collapse
+that entry. The list does not repeat the same title four times. A long list loads fifty entries at
+a time.
 
-Nothing is ever deleted, and nothing drops out. A to-do somebody completes, or a merge request that
-gets merged, stays in the list and is marked "done" in grey. So the feed is the whole history, and the
-only thing you filter it on is whether you have read it. Finished work does not count as unread, because
-nothing is waiting on you. Rows you have read stay where they are, which is what loading in pages is
-for.
+You can read the feed with the newest activity first. You can also read it with the oldest first.
+Use the second order to find the item that has waited longest.
 
-Not built yet: signing in to GitLab instead of pasting a token, and email as a second source, both
-Outlook and Gmail.
+Every page has a search field at the top. It searches every connected source. It does not search
+only the tab you are on. It forgives a typo. It forgives words in the wrong order. `is:unread`,
+`is:mr`, `project:` and `from:` make a search narrow.
 
-## Running it
+Sift deletes nothing, and nothing drops out of the feed. Somebody completes a to-do, or a merge
+request merges. The row stays in the list. It turns grey and it says "done". The feed is your whole
+history. Read and unread is the only axis you filter it on. Finished work does not count as unread,
+because nothing waits for you there.
 
-Docker is the only prerequisite. The Gradle wrapper provisions its own Java 25 toolchain, so
-whatever JDK you happen to have does not matter.
+These parts are not built yet: a GitLab sign-in in place of a pasted token, and email as a second
+source. Email covers Outlook and Gmail.
+
+## Run it
+
+Docker is the only prerequisite. The Gradle wrapper installs its own Java 25 toolchain. The JDK on
+your machine does not matter.
 
 ```
 make up        # builds and runs everything on http://localhost:7777
 ```
 
-That is the whole setup. It writes a `.env` with a fresh encryption key on first run, waits for
-the database to be ready, applies migrations, and serves the app.
+That is the whole setup. On the first run Sift writes a `.env` file with a new encryption key. It
+waits for the database. It applies the migrations. It then serves the app.
 
-To work on it instead, run the pieces separately so both sides reload:
+To work on the code, start the parts separately. Both sides then reload.
 
 ```
 make db                      # just postgres
@@ -83,96 +95,100 @@ make backend                 # the backend from source, on http://localhost:7777
 cd frontend && npm run dev    # vite, on http://localhost:5174
 ```
 
-`make help` lists the rest. `make logs` follows the app, `make stop` keeps your data, `make clean`
+`make help` lists the rest. `make logs` follows the app. `make stop` keeps your data. `make clean`
 deletes the volume.
 
-## Connecting GitLab
+## Connect GitLab
 
-Open **Settings**, put in your instance URL, and Sift shows you a link that opens GitLab's token
-page with the name and scope already filled in. Paste the token back and connect.
+Open **Settings**. Enter the URL of your instance. Sift shows you a link. The link opens GitLab's
+token page with the name and the scope already complete. Copy the new token. Paste it into Sift.
+Then connect.
 
-The token is checked against your instance before it is stored, so a typo fails immediately rather
-than quietly never syncing, and a first read happens in the same step so your feed is populated
-straight away. After that Sift re-reads every five minutes.
+Sift checks the token against your instance before it stores the token. A typo therefore fails at
+once. It does not fail silently five minutes later. Sift also reads the source in the same step.
+Your feed is full straight away. After that, Sift reads the source every five minutes.
 
-If a token later expires or is revoked, Sift says so on the feed itself rather than just going
-quiet, and Settings offers to replace it.
+If a token expires, Sift says so on the feed itself. It does the same when somebody revokes a token.
+Settings offers to replace it.
 
-You never have to guess how current the list is. Each source's tab says when it was last synced and
-offers a refresh next to it, and Settings has the same thing as a **Check now** button. Either one
-reads the source immediately instead of waiting for the next pass, and if it fails it tells you why
-rather than appearing to do nothing.
+You always know how current the list is. Each source tab gives the time of the last read, and a
+refresh control sits next to it. Settings has the same function as a **Check now** button. Both read
+the source immediately. Neither one waits for the next pass. If a read fails, Sift gives you the
+reason.
 
-`read_api` is read-only on purpose. Marking a to-do done through the API would need GitLab's full
-`api` scope, which is read *and* write across everything you can see, so Sift links out to GitLab
-for actions instead.
+The `read_api` scope is read-only, on purpose. To mark a to-do done through the API, Sift needs the
+full `api` scope. That scope permits reads and writes across everything you can see. Sift gives you
+a link to GitLab for those actions instead.
 
 ## Ports
 
-Postgres is published on **5433**, the backend listens on **7777**, and the Vite dev server runs
-on **5174**. All three stay clear of 5432, 5173 and the 8080-8090 range that local service stacks
-tend to occupy. Override the backend with `SIFT_PORT`.
+Postgres uses port **5433**. The backend uses port **7777**. The Vite dev server uses port **5174**.
+These three ports avoid 5432, 5173 and the range 8080 to 8090. A local service stack often holds
+those. `SIFT_PORT` changes the port of the backend.
 
-The dev server proxies `/api` and `/actuator` to the backend, so it shares one origin with the API
-and the session cookie and CSRF handshake behave exactly as they do in a built deployment.
+The dev server sends `/api` and `/actuator` to the backend. The API and the app then share one
+origin. The session cookie and the CSRF handshake behave exactly as they do in a built deployment.
 
 ## Configuration
 
-Everything lives in `.env`, copied from `.env.example`.
+Everything is in `.env`. Copy that file from `.env.example`.
 
 | Variable | Meaning |
 | --- | --- |
-| `SIFT_ENCRYPTION_KEY` | base64 of 32 random bytes. Required. Changing it makes every stored token undecryptable. |
-| `SIFT_ALLOWED_EMAIL_DOMAINS` | Comma separated. Empty lets any address register, which suits a local instance only. |
-| `SIFT_SYNC_INTERVAL` | How often each source is re-read, as an ISO-8601 duration. Defaults to `PT5M`. Drop it to something like `PT20S` while trying things out, so you are not waiting five minutes to see a change. |
-| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database credentials. |
+| `SIFT_ENCRYPTION_KEY` | Base64 of 32 random bytes. Required. If you change it, Sift cannot decrypt any stored token. |
+| `SIFT_ALLOWED_EMAIL_DOMAINS` | A comma separated list. If it is empty, any address can register. Use an empty value on a local instance only. |
+| `SIFT_SYNC_INTERVAL` | The time between two reads of each source, as an ISO-8601 duration. The default is `PT5M`. Use a short value such as `PT20S` for a test. You then see a change in 20 seconds. |
+| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | The database credentials. |
 
-## Checking it works
+## Check it works
 
-The test suite needs nothing but Docker:
+The test suite needs Docker and nothing else.
 
 ```
 cd backend && ./gradlew test
 ```
 
-It runs against a real Postgres in a container it starts itself, and covers the parts where being
-quietly wrong would matter most: which items are still waiting on you, which have been dealt with,
-and never showing you somebody else's.
+It runs against a real Postgres in a container, and it starts that container itself. It covers the
+parts where a silent error costs most: which items still wait for you, which items are complete, and
+the rule that you never see the items of another person.
 
-`verify/` holds the rest, integration suites that drive the real backend over HTTP against a stand-in
-GitLab, including one that drives the UI in a browser:
+`verify/` holds the integration suites. They drive the real backend over HTTP against a stand-in
+GitLab. One of them drives the user interface in a browser.
 
 ```
 verify/verify-participation.sh
 ```
 
-Run those one at a time. `verify/README.md` explains what each covers.
+Run one suite at a time. Each suite starts its own database and its own backend. Expect about one
+minute before the first check. `verify/README.md` explains what each suite covers.
 
-## Shape
+## Architecture
 
-Sift is a backend-for-frontend. The browser only ever holds a session cookie; source tokens stay
-server-side, encrypted, and every call to GitLab is proxied. There is no CORS configuration
-anywhere because the API and the bundle are served from one origin.
+Sift is a backend-for-frontend. The browser holds a session cookie and nothing else. The source
+tokens stay on the server, and Sift encrypts them. Every call to GitLab goes through the server. The
+API and the app come from one origin, and there is no CORS configuration anywhere.
 
-Tokens are encrypted with AES-GCM before they reach the database, so they are never readable
-straight out of it. On a machine only you can reach, that mostly guards against casual snooping and
-stray backups; it is the same protection a hosted instance would rely on.
+Sift encrypts a token with AES-GCM before the token reaches the database. Nobody can read a token
+straight out of the database. On a machine only you can reach, this protects against two things: a
+casual look at the data, and an old backup. A hosted instance relies on the same protection.
 
-## Look
+## Appearance
 
-Near-black in dark, warm off-white in light, with brass for the things that need you. Light is
-designed rather than inverted. Type is Instrument Sans with IBM Plex Mono for metadata, both
-self-hosted.
+The dark theme is near-black. The light theme is a warm off-white. Brass marks the things that need
+you. The light theme is a design of its own. It is not an inversion of the dark theme. The type is
+Instrument Sans, with IBM Plex Mono for metadata. Both are self-hosted.
 
-Each row carries a left edge that is brass while you have not read it and grey once you have, so what
-is still waiting is the first thing you see down the page. **Why** it is in your list is written out
-next to the timestamp, coloured by kind: needs review, assigned to you, you were named, a discussion
-moved, something broke, or merged. A word rather than a colour to decode, and the colour groups those
-words so a long list still scans.
+Each row has a left edge. The edge is brass while the row is unread. It turns grey after you read
+the row. The work that still waits for you is therefore the first thing you see down the page.
 
-Actions are styled by what they cost you. Checking a source, replacing a token and disconnecting one
-sit next to each other and look nothing alike, and the destructive one is red and asks twice.
+Each row also gives the reason it is in your list, next to the time. A colour groups the reasons:
+needs review, assigned to you, you were named, a discussion moved, something broke, or merged. The
+reason is a word. You do not decode a colour.
 
-Pick from three states, light, dark, or match system. Dark is the default, your choice is
-remembered between visits, and the right theme is in place before the first paint, so the page
-never flashes the wrong one at you.
+The style of an action shows what the action costs you. Check a source, replace a token and
+disconnect a source sit next to each other, and the three look different. The destructive one is
+red, and it asks you twice.
+
+Pick one of three states: light, dark, or the setting of your system. Dark is the default. Sift
+remembers your choice between visits. The correct theme is in place before the first paint. The page
+never shows you the wrong theme first.
