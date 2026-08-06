@@ -1,22 +1,24 @@
 import { useEffect } from "react";
-import { unreadCount, useFeed } from "./feed";
+import { totalUnread, useFeedSummary } from "./feed";
 
 const TITLE = "Sift";
 const ICON = "/favicon.svg";
 const ICON_UNREAD = "/favicon-unread.svg";
 
 /**
- * The tab is the notification, until real Notifications land: a count in its title and a badge on its
- * favicon, from the feed the app already polls. Mounted once in the app frame, so it is the whole
- * working set rather than whichever source's tab is open.
+ * The tab is the notification: a count in its title and a badge on its favicon. Mounted once in the
+ * app frame, so it is every source rather than whichever tab is open.
+ *
+ * <p>It reads the summary rather than counting the rows on screen, because the feed is paged now and
+ * a page cannot count what it does not hold.
  *
  * <p>Honest limit, the same one browser Notifications will have: it only says anything while a tab is
  * open. It also cannot be seen at all when the tab is the active one, which is fine, since then the
  * feed itself is on screen.
  */
 export function useUnreadBadge() {
-	const { data } = useFeed();
-	const unread = data === undefined ? 0 : unreadCount(data);
+	const { data } = useFeedSummary();
+	const unread = totalUnread(data);
 
 	useEffect(() => {
 		apply(unread);

@@ -22,18 +22,49 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/feed")
 public class FeedController {
 
+	private static final int DEFAULT_GROUPS = 50;
+	private static final int MAX_GROUPS = 500;
+
 	private final FeedService feed;
 
 	public FeedController(FeedService feed) {
 		this.feed = feed;
 	}
 
-	/** No {@code source} is Home: everything, from every source, newest first. */
+	/**
+	 * One page of the feed. No {@code source} is every source, which is what the search asks for.
+	 *
+	 * <p>{@code limit} counts groups rather than items, so a merge request's four rows always arrive
+	 * together. {@code cursor} is what the previous page handed back, and is opaque.
+	 */
 	@GetMapping
-	public List<FeedItemResponse> feed(@RequestParam(required = false) String source,
+	public FeedPageResponse feed(@RequestParam(required = false) String source,
+			@RequestParam(required = false) String filter,
+			@RequestParam(required = false) String order,
+			@RequestParam(required = false) String q,
+			@RequestParam(required = false) String cursor,
+			@RequestParam(required = false) Integer limit,
 			@AuthenticationPrincipal SiftUserDetails principal) {
 
-		return feed.feed(principal.id(), parse(source));
+		return feed.page(new FeedRequest(principal.id(), parse(source), FeedFilter.parse(filter),
+				FeedOrder.parse(order), FeedSearch.parse(q), FeedCursor.decode(cursor), bounded(limit)));
+	}
+
+	/** The counts behind every number the app shows without showing the rows it counted. */
+	@GetMapping("/summary")
+	public List<FeedSummaryResponse> summary(@AuthenticationPrincipal SiftUserDetails principal) {
+		return feed.summary(principal.id());
+	}
+
+	/*
+	 * a ceiling as well as a default, since the page size is a promise about how much work one
+	 * request can ask for. the verification suites are what want the large end of it.
+	 */
+	private static int bounded(Integer limit) {
+		if (limit == null) {
+			return DEFAULT_GROUPS;
+		}
+		return Math.clamp(limit, 1, MAX_GROUPS);
 	}
 
 	/** Absent or blank means every source, which is what Home asks for. */

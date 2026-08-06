@@ -20,15 +20,36 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 
 	List<FeedItem> findByUserIdAndSource(UUID userId, SourceType source);
 
-	/*
-	 * resolved rows are deliberately included. the feed is the whole history, and read against unread
-	 * is the only axis it narrows on, so a completed to-do stays in the list instead of leaving it.
-	 */
-	List<FeedItem> findByUserIdOrderByActivityAtDesc(UUID userId);
-
-	List<FeedItem> findByUserIdAndSourceOrderByActivityAtDesc(UUID userId, SourceType source);
-
 	long countByUserIdAndSourceAndResolvedAtIsNull(UUID userId, SourceType source);
+
+	/*
+	 * the counts the client used to work out for itself from the whole feed: the All / Unread / Read
+	 * control, Home's "11 waiting", and the number on the tab. one statement for every source, since
+	 * every page wants all of them at once.
+	 *
+	 * resolved rows are in `total` deliberately. the feed is the whole history, and read against
+	 * unread is the only axis it narrows on, so a completed to-do is still one of the rows in it.
+	 */
+	@Query("""
+			select new dev.emambocus.sift.feed.FeedCounts(
+			           item.source,
+			           count(item),
+			           count(case when item.readAt is null then 1 end),
+			           count(case when item.resolvedAt is null then 1 end),
+			           count(case when item.resolvedAt is null and item.readAt is null then 1 end))
+			  from FeedItem item
+			 where item.userId = :userId
+			 group by item.source
+			""")
+	List<FeedCounts> countBySource(@Param("userId") UUID userId);
+
+	@Query("""
+			select new dev.emambocus.sift.feed.KindCount(item.source, item.kind, count(item))
+			  from FeedItem item
+			 where item.userId = :userId and item.resolvedAt is null
+			 group by item.source, item.kind
+			""")
+	List<KindCount> countWaitingByKind(@Param("userId") UUID userId);
 
 	/*
 	 * a targeted update rather than loading the entity and saving it back, for the same reason the

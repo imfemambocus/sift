@@ -1,5 +1,4 @@
-import type { FeedItem } from "./feed";
-import { unreadCount } from "./feed";
+import type { FeedSummary } from "./feed";
 import type { FeedFilter } from "./view";
 
 const TAB = "rounded-control px-2 py-1 text-[12px] transition-colors";
@@ -8,7 +7,8 @@ const TAB_ON = `${TAB} bg-raised text-fg`;
 const TAB_OFF = `${TAB} text-fg-muted hover:text-fg`;
 
 type FeedFiltersProps = {
-	readonly items: readonly FeedItem[];
+	/** The counts come from the server now: the list on screen is one page of a longer history. */
+	readonly counts: FeedSummary;
 	readonly filter: FeedFilter;
 	readonly onChange: (filter: FeedFilter) => void;
 };
@@ -18,16 +18,15 @@ type FeedFiltersProps = {
  * numbers you would want to filter by were already the numbers on screen, so there was no reason to
  * put a second thing next to them.
  */
-export function FeedFilters({ items, filter, onChange }: FeedFiltersProps) {
-	if (items.length === 0) {
+export function FeedFilters({ counts, filter, onChange }: FeedFiltersProps) {
+	if (counts.total === 0) {
 		return null;
 	}
 
-	const unread = unreadCount(items);
 	const options: readonly { readonly value: FeedFilter; readonly label: string; readonly count: number }[] = [
-		{ value: "all", label: "All", count: items.length },
-		{ value: "unread", label: "Unread", count: unread },
-		{ value: "read", label: "Read", count: items.length - unread },
+		{ value: "all", label: "All", count: counts.total },
+		{ value: "unread", label: "Unread", count: counts.unread },
+		{ value: "read", label: "Read", count: counts.total - counts.unread },
 	];
 
 	return (

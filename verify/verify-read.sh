@@ -59,21 +59,24 @@ echo
 
 csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
 api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
+# the feed is paged over groups now, so a suite asks for one page large enough to hold every fixture
+# and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
+feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
 patchcode() { curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" -X PATCH -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
 
 # the kind is the stable handle on a fixture item; the id is a uuid the run only learns at runtime
 item_id() {
-  api "$BASE/api/feed" | python3 -c 'import json,sys; print(next(i["id"] for i in json.load(sys.stdin) if i["kind"]==sys.argv[1]))' "$1"
+  feed | python3 -c 'import json,sys; print(next(i["id"] for i in json.load(sys.stdin) if i["kind"]==sys.argv[1]))' "$1"
 }
 read_flag() {
-  api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["read"] for i in json.load(sys.stdin) if i["kind"]==sys.argv[1])))' "$1"
+  feed | python3 -c 'import json,sys; print(json.dumps(next(i["read"] for i in json.load(sys.stdin) if i["kind"]==sys.argv[1])))' "$1"
 }
 unread_total() {
-  api "$BASE/api/feed" | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if not i["read"]))'
+  feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if not i["read"]))'
 }
 mark_all_read() {
-  for id in $(api "$BASE/api/feed" | python3 -c 'import json,sys; print(" ".join(i["id"] for i in json.load(sys.stdin)))'); do
+  for id in $(feed | python3 -c 'import json,sys; print(" ".join(i["id"] for i in json.load(sys.stdin)))'); do
     patchcode -d '{"read":true}' "$BASE/api/feed/$id" >/dev/null
   done
 }
@@ -85,7 +88,7 @@ post -d '{"email":"isfaaq@uni.lu","password":"correct-horse-battery"}' "$BASE/ap
 post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
 
 echo "--- everything arrives unread ---"
-check "feed size" 8 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+check "feed size" 8 "$(feed | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
 check "all unread" 8 "$(unread_total)"
 check "no read_at in the table" 8 "$(sql 'select count(*) from feed_items where read_at is null')"
 

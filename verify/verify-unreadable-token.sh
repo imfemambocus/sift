@@ -53,6 +53,9 @@ echo "backend up with a 3s sweep"; echo
 
 csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
 api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
+# the feed is paged over groups now, so a suite asks for one page large enough to hold every fixture
+# and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
+feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 code() { curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" "$@"; }
 post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
 sql() { docker exec sift-u-db psql -U sift -d sift -qtAc "$1" | tr -d ' '; }
@@ -84,7 +87,7 @@ check "tried once, then stopped" 1 "$(grep -c 'sync failed for user' "$LOG")"
 check "no not-null constraint violation anywhere" 0 "$(grep -ci 'not-null constraint' "$LOG")"
 check "listing sources still answers" 200 "$(code "$BASE/api/sources")"
 check "the UI is told it was rejected" '"AUTH_FAILED"' "$(api "$BASE/api/sources" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)[0]["status"]))')"
-check "the items already collected are still there" 8 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+check "the items already collected are still there" 8 "$(feed | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
 
 echo
 echo "--- reconnecting recovers, and sweeps resume ---"

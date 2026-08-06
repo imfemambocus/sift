@@ -80,12 +80,15 @@ echo "backend up"; echo
 
 csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
 api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
+# the feed is paged over groups now, so a suite asks for one page large enough to hold every fixture
+# and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
+feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
 connect() { post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null; }
-kinds() { api "$BASE/api/feed" | python3 -c 'import json,sys; print(" ".join(sorted(i["kind"] for i in json.load(sys.stdin))))'; }
-count() { api "$BASE/api/feed" | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1'))"; }
-settled() { api "$BASE/api/feed" | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1' and i['resolved']))"; }
-titled() { api "$BASE/api/feed" | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['title']=='$1'))"; }
+kinds() { feed | python3 -c 'import json,sys; print(" ".join(sorted(i["kind"] for i in json.load(sys.stdin))))'; }
+count() { feed | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1'))"; }
+settled() { feed | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1' and i['resolved']))"; }
+titled() { feed | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['title']=='$1'))"; }
 watched() { docker exec sift-p-db psql -U sift -d sift -qtAc 'select count(*) from gitlab_watched_resources' | tr -d ' '; }
 
 api "$BASE/actuator/health" >/dev/null
@@ -125,20 +128,20 @@ connect
 check "kinds now" "changes_pushed mr_review_requested new_comment" "$(kinds)"
 check "one row for the thread, not one per reply" 1 "$(count new_comment)"
 check "commits noticed via sha" 1 "$(count changes_pushed)"
-check "commits are high, since he is the reviewer" '"HIGH"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["priority"] for i in json.load(sys.stdin) if i["kind"]=="changes_pushed")))')"
-check "the commits row names whose branch moved" '"Maxime"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="changes_pushed")))')"
-check "snippet is the reply, not the system note" '"Fixed, switched to the Okabe-Ito ramp and pushed."' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["body"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
-check "deep links to the note" '"https://gl.example.org/team/web/-/merge_requests/20#note_1002"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["url"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
+check "commits are high, since he is the reviewer" '"HIGH"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["priority"] for i in json.load(sys.stdin) if i["kind"]=="changes_pushed")))')"
+check "the commits row names whose branch moved" '"Maxime"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="changes_pushed")))')"
+check "snippet is the reply, not the system note" '"Fixed, switched to the Okabe-Ito ramp and pushed."' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["body"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
+check "deep links to the note" '"https://gl.example.org/team/web/-/merge_requests/20#note_1002"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["url"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
 
 echo
 echo "--- an old merge request with fresh activity reads as fresh ---"
 MRROW='import json,sys; print(json.dumps(next(i for i in json.load(sys.stdin) if i["kind"]=="mr_review_requested")))'
-check "created stays the day it was opened" '"2026-08-01T09:00:00Z"' "$(api "$BASE/api/feed" | python3 -c "$MRROW" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["createdAt"]))')"
-check "activity follows the merge request updated_at" '"2026-08-03T11:01:00Z"' "$(api "$BASE/api/feed" | python3 -c "$MRROW" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["activityAt"]))')"
-check "feed is ordered newest activity first" True "$(api "$BASE/api/feed" | python3 -c 'import json,sys
+check "created stays the day it was opened" '"2026-08-01T09:00:00Z"' "$(feed | python3 -c "$MRROW" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["createdAt"]))')"
+check "activity follows the merge request updated_at" '"2026-08-03T11:01:00Z"' "$(feed | python3 -c "$MRROW" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["activityAt"]))')"
+check "feed is ordered newest activity first" True "$(feed | python3 -c 'import json,sys
 feed = json.load(sys.stdin)
 print(feed == sorted(feed, key=lambda i: i["activityAt"], reverse=True))')"
-check "the merge request row has a detail line" '"3 comments"' "$(api "$BASE/api/feed" | python3 -c "$MRROW" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["body"]))')"
+check "the merge request row has a detail line" '"3 comments"' "$(feed | python3 -c "$MRROW" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["body"]))')"
 
 echo
 echo "--- syncing again with nothing new must not re-announce ---"
@@ -201,11 +204,11 @@ check "my own push raised no row" 1 "$(count changes_pushed)"
 
 echo
 echo "--- several events on one merge request collapse into one entry ---"
-check "every row about MR 20 shares its group key" 4 "$(api "$BASE/api/feed" | python3 -c 'import json,sys
+check "every row about MR 20 shares its group key" 4 "$(feed | python3 -c 'import json,sys
 feed = json.load(sys.stdin)
 key = next(i["groupKey"] for i in feed if i["kind"] == "mr_review_requested")
 print(sum(1 for i in feed if i["groupKey"] == key))')"
-check "the note anchor is not part of the key" '"gitlab:https://gl.example.org/team/web/-/merge_requests/20"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["groupKey"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
+check "the note anchor is not part of the key" '"gitlab:https://gl.example.org/team/web/-/merge_requests/20"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["groupKey"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
 
 echo
 echo "--- merged: announced once, then there is nothing left to watch ---"
@@ -227,9 +230,9 @@ json.dump(data, open(path, "w"))
 PY
 connect
 check "a merged row appeared"                1        "$(count mr_merged)"
-check "named after whoever merged it"        '"David"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
-check "activity is when it was merged"       '"2026-08-03T15:00:00Z"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["activityAt"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
-check "the project path survived"            '"team/web"' "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.dumps(next(i["contextLabel"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
+check "named after whoever merged it"        '"David"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
+check "activity is when it was merged"       '"2026-08-03T15:00:00Z"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["activityAt"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
+check "the project path survived"            '"team/web"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["contextLabel"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
 # it is history now rather than a row that vanishes: still there, marked as no longer waiting
 check "the waiting-for-review row stayed"    1        "$(count mr_review_requested)"
 check "and it reads as settled"              1        "$(settled mr_review_requested)"
@@ -303,8 +306,8 @@ json.dump(data, open(sys.argv[1], "w"))
 PY
 connect
 check "the reply to my comment reaches me"         1 "$(titled "$TITLE")"
-check "as a discussion row"                        '"new_comment"' "$(api "$BASE/api/feed" | python3 -c "import json,sys; print(json.dumps(next(i['kind'] for i in json.load(sys.stdin) if i['title']=='$TITLE')))")"
-check "named after whoever replied"                '"David"' "$(api "$BASE/api/feed" | python3 -c "import json,sys; print(json.dumps(next(i['actorName'] for i in json.load(sys.stdin) if i['title']=='$TITLE')))")"
+check "as a discussion row"                        '"new_comment"' "$(feed | python3 -c "import json,sys; print(json.dumps(next(i['kind'] for i in json.load(sys.stdin) if i['title']=='$TITLE')))")"
+check "named after whoever replied"                '"David"' "$(feed | python3 -c "import json,sys; print(json.dumps(next(i['actorName'] for i in json.load(sys.stdin) if i['title']=='$TITLE')))")"
 
 # a branch moving is news to a reviewer. it is not news to someone who left one comment.
 python3 - "$MRS" <<'PY'

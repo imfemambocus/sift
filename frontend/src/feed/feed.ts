@@ -1,6 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { request } from "../lib/api";
+import type { FeedFilter, FeedOrder } from "./view";
 
 /*
  * source and kind are parsed as plain strings rather than enums on purpose. this app's job is to
@@ -27,37 +29,112 @@ const feedItemSchema = z.object({
 	resolved: z.boolean(),
 });
 
-const feedSchema = z.array(feedItemSchema);
+const feedPageSchema = z.object({
+	items: z.array(feedItemSchema),
+	/** Null is the last page, so a "Show more" is never a button that would do nothing. */
+	nextCursor: z.string().nullable(),
+});
+
+const feedSummarySchema = z.object({
+	source: z.string(),
+	total: z.number(),
+	unread: z.number(),
+	/** Only what the source still reports. A merged merge request is history, not a thing waiting. */
+	waiting: z.number(),
+	waitingUnread: z.number(),
+	waitingByKind: z.record(z.string(), z.number()),
+});
+
+const summarySchema = z.array(feedSummarySchema);
 
 export type FeedItem = z.infer<typeof feedItemSchema>;
+export type FeedPage = z.infer<typeof feedPageSchema>;
+export type FeedSummary = z.infer<typeof feedSummarySchema>;
 
 export const FEED_KEY = "feed";
+export const SUMMARY_KEY = "feed-summary";
 
-/*
- * One query for the whole app, every source at once. A source tab narrows it in the browser rather
- * than asking for `?source=`, because the search field, the tab badge and Home all want everything:
- * a second per-source query would only mean polling the same endpoint twice. The backend's filter
- * stays, for when the corpus is big enough that shipping all of it stops being sensible.
+const NOTHING: FeedSummary = {
+	source: "",
+	total: 0,
+	unread: 0,
+	waiting: 0,
+	waitingUnread: 0,
+	waitingByKind: {},
+};
+
+/** What narrows one view of the feed. Every field of it is part of the query key. */
+export type FeedView = {
+	/** Absent is every source, which is what the search wants. */
+	readonly source?: string;
+	readonly filter: FeedFilter;
+	readonly order: FeedOrder;
+	readonly query?: string;
+};
+
+function pathFor(view: FeedView, cursor: string | null): string {
+	const params = new URLSearchParams({ filter: view.filter, order: view.order });
+	if (view.source !== undefined) {
+		params.set("source", view.source);
+	}
+	if (view.query !== undefined && view.query.trim() !== "") {
+		params.set("q", view.query.trim());
+	}
+	if (cursor !== null) {
+		params.set("cursor", cursor);
+	}
+	return `/api/feed?${params.toString()}`;
+}
+
+/**
+ * One page of the feed at a time, as whole groups.
+ *
+ * <p>The server narrows, orders, searches and pages, which is a change from the whole history
+ * arriving in one request. It had to be: that request grew without a bound and the poll carried all
+ * of it every thirty seconds. Everything that used to count the rows the browser held now reads
+ * {@link useFeedSummary} instead.
  */
-export function useFeed() {
-	return useQuery({
-		queryKey: [FEED_KEY],
-		queryFn: async () => feedSchema.parse(await request<unknown>("/api/feed")),
+export function useFeedPages(view: FeedView, enabled = true) {
+	return useInfiniteQuery({
+		queryKey: [FEED_KEY, view.source ?? "all", view.filter, view.order, view.query?.trim() ?? ""],
+		queryFn: async ({ pageParam }) => feedPageSchema.parse(await request<unknown>(pathFor(view, pageParam))),
+		initialPageParam: null as string | null,
+		getNextPageParam: (last: FeedPage) => last.nextCursor,
+		// off while a search query is still being typed, so a half-word never asks for the whole feed
+		enabled,
 		// tanstack pauses interval refetching while the tab is in the background, so this is only
-		// every 30s when someone is actually looking at it
+		// every 30s when someone is actually looking at it. it refreshes the pages already loaded.
 		refetchInterval: 30_000,
 	});
 }
 
-export function bySource(items: readonly FeedItem[], source: string): readonly FeedItem[] {
-	return items.filter((item) => item.source === source);
+/** Every page loaded so far, flattened. Groups survive the seam, since `intoGroups` merges by key. */
+export function itemsOf(data: InfiniteData<FeedPage> | undefined): readonly FeedItem[] {
+	return data === undefined ? [] : data.pages.flatMap((page) => page.items);
 }
 
-export function unreadCount(items: readonly FeedItem[]): number {
-	return items.filter((item) => !item.read).length;
+/**
+ * The counts behind every number the app shows without showing the rows: the All / Unread / Read
+ * control, Home's cards, and the count on the tab. One request for every source at once.
+ */
+export function useFeedSummary() {
+	return useQuery({
+		queryKey: [SUMMARY_KEY],
+		queryFn: async () => summarySchema.parse(await request<unknown>("/api/feed/summary")),
+		refetchInterval: 30_000,
+	});
 }
 
-type CachedFeeds = readonly (readonly [readonly unknown[], FeedItem[] | undefined])[];
+/** Zeros rather than undefined for a source with no rows yet, so a card can render before a sync. */
+export function summaryFor(summary: readonly FeedSummary[] | undefined, source: string): FeedSummary {
+	return summary?.find((entry) => entry.source === source) ?? { ...NOTHING, source };
+}
+
+export function totalUnread(summary: readonly FeedSummary[] | undefined): number {
+	return (summary ?? []).reduce((sum, entry) => sum + entry.unread, 0);
+}
+
+type CachedFeeds = readonly (readonly [readonly unknown[], InfiniteData<FeedPage> | undefined])[];
 
 /**
  * Writes `read` onto every cached item the predicate picks, and hands back what was there so an error
@@ -68,12 +145,18 @@ async function optimisticRead(
 	picks: (item: FeedItem) => boolean,
 	read: boolean,
 ): Promise<CachedFeeds> {
-	// by prefix, so it still holds if a narrowed feed query is ever added beside the one
+	// by prefix, so every narrowed feed on screen is written at once and none of them disagree
 	await queryClient.cancelQueries({ queryKey: [FEED_KEY] });
-	const previous = queryClient.getQueriesData<FeedItem[]>({ queryKey: [FEED_KEY] });
+	const previous = queryClient.getQueriesData<InfiniteData<FeedPage>>({ queryKey: [FEED_KEY] });
 
-	queryClient.setQueriesData<FeedItem[]>({ queryKey: [FEED_KEY] }, (feed) =>
-		feed?.map((item) => (picks(item) ? { ...item, read } : item)),
+	queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: [FEED_KEY] }, (feed) =>
+		feed === undefined ? feed : {
+			...feed,
+			pages: feed.pages.map((page) => ({
+				...page,
+				items: page.items.map((item) => (picks(item) ? { ...item, read } : item)),
+			})),
+		},
 	);
 	return previous;
 }
@@ -82,6 +165,23 @@ function rollback(queryClient: ReturnType<typeof useQueryClient>, previous: Cach
 	for (const [key, feed] of previous ?? []) {
 		queryClient.setQueryData(key, feed);
 	}
+}
+
+/**
+ * Anything that changes the rows changes the counts as well, and the two are separate requests now,
+ * so they are refreshed together. Every caller has to use this rather than the feed key alone: a
+ * page whose list moved while its All / Unread / Read numbers did not is the visible failure.
+ *
+ * <p>The counts are refetched rather than written optimistically. The row greying out under the
+ * cursor is what would look broken if it waited for a round trip; a number in the corner catching up
+ * one beat later does not, and working the delta out per source from several cached pages would be a
+ * second way to get the counts wrong.
+ */
+export async function invalidateFeed(queryClient: ReturnType<typeof useQueryClient>) {
+	await Promise.all([
+		queryClient.invalidateQueries({ queryKey: [FEED_KEY] }),
+		queryClient.invalidateQueries({ queryKey: [SUMMARY_KEY] }),
+	]);
 }
 
 /** Several ids at once, so clearing a whole group is one gesture and one cache write. */
@@ -108,9 +208,7 @@ export function useSetRead() {
 
 		onError: (_error, _input, context) => rollback(queryClient, context?.previous),
 
-		onSettled: async () => {
-			await queryClient.invalidateQueries({ queryKey: [FEED_KEY] });
-		},
+		onSettled: () => invalidateFeed(queryClient),
 	});
 }
 
@@ -138,8 +236,6 @@ export function useMarkAllRead(source?: string) {
 
 		onError: (_error, _input, context) => rollback(queryClient, context?.previous),
 
-		onSettled: async () => {
-			await queryClient.invalidateQueries({ queryKey: [FEED_KEY] });
-		},
+		onSettled: () => invalidateFeed(queryClient),
 	});
 }

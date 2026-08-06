@@ -1,34 +1,37 @@
 import { Link } from "react-router";
-import type { FeedItem } from "../feed/feed";
-import { unreadCount } from "../feed/feed";
+import type { FeedSummary } from "../feed/feed";
 import type { EventFamily } from "../feed/events";
 import { eventFamily, FAMILY_FILL, FAMILY_LABEL, FAMILY_ORDER } from "../feed/events";
 import { agoPhrase } from "../lib/time";
 import { sourceName, sourcePath } from "../sources/labels";
 import type { SourceStatus } from "../sources/sources";
 
-function countByFamily(items: readonly FeedItem[]): Record<EventFamily, number> {
+/*
+ * the server counts by kind and this turns those into families, rather than the server counting
+ * families itself: which kinds make up a family is a question about how the app words things, and
+ * that answer belongs on this side.
+ */
+function countByFamily(byKind: Readonly<Record<string, number>>): Record<EventFamily, number> {
 	const counts = { review: 0, assigned: 0, mention: 0, discussion: 0, blocked: 0, other: 0 };
-	for (const item of items) {
-		counts[eventFamily(item.kind)] += 1;
+	for (const [kind, count] of Object.entries(byKind)) {
+		counts[eventFamily(kind)] += count;
 	}
 	return counts;
 }
 
 type SourceSummaryProps = {
 	readonly source: SourceStatus;
-	readonly items: readonly FeedItem[];
+	readonly counts: FeedSummary;
 };
 
-export function SourceSummary({ source, items }: SourceSummaryProps) {
+export function SourceSummary({ source, counts }: SourceSummaryProps) {
 	/*
-	 * the feed holds the whole history now, so what is waiting is only the part the source still
-	 * reports. a merged merge request belongs in the list; it does not belong in this number.
+	 * every number here is over what the source still reports, never the whole history. the feed
+	 * holds a merged merge request; it does not belong in "11 waiting".
 	 */
-	const waiting = items.filter((item) => !item.resolved);
-	const counts = countByFamily(waiting);
-	const present = FAMILY_ORDER.filter((family) => counts[family] > 0);
-	const unread = unreadCount(waiting);
+	const waiting = counts.waiting;
+	const byFamily = countByFamily(counts.waitingByKind);
+	const present = FAMILY_ORDER.filter((family) => byFamily[family] > 0);
 	const rejected = source.status === "AUTH_FAILED";
 
 	return (
@@ -43,8 +46,8 @@ export function SourceSummary({ source, items }: SourceSummaryProps) {
 			</div>
 
 			<div className="flex items-baseline gap-2">
-				<span className="text-[32px] font-semibold leading-none tracking-[-0.03em] text-fg">{waiting.length}</span>
-				<span className="text-[13px] text-fg-muted">{waiting.length === 1 ? "item waiting" : "waiting"}</span>
+				<span className="text-[32px] font-semibold leading-none tracking-[-0.03em] text-fg">{waiting}</span>
+				<span className="text-[13px] text-fg-muted">{waiting === 1 ? "item waiting" : "waiting"}</span>
 			</div>
 
 			{present.length > 0 && (
@@ -54,7 +57,7 @@ export function SourceSummary({ source, items }: SourceSummaryProps) {
 							<span
 								key={family}
 								className={FAMILY_FILL[family]}
-								style={{ width: `${(counts[family] / waiting.length) * 100}%` }}
+								style={{ width: `${(byFamily[family] / waiting) * 100}%` }}
 							/>
 						))}
 					</div>
@@ -64,7 +67,7 @@ export function SourceSummary({ source, items }: SourceSummaryProps) {
 							<span key={family} className="flex items-center gap-1.5 text-[11px] text-fg-muted">
 								<span aria-hidden className={`h-2 w-0.5 rounded-full ${FAMILY_FILL[family]}`} />
 								{FAMILY_LABEL[family]}
-								<span className="font-mono text-fg">{counts[family]}</span>
+								<span className="font-mono text-fg">{byFamily[family]}</span>
 							</span>
 						))}
 					</div>
@@ -72,8 +75,8 @@ export function SourceSummary({ source, items }: SourceSummaryProps) {
 			)}
 
 			<div className="flex flex-wrap items-baseline gap-x-2 text-[12px] text-fg-muted">
-				{unread > 0 && <span className="text-accent">{unread} unread</span>}
-				{unread > 0 && <span aria-hidden className="text-fg-muted/45">&middot;</span>}
+				{counts.waitingUnread > 0 && <span className="text-accent">{counts.waitingUnread} unread</span>}
+				{counts.waitingUnread > 0 && <span aria-hidden className="text-fg-muted/45">&middot;</span>}
 				<span>{source.lastSyncAt === null ? "Not synced yet" : `Synced ${agoPhrase(source.lastSyncAt)}`}</span>
 			</div>
 		</Link>

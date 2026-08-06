@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { EmptyState } from "../components/EmptyState";
-import { bySource, unreadCount, useFeed, useMarkAllRead } from "../feed/feed";
+import { itemsOf, summaryFor, useFeedPages, useFeedSummary, useMarkAllRead } from "../feed/feed";
 import { FeedFilters } from "../feed/FeedFilters";
 import { FeedList } from "../feed/FeedList";
 import { FeedOrderToggle } from "../feed/FeedOrderToggle";
 import { FeedSkeleton } from "../feed/FeedSkeleton";
 import type { FeedFilter, FeedOrder } from "../feed/view";
-import { applyView } from "../feed/view";
 import { Page } from "../layout/Page";
 import { useMinimumDuration } from "../lib/minimumDuration";
 import { LastSynced } from "../sources/LastSynced";
@@ -15,15 +14,16 @@ import { SourceAlerts } from "../sources/SourceAlerts";
 import { useIsSyncing, useSource } from "../sources/sources";
 
 export function GitLabPage() {
-	const { data: feed, isPending } = useFeed();
-	const { data: source } = useSource("gitlab");
 	const [filter, setFilter] = useState<FeedFilter>("all");
 	const [order, setOrder] = useState<FeedOrder>("latest");
+	const feed = useFeedPages({ source: "gitlab", filter, order });
+	const { data: summary } = useFeedSummary();
+	const { data: source } = useSource("gitlab");
 	const markAllRead = useMarkAllRead("gitlab");
 
-	// narrowed here rather than by a second request; see useFeed
-	const items = bySource(feed ?? [], "gitlab");
-	const shown = applyView(items, filter, order);
+	// narrowed, ordered and paged by the server; this is only the pages that have been asked for
+	const shown = itemsOf(feed.data);
+	const counts = summaryFor(summary, "gitlab");
 
 	/*
 	 * a refresh someone pressed skeletons the list, so the wait is visible where the new rows will
@@ -31,8 +31,7 @@ export function GitLabPage() {
 	 * a flicker rather than an answer. called on its own line, since `||` would short-circuit a hook.
 	 */
 	const syncing = useIsSyncing("gitlab");
-	const loading = useMinimumDuration(isPending || syncing);
-	const unread = unreadCount(items);
+	const loading = useMinimumDuration(feed.isPending || syncing);
 
 	return (
 		<Page title="GitLab" description="To-dos, review requests and mentions from your GitLab instance.">
@@ -40,16 +39,16 @@ export function GitLabPage() {
 
 			{/* reachable from where the feed is, not buried in settings */}
 			<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-				<FeedFilters items={items} filter={filter} onChange={setFilter} />
+				<FeedFilters counts={counts} filter={filter} onChange={setFilter} />
 
 				<div className="flex flex-wrap items-center gap-2">
-					{items.length > 0 && <FeedOrderToggle order={order} onChange={setOrder} />}
+					{counts.total > 0 && <FeedOrderToggle order={order} onChange={setOrder} />}
 					{/*
 					  * bordered where the sort toggle is not, because they are different kinds of thing
 					  * sitting next to each other: one changes what you see, this one changes the data.
 					  * `Button` is not used here, since its h-10 would tower over a row of 12px controls.
 					  */}
-					{unread > 0 && (
+					{counts.unread > 0 && (
 						<button
 							type="button"
 							onClick={() => markAllRead.mutate()}
@@ -63,7 +62,18 @@ export function GitLabPage() {
 				</div>
 			</div>
 
-			{loading ? <FeedSkeleton /> : <FeedList items={shown} empty={emptyFor(filter, source !== undefined)} />}
+			{loading ? <FeedSkeleton /> : (
+				<FeedList
+					items={shown}
+					empty={emptyFor(filter, source !== undefined)}
+					hasMore={feed.hasNextPage}
+					onMore={() => {
+						// it never rejects: a failure lands in the query's own error state
+						feed.fetchNextPage();
+					}}
+					loadingMore={feed.isFetchingNextPage}
+				/>
+			)}
 		</Page>
 	);
 }

@@ -30,10 +30,17 @@ page.on("console", (m) => {
 });
 page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 
-// the app holds one feed query for every page; GET only, so marking read does not count
+/*
+ * a page load costs one page of the feed and one read of the counts, and they are counted apart:
+ * the summary is a second endpoint now, so lumping them together would hide a page that quietly
+ * fires two list queries. GET only, so marking read does not count.
+ */
 let feedReads = 0;
+let summaryReads = 0;
 page.on("request", (r) => {
-  if (r.method() === "GET" && r.url().includes("/api/feed")) feedReads += 1;
+  if (r.method() !== "GET") return;
+  if (r.url().includes("/api/feed/summary")) summaryReads += 1;
+  else if (r.url().includes("/api/feed")) feedReads += 1;
 });
 
 const setTheme = (t) => page.evaluate((v) => window.localStorage.setItem("sift-theme", v), t);
@@ -101,14 +108,16 @@ await shot("f05-home-cards-light");
 // a cold load of a source tab: the skeleton must be seen, and it must cost exactly one feed read
 await setTheme("dark");
 const readsBefore = feedReads;
+const summariesBefore = summaryReads;
 await page.goto(`${BASE}/gitlab`, { waitUntil: "domcontentloaded" });
 const skeleton = await page.waitForSelector("div.animate-pulse", { timeout: 5000 }).catch(() => null);
 await page.waitForSelector("time", { timeout: 15000 });
 // long enough that a second query would have fired, and well short of the 30s poll
 await settle(1500);
-console.log(`  skeleton ${skeleton === null ? "NEVER APPEARED" : "appeared"}, feed reads on load: ${feedReads - readsBefore}`);
+console.log(`  skeleton ${skeleton === null ? "NEVER APPEARED" : "appeared"}, on load: ${feedReads - readsBefore} page reads, ${summaryReads - summariesBefore} count reads`);
 if (skeleton === null) problems.push("the loading skeleton never appeared, so a fast load flashes instead");
 if (feedReads - readsBefore > 1) problems.push(`opening a source tab cost ${feedReads - readsBefore} feed reads, not one`);
+if (summaryReads - summariesBefore > 1) problems.push(`opening a source tab read the counts ${summaryReads - summariesBefore} times, not one`);
 await shot("f06-gitlab-feed-dark");
 
 // the reply lands on the same merge request as its review request, so there must be a group
@@ -137,7 +146,8 @@ async function searchFor(text) {
   const left = await page.$eval(SEARCH, (el) => el.value);
   if (left !== "") problems.push(`the search field would not clear, so "${text}" was typed onto "${left}"`);
   await page.type(SEARCH, text);
-  await settle(500);
+  // the search waits 250ms for the typing to stop and then asks the server, so this must outlast both
+  await settle(1200);
   return { heading: await heading(), rows: (await page.$$('a[href^="https://gitlab.example.org"]')).length };
 }
 

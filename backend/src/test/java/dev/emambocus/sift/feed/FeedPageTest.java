@@ -1,0 +1,251 @@
+package dev.emambocus.sift.feed;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import dev.emambocus.sift.SiftIntegrationTest;
+import dev.emambocus.sift.credential.SourceType;
+import dev.emambocus.sift.sync.FeedSyncStore;
+import dev.emambocus.sift.sync.IncomingItem;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+/**
+ * Paging, narrowing and searching, all of which moved to the server once the feed stopped being
+ * something the browser could hold in one request.
+ */
+class FeedPageTest extends SiftIntegrationTest {
+
+	private static final Instant MONDAY = Instant.parse("2026-08-03T09:00:00Z");
+	private static final String MR = "https://gl.example.org/team/web/-/merge_requests/";
+
+	@Autowired
+	private FeedService feed;
+
+	@Autowired
+	private FeedSyncStore store;
+
+	@Test
+	@DisplayName("a page is a number of groups, so one thing's events are never split across it")
+	void pagesOverGroups() {
+		UUID user = newUser("groups@uni.lu");
+		store.persist(user, SourceType.GITLAB, threeGroupsOfTwo());
+
+		FeedPageResponse first = feed.page(page(user, 2, null));
+
+		// two groups, both of them whole, which is four rows rather than the two an item limit gives
+		assertThat(first.items()).hasSize(4);
+		assertThat(first.items()).extracting(FeedItemResponse::groupKey)
+				.containsOnly("gitlab:" + MR + "3", "gitlab:" + MR + "2");
+		assertThat(first.nextCursor()).isNotNull();
+	}
+
+	@Test
+	@DisplayName("the cursor walks every group exactly once")
+	void cursorWalksTheWholeFeed() {
+		UUID user = newUser("walk@uni.lu");
+		store.persist(user, SourceType.GITLAB, threeGroupsOfTwo());
+
+		List<String> seen = new ArrayList<>();
+		String cursor = null;
+		do {
+			FeedPageResponse next = feed.page(page(user, 2, cursor));
+			next.items().forEach(item -> seen.add(item.id().toString()));
+			cursor = next.nextCursor();
+		}
+		while (cursor != null);
+
+		assertThat(seen).hasSize(6).doesNotHaveDuplicates();
+	}
+
+	@Test
+	@DisplayName("the last page says so, rather than handing out a cursor that answers nothing")
+	void lastPageHasNoCursor() {
+		UUID user = newUser("last@uni.lu");
+		store.persist(user, SourceType.GITLAB, threeGroupsOfTwo());
+
+		assertThat(feed.page(page(user, 3, null)).nextCursor()).isNull();
+	}
+
+	@Test
+	@DisplayName("longest waiting reverses the groups and leads each one with its oldest event")
+	void waitingOrder() {
+		UUID user = newUser("waiting@uni.lu");
+		store.persist(user, SourceType.GITLAB, threeGroupsOfTwo());
+
+		List<FeedItemResponse> latest = feed.page(page(user, 50, null)).items();
+		List<FeedItemResponse> waiting = feed.page(new FeedRequest(user, null, FeedFilter.ALL,
+				FeedOrder.WAITING, FeedSearch.NONE, null, 50)).items();
+
+		assertThat(waiting).hasSize(6);
+		assertThat(waiting.getFirst().groupKey()).isEqualTo(latest.getLast().groupKey());
+		// the lead of a group is its oldest event under this order, which is what dates the group
+		assertThat(waiting.getFirst().activityAt()).isBefore(waiting.get(1).activityAt());
+		assertThat(latest.getFirst().activityAt()).isAfter(latest.get(1).activityAt());
+	}
+
+	@Test
+	@DisplayName("the unread filter narrows to unread rows and the counts agree with it")
+	void unreadFilter() {
+		UUID user = newUser("unread@uni.lu");
+		store.persist(user, SourceType.GITLAB, threeGroupsOfTwo());
+		feed.setRead(user, feed.page(page(user, 50, null)).items().getFirst().id(), true);
+
+		List<FeedItemResponse> unread = feed.page(new FeedRequest(user, null, FeedFilter.UNREAD,
+				FeedOrder.LATEST, FeedSearch.NONE, null, 50)).items();
+
+		assertThat(unread).hasSize(5).allMatch(item -> !item.read());
+		assertThat(feed.summary(user).getFirst().unread()).isEqualTo(5);
+	}
+
+	@Test
+	@DisplayName("one typo per word is forgiven, including two letters swapped")
+	void searchForgivesATypo() {
+		UUID user = newUser("typo@uni.lu");
+		store.persist(user, SourceType.GITLAB, List.of(
+				row("mr:1", "mr_review_requested", "Chart V2: Line chart color encoding", "David",
+						"team/web", MR + "1", MONDAY)));
+
+		// a transposition, which is the typo people actually make, and two letters short of the word
+		assertThat(titles(user, "encodnig")).containsExactly("Chart V2: Line chart color encoding");
+		assertThat(titles(user, "reveiw")).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("every word has to match, and they may be typed in any order")
+	void searchIsAnUnorderedConjunction() {
+		UUID user = newUser("words@uni.lu");
+		store.persist(user, SourceType.GITLAB, List.of(
+				row("mr:1", "mr_assigned", "Chart V2: Line chart color encoding", "David", "team/web",
+						MR + "1", MONDAY),
+				row("mr:2", "mr_assigned", "Colour ramp for the map", "David", "team/web", MR + "2",
+						MONDAY)));
+
+		assertThat(titles(user, "color chart")).containsExactly("Chart V2: Line chart color encoding");
+		assertThat(titles(user, "chart nowhere")).isEmpty();
+	}
+
+	@Test
+	@DisplayName("the scope prefixes narrow on the project, the author and the shape of the thing")
+	void searchScopes() {
+		UUID user = newUser("scopes@uni.lu");
+		store.persist(user, SourceType.GITLAB, List.of(
+				row("mr:1", "mr_assigned", "A merge request", "David", "team/web", MR + "1", MONDAY),
+				row("issue:2", "assigned", "An issue", "Maxime", "team/infra",
+						"https://gl.example.org/team/infra/-/issues/7", MONDAY)));
+
+		assertThat(titles(user, "project:infra")).containsExactly("An issue");
+		assertThat(titles(user, "from:david")).containsExactly("A merge request");
+		assertThat(titles(user, "is:mr")).containsExactly("A merge request");
+		assertThat(titles(user, "is:issue")).containsExactly("An issue");
+		// anything else falls through to the source's own token, so is:merged works unlisted
+		assertThat(titles(user, "is:review")).isEmpty();
+		assertThat(titles(user, "is:assigned")).hasSize(2);
+		// every token has to match, so two of the same key narrow to nothing
+		assertThat(titles(user, "project:web project:infra")).isEmpty();
+	}
+
+	@Test
+	@DisplayName("asking for read and unread at once finds nothing, since every token has to match")
+	void contradictoryScopes() {
+		UUID user = newUser("both@uni.lu");
+		store.persist(user, SourceType.GITLAB, threeGroupsOfTwo());
+
+		assertThat(titles(user, "is:read is:unread")).isEmpty();
+	}
+
+	@Test
+	@DisplayName("a search never reaches another tenant's rows")
+	void searchIsScopedToTheOwner() {
+		UUID mine = newUser("mine3@uni.lu");
+		UUID theirs = newUser("theirs3@uni.lu");
+		store.persist(theirs, SourceType.GITLAB, List.of(
+				row("mr:1", "mr_assigned", "Their secret merge request", "David", "team/web", MR + "1",
+						MONDAY)));
+
+		assertThat(titles(mine, "secret")).isEmpty();
+		assertThat(titles(theirs, "secret")).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("the summary counts what the client used to count for itself")
+	void summaryCounts() {
+		UUID user = newUser("summary@uni.lu");
+		store.persist(user, SourceType.GITLAB, List.of(
+				row("todo:1", "assigned", "One", "David", "team/web", MR + "1", MONDAY),
+				row("todo:2", "review_requested", "Two", "David", "team/web", MR + "2", MONDAY),
+				row("todo:3", "assigned", "Three", "David", "team/web", MR + "3", MONDAY)));
+		// the third stops being reported, which resolves it and reads it
+		store.persist(user, SourceType.GITLAB, List.of(
+				row("todo:1", "assigned", "One", "David", "team/web", MR + "1", MONDAY),
+				row("todo:2", "review_requested", "Two", "David", "team/web", MR + "2", MONDAY)));
+
+		FeedSummaryResponse summary = feed.summary(user).getFirst();
+
+		assertThat(summary.source()).isEqualTo("gitlab");
+		// the history is the whole of it; what is waiting is only the part the source still reports
+		assertThat(summary.total()).isEqualTo(3);
+		assertThat(summary.waiting()).isEqualTo(2);
+		assertThat(summary.unread()).isEqualTo(2);
+		assertThat(summary.waitingUnread()).isEqualTo(2);
+		assertThat(summary.waitingByKind()).containsOnly(
+				org.assertj.core.api.Assertions.entry("assigned", 1L),
+				org.assertj.core.api.Assertions.entry("review_requested", 1L));
+	}
+
+	@Test
+	@DisplayName("a cursor the feed did not hand out is a bad request, not an empty page")
+	void rejectsAForgedCursor() {
+		UUID user = newUser("forged@uni.lu");
+
+		assertThatThrownBy(() -> feed.page(page(user, 50, "not-a-cursor")))
+				.isInstanceOf(InvalidFeedRequestException.class);
+	}
+
+	@Test
+	@DisplayName("an unknown filter or order is a bad request rather than a silent default")
+	void rejectsUnknownNarrowing() {
+		assertThatThrownBy(() -> FeedFilter.parse("everything")).isInstanceOf(InvalidFeedRequestException.class);
+		assertThatThrownBy(() -> FeedOrder.parse("loudest")).isInstanceOf(InvalidFeedRequestException.class);
+		// absent is the default, which is not the same thing as unknown
+		assertThat(FeedFilter.parse(null)).isEqualTo(FeedFilter.ALL);
+		assertThat(FeedOrder.parse("")).isEqualTo(FeedOrder.LATEST);
+	}
+
+	private List<String> titles(UUID user, String query) {
+		FeedRequest request = new FeedRequest(user, null, FeedFilter.ALL, FeedOrder.LATEST,
+				FeedSearch.parse(query), null, 50);
+		return feed.page(request).items().stream().map(FeedItemResponse::title).toList();
+	}
+
+	private static FeedRequest page(UUID user, int limit, String cursor) {
+		return new FeedRequest(user, null, FeedFilter.ALL, FeedOrder.LATEST, FeedSearch.NONE,
+				FeedCursor.decode(cursor), limit);
+	}
+
+	/** Three merge requests, each with a review request and a reply on it. Newest group last. */
+	private static List<IncomingItem> threeGroupsOfTwo() {
+		List<IncomingItem> items = new ArrayList<>();
+		for (int mr = 1; mr <= 3; mr++) {
+			Instant opened = MONDAY.plus(mr, ChronoUnit.HOURS);
+			items.add(row("mr:" + mr, "mr_review_requested", "Merge request " + mr, "David", "team/web",
+					MR + mr, opened));
+			items.add(row("thread:" + mr, "new_comment", "Merge request " + mr, "Maxime", "team/web",
+					MR + mr + "#note_" + mr, opened.plus(10, ChronoUnit.MINUTES)));
+		}
+		return items;
+	}
+
+	private static IncomingItem row(String sourceId, String kind, String title, String actor,
+			String project, String url, Instant activity) {
+
+		return new IncomingItem(sourceId, kind, Priority.NORMAL, title, null, actor, null, project,
+				null, url, MONDAY, activity, null, true);
+	}
+}
