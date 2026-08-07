@@ -125,6 +125,18 @@ final class GitLabResponses {
 			Note note) {
 	}
 
+	/**
+	 * What {@code /oauth/token} answers, for both grant types.
+	 *
+	 * <p>{@code refreshToken} is not optional in practice: GitLab invalidates the old one on every
+	 * refresh, so losing the new one ends the connection.
+	 */
+	record OAuthToken(
+			@JsonProperty("access_token") String accessToken,
+			@JsonProperty("refresh_token") String refreshToken,
+			@JsonProperty("expires_in") Long expiresIn) {
+	}
+
 	record Todo(
 			Long id,
 			@JsonProperty("action_name") String actionName,

@@ -13,14 +13,6 @@ const sourceStatusSchema = z.object({
 	lastError: z.string().nullable(),
 	lastSyncAt: z.string().nullable(),
 	itemCount: z.number(),
-	account: z
-		.object({
-			username: z.string().nullable(),
-			displayName: z.string().nullable(),
-			avatarUrl: z.string().nullable(),
-			webUrl: z.string().nullable(),
-		})
-		.nullable(),
 });
 
 const sourcesSchema = z.array(sourceStatusSchema);
@@ -28,6 +20,38 @@ const sourcesSchema = z.array(sourceStatusSchema);
 export type SourceStatus = z.infer<typeof sourceStatusSchema>;
 
 const SOURCES_KEY = ["sources"];
+
+const oauthAvailabilitySchema = z.object({
+	configured: z.boolean(),
+	instanceUrl: z.string().nullable(),
+});
+
+const authorizationSchema = z.object({ authorizeUrl: z.string() });
+
+/** Whether this deployment has a GitLab OAuth application, which decides how Settings offers to connect. */
+export function useGitLabOAuth() {
+	return useQuery({
+		queryKey: ["gitlab-oauth"],
+		queryFn: async () =>
+			oauthAvailabilitySchema.parse(await request<unknown>("/api/sources/gitlab/oauth")),
+		// deployment configuration: it cannot change while the app is open
+		staleTime: Infinity,
+	});
+}
+
+/**
+ * Starts the authorization, then hands the browser to GitLab. The exchange happens server-side, so
+ * no token ever reaches this code.
+ */
+export function useStartGitLabOAuth() {
+	return useMutation({
+		mutationFn: async () => {
+			const payload = await request<unknown>("/api/sources/gitlab/oauth/start", { method: "POST" });
+			const { authorizeUrl } = authorizationSchema.parse(payload);
+			window.location.assign(authorizeUrl);
+		},
+	});
+}
 
 export function useSources() {
 	return useQuery({
@@ -39,24 +63,6 @@ export function useSources() {
 export function useSource(source: string) {
 	const query = useSources();
 	return { ...query, data: query.data?.find((entry) => entry.source === source) };
-}
-
-export function useConnectSource(source: string) {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: async (input: { instanceUrl: string; token: string }) => {
-			const payload = await request<unknown>(`/api/sources/${source}/connect`, {
-				method: "POST",
-				body: JSON.stringify(input),
-			});
-			return sourceStatusSchema.parse(payload);
-		},
-		// connecting runs a first sync server-side, so the feed has something new to show
-		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
-			await invalidateFeed(queryClient);
-		},
-	});
 }
 
 const SYNC_KEY = "sync-source";

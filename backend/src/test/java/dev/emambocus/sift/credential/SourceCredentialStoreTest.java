@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  */
 class SourceCredentialStoreTest extends SiftIntegrationTest {
 
-	private static final String TOKEN = "glpat-a-token-worth-keeping";
+	private static final String TOKEN = "an-access-token-worth-keeping";
 
 	@Autowired
 	private SourceCredentialRepository credentials;
@@ -89,8 +89,8 @@ class SourceCredentialStoreTest extends SiftIntegrationTest {
 	}
 
 	private SourceCredential connect(UUID userId) {
-		return credentials.save(SourceCredential.personalAccessToken(
-				userId, SourceType.GITLAB, "https://gl.example.org", TOKEN, Instant.now()));
+		return credentials.save(SourceCredential.oauth(userId, SourceType.GITLAB, "https://gl.example.org",
+				TOKEN, "a-refresh-token", Instant.now().plusSeconds(7200), Instant.now()));
 	}
 
 	private String rawToken(UUID credentialId) {

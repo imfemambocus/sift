@@ -12,6 +12,8 @@ JAR="$WORK/u-cookies.txt"
 LOG="$WORK/u-boot.log"
 BASE=http://localhost:7779
 FAKE=http://127.0.0.1:7788
+# shellcheck source=oauth-connect.sh
+source "$HERE/oauth-connect.sh"
 PASS=0; FAIL=0
 
 cleanup() {
@@ -30,7 +32,7 @@ rm -f "$JAR"
 python3 "$HERE/make-todos.py" full "$WORK/u-todos.json" >/dev/null
 PORT=7788 TODOS_FILE="$WORK/u-todos.json" python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
-for _ in $(seq 1 30); do curl -sf -o /dev/null -H 'PRIVATE-TOKEN: good-token' "$FAKE/api/v4/user" && break; sleep 1; done
+for _ in $(seq 1 30); do curl -sf -o /dev/null "$FAKE/oauth/issued" && break; sleep 1; done
 
 docker rm -f sift-u-db >/dev/null 2>&1
 docker run -d --rm --name sift-u-db -e POSTGRES_DB=sift -e POSTGRES_USER=sift \
@@ -40,7 +42,7 @@ for _ in $(seq 1 60); do docker exec sift-u-db pg_isready -U sift -d sift >/dev/
 SIFT_DB_URL=jdbc:postgresql://localhost:5439/sift SIFT_DB_USER=sift SIFT_DB_PASSWORD=sift \
 SIFT_ENCRYPTION_KEY="$(openssl rand -base64 32)" SIFT_PORT=7779 \
 SIFT_SYNC_INITIAL_DELAY=PT2S SIFT_SYNC_INTERVAL=PT3S \
-  "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$LOG" 2>&1 &
+  env $(sift_oauth_env) "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$LOG" 2>&1 &
 BOOT_PID=$!
 for _ in $(seq 1 180); do
   grep -q "Started SiftApplication" "$LOG" 2>/dev/null && break
@@ -63,7 +65,7 @@ sql() { docker exec sift-u-db psql -U sift -d sift -qtAc "$1" | tr -d ' '; }
 api "$BASE/actuator/health" >/dev/null
 post -d '{"email":"a@b.co","displayName":"A","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
 post -d '{"email":"a@b.co","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
-post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
+sift_connect_gitlab >/dev/null
 sleep 5
 check "healthy to begin with" OK "$(sql 'select last_sync_status from source_credentials')"
 
@@ -91,7 +93,7 @@ check "the items already collected are still there" 8 "$(feed | python3 -c 'impo
 
 echo
 echo "--- reconnecting recovers, and sweeps resume ---"
-post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
+sift_connect_gitlab >/dev/null
 sleep 8
 check "back to OK" OK "$(sql 'select last_sync_status from source_credentials')"
 check "and the reason is cleared" 1 "$(sql 'select count(*) from source_credentials where last_error is null')"

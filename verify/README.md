@@ -4,7 +4,9 @@ Integration checks that drive the real backend over HTTP against a stand-in GitL
 Postgres. There are no unit tests yet; these are what stands in for them, and they have caught every
 non-obvious bug in this project so far.
 
-Each script starts everything it needs and tears it down again.
+Each script starts everything it needs and tears it down again. Every one of them connects GitLab
+through the real OAuth flow, since the pasted-token endpoint was removed on 2026-08-07 and there is no
+other way in. `oauth-connect.sh` holds that helper, and each suite sources it.
 
 ```
 ./verify-sync.sh              connect, priority mapping, resolve, disconnect, a revoked token, and
@@ -13,6 +15,8 @@ Each script starts everything it needs and tears it down again.
 ./verify-mr.sh                merge requests read as state, and the three de-duplications
 ./verify-participation.sh     threads, replies, pushed commits, grouping, and what must NOT be emitted
 ./verify-read.sh              marking items read, tenancy on it, and what a later sync un-reads
+./verify-oauth.sh             the GitLab OAuth flow: the authorize URL, the callback, the state rule,
+                              a spent state replayed, and a renewal the stand-in instance compels
 ./verify-unreadable-token.sh  a token that will not decrypt, and "check now"
 ./verify-feed-ui.sh           the same flow in a browser, plus search, grouping, the tab badge, and
                               an item completed upstream that stays in the feed as history
@@ -56,10 +60,24 @@ before assuming the suite can run.
 `discussions` and the caller's own `events`, from JSON fixtures it re-reads on every request, so a
 test can change what the instance returns between sweeps. `make-todos.py` and `make-mrs.py` write
 those fixtures. Touching the file named by `REVOKE_FILE` makes it reject every token, which stands in
-for a revoked PAT.
+for an approval withdrawn on the instance.
+
+It also runs the OAuth end: `/oauth/authorize` approves at once and redirects straight back, and
+`/oauth/token` grants both kinds. That pair is what lets the browser suite click the real button, and
+what makes the whole flow work locally with no application registered anywhere.
 
 Unconfigured routes answer with an empty list rather than 404, so a suite that does not care about
 issues, discussions or the activity feed is not broken by the app reading them.
+
+The token endpoint is strict on purpose. It demands the client id and secret, and refuses an
+`authorization_code` grant with no `code_verifier`. It keeps **one chain per approval**, exactly as a
+real server does: renewing advances that chain and kills its own previous pair, and leaves every other
+chain alone. Both halves matter. A spent token has to stop working, or a renewal the app failed to
+store would pass unnoticed. And one user authorizing must not sign another user out, which is what
+`verify-read.sh` needs when it connects a second tenant.
+
+So `OAUTH_EXPIRES_IN=1` makes every read renew. `GET /oauth/issued` reports how many grants have been
+made, and it is the only way a suite can see that a renewal really happened.
 
 Two routes share one fixture key. `single`, keyed `project:iid`, answers both
 `GET /projects/:id/merge_requests/:iid` (what became of something that left the opened lists) and
@@ -69,9 +87,9 @@ flipping a record to `merged` or `closed` is how a suite makes something depart.
 
 ## The Testcontainers suite is separate
 
-`cd backend && ./gradlew test` runs 49 in-process tests against a real Postgres 17 container: the
-diffing rules, tenancy, the credential sync outcome, the GitLab adapter's de-duplications, and the
-paging, narrowing and search of the feed query. It needs no shell script and no free ports, so it is
+`cd backend && ./gradlew test` runs 56 in-process tests against a real Postgres 17 container: the
+diffing rules, tenancy, the credential sync outcome, the GitLab adapter's de-duplications, the OAuth
+renewal and its PKCE, and the paging, narrowing and search of the feed query. It needs no shell script and no free ports, so it is
 the one to reach for first. The suites here cover what it cannot: real HTTP, a real browser, and the
 packaged container.
 

@@ -1,6 +1,5 @@
 package dev.emambocus.sift.gitlab;
 
-import dev.emambocus.sift.credential.SourceCredential;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -66,12 +65,11 @@ class GitLabCommentedOn {
 	 * @param alreadyWatched resource keys the lists have already produced, which cost nothing to watch
 	 *                       and must not be looked up again
 	 */
-	Found discover(SourceCredential credential, Set<String> alreadyWatched, int maxPages) {
+	Found discover(GitLabAccess access, Set<String> alreadyWatched, int maxPages) {
 		List<GitLabResponses.Event> events;
 		try {
 			LocalDate after = LocalDate.ofInstant(clock.instant().minus(WINDOW), ZoneOffset.UTC);
-			events = client.fetchCommentedEvents(credential.getInstanceUrl(), credential.getAccessToken(),
-					after, maxPages);
+			events = client.fetchCommentedEvents(access, after, maxPages);
 		}
 		catch (RuntimeException ex) {
 			/*
@@ -92,7 +90,7 @@ class GitLabCommentedOn {
 		List<GitLabResponses.MergeRequest> mergeRequests = new ArrayList<>();
 		List<GitLabResponses.Issue> issues = new ArrayList<>();
 		for (Map.Entry<Batch, Set<Long>> entry : wanted.entrySet()) {
-			read(credential, entry.getKey(), entry.getValue(), maxPages, mergeRequests, issues);
+			read(access, entry.getKey(), entry.getValue(), maxPages, mergeRequests, issues);
 		}
 		return new Found(mergeRequests, issues);
 	}
@@ -126,18 +124,17 @@ class GitLabCommentedOn {
 		return wanted;
 	}
 
-	private void read(SourceCredential credential, Batch batch, Set<Long> iids, int maxPages,
+	private void read(GitLabAccess access, Batch batch, Set<Long> iids, int maxPages,
 			List<GitLabResponses.MergeRequest> mergeRequests, List<GitLabResponses.Issue> issues) {
 
 		for (List<Long> chunk : chunks(iids)) {
 			try {
 				if (batch.type() == GitLabResourceType.MERGE_REQUEST) {
-					mergeRequests.addAll(client.fetchMergeRequestsByIid(credential.getInstanceUrl(),
-							credential.getAccessToken(), batch.projectId(), chunk, maxPages));
+					mergeRequests.addAll(
+							client.fetchMergeRequestsByIid(access, batch.projectId(), chunk, maxPages));
 				}
 				else {
-					issues.addAll(client.fetchIssuesByIid(credential.getInstanceUrl(),
-							credential.getAccessToken(), batch.projectId(), chunk, maxPages));
+					issues.addAll(client.fetchIssuesByIid(access, batch.projectId(), chunk, maxPages));
 				}
 			}
 			catch (RuntimeException ex) {

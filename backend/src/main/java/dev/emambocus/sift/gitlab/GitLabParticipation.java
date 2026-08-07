@@ -68,7 +68,8 @@ class GitLabParticipation {
 		this.clock = clock;
 	}
 
-	List<IncomingItem> collect(SourceCredential credential, Long selfId, List<Watched> watched, int maxPages) {
+	List<IncomingItem> collect(SourceCredential credential, GitLabAccess access, Long selfId,
+			List<Watched> watched, int maxPages) {
 		UUID userId = credential.getUserId();
 		Instant now = clock.instant();
 
@@ -94,7 +95,8 @@ class GitLabParticipation {
 			}
 
 			if (hasMoved(resource, known, firstSight)) {
-				readThreads(credential, selfId, resource, firstSight, knownThreads, items, threadUpdates, now, maxPages);
+				readThreads(userId, access, selfId, resource, firstSight, knownThreads, items, threadUpdates, now,
+						maxPages);
 			}
 
 			known.setTitle(resource.title());
@@ -109,7 +111,7 @@ class GitLabParticipation {
 			if (stillListed.contains(known.key())) {
 				continue;
 			}
-			settle(credential, known, items, finished, now);
+			settle(access, known, items, finished, now);
 		}
 
 		store.save(resourceUpdates, threadUpdates);
@@ -122,7 +124,7 @@ class GitLabParticipation {
 	 * involving you. only the first is news, and the answer needs one request, which is why it is
 	 * asked here rather than guessed from the absence.
 	 */
-	private void settle(SourceCredential credential, GitLabWatchedResource known, List<IncomingItem> items,
+	private void settle(GitLabAccess access, GitLabWatchedResource known, List<IncomingItem> items,
 			List<GitLabWatchedResource> finished, Instant now) {
 
 		if (known.getResourceType() != GitLabResourceType.MERGE_REQUEST) {
@@ -132,8 +134,7 @@ class GitLabParticipation {
 
 		Optional<GitLabResponses.MergeRequest> found;
 		try {
-			found = client.fetchMergeRequest(credential.getInstanceUrl(), credential.getAccessToken(),
-					known.getProjectId(), known.getResourceIid());
+			found = client.fetchMergeRequest(access, known.getProjectId(), known.getResourceIid());
 		}
 		catch (RuntimeException ex) {
 			// as with an unreadable thread: report it, leave the watch row alone, and try again later
@@ -149,14 +150,14 @@ class GitLabParticipation {
 		finished.add(known);
 	}
 
-	private void readThreads(SourceCredential credential, Long selfId, Watched resource, boolean firstSight,
+	private void readThreads(UUID userId, GitLabAccess access, Long selfId, Watched resource, boolean firstSight,
 			Map<String, GitLabWatchedDiscussion> knownThreads, List<IncomingItem> items,
 			List<GitLabWatchedDiscussion> threadUpdates, Instant now, int maxPages) {
 
 		List<GitLabResponses.Discussion> discussions;
 		try {
-			discussions = client.fetchDiscussions(credential.getInstanceUrl(), credential.getAccessToken(),
-					resource.projectId(), resource.type(), resource.iid(), maxPages);
+			discussions = client.fetchDiscussions(access, resource.projectId(), resource.type(), resource.iid(),
+					maxPages);
 		}
 		catch (RuntimeException ex) {
 			/*
@@ -202,7 +203,7 @@ class GitLabParticipation {
 			}
 
 			if (knownThread == null) {
-				threadUpdates.add(GitLabWatchedDiscussion.of(credential.getUserId(), discussion.id(), newest, now));
+				threadUpdates.add(GitLabWatchedDiscussion.of(userId, discussion.id(), newest, now));
 			}
 			else if (newest > alreadySeen) {
 				knownThread.setLastNoteId(newest);

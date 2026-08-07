@@ -13,6 +13,8 @@ JAR_NONE="$WORK/read-cookies-none.txt"
 TODOS="$WORK/read-todos.json"
 BASE=http://localhost:7779
 FAKE=http://127.0.0.1:7788
+# shellcheck source=oauth-connect.sh
+source "$HERE/oauth-connect.sh"
 JAR="$JAR_A"
 PASS=0
 FAIL=0
@@ -35,7 +37,7 @@ python3 "$HERE/make-todos.py" full "$TODOS" >/dev/null
 
 PORT=7788 TODOS_FILE="$TODOS" python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
-for _ in $(seq 1 30); do curl -sf -o /dev/null -H 'PRIVATE-TOKEN: good-token' "$FAKE/api/v4/user" && break; sleep 1; done
+for _ in $(seq 1 30); do curl -sf -o /dev/null "$FAKE/oauth/issued" && break; sleep 1; done
 echo "stub gitlab up"
 
 docker rm -f sift-read-db >/dev/null 2>&1
@@ -46,7 +48,7 @@ for _ in $(seq 1 60); do docker exec sift-read-db pg_isready -U sift -d sift >/d
 SIFT_DB_URL=jdbc:postgresql://localhost:5439/sift SIFT_DB_USER=sift SIFT_DB_PASSWORD=sift \
 SIFT_ENCRYPTION_KEY="$KEY" SIFT_ALLOWED_EMAIL_DOMAINS=uni.lu SIFT_PORT=7779 \
 SIFT_SYNC_INITIAL_DELAY=PT1H \
-  "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$LOG" 2>&1 &
+  env $(sift_oauth_env) "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$LOG" 2>&1 &
 BOOT_PID=$!
 for _ in $(seq 1 150); do
   grep -q "Started SiftApplication" "$LOG" 2>/dev/null && break
@@ -85,7 +87,7 @@ sql() { docker exec sift-read-db psql -U sift -d sift -qtAc "$1" | tr -d ' '; }
 api "$BASE/actuator/health" >/dev/null
 post -d '{"email":"isfaaq@uni.lu","displayName":"Isfaaq","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
 post -d '{"email":"isfaaq@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
-post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
+sift_connect_gitlab >/dev/null
 
 echo "--- everything arrives unread ---"
 check "feed size" 8 "$(feed | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
@@ -116,7 +118,7 @@ JAR="$JAR_B"
 api "$BASE/actuator/health" >/dev/null
 post -d '{"email":"maxime@uni.lu","displayName":"Maxime","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
 post -d '{"email":"maxime@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
-post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
+sift_connect_gitlab >/dev/null
 check "the second user has their own rows" 16 "$(sql 'select count(*) from feed_items')"
 check "patching the first user's item" 404 "$(patchcode -d '{"read":true}' "$BASE/api/feed/$TARGET")"
 check "and it stayed unread" 0 "$(sql 'select count(*) from feed_items where read_at is not null')"

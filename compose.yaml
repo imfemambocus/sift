@@ -34,6 +34,12 @@ services:
       SIFT_DB_PASSWORD: ${POSTGRES_PASSWORD}
       SIFT_ENCRYPTION_KEY: ${SIFT_ENCRYPTION_KEY}
       SIFT_ALLOWED_EMAIL_DOMAINS: ${SIFT_ALLOWED_EMAIL_DOMAINS:-}
+      # without these, Settings can only say how to register an application: an approval on the
+      # instance is the only way to connect a source
+      SIFT_GITLAB_URL: ${SIFT_GITLAB_URL:-}
+      SIFT_GITLAB_CLIENT_ID: ${SIFT_GITLAB_CLIENT_ID:-}
+      SIFT_GITLAB_CLIENT_SECRET: ${SIFT_GITLAB_CLIENT_SECRET:-}
+      SIFT_GITLAB_REDIRECT_URI: ${SIFT_GITLAB_REDIRECT_URI:-http://localhost:7777/api/sources/gitlab/oauth/callback}
       # forwarded so the sweep stays tunable from .env; shortening it is the only practical way to
       # watch a sync happen without waiting five minutes
       SIFT_SYNC_INTERVAL: ${SIFT_SYNC_INTERVAL:-PT5M}

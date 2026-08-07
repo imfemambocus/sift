@@ -15,8 +15,6 @@ export function SettingsPage() {
 
 	return (
 		<Page title="Settings">
-			<ConnectGitLab />
-
 			<section className="flex flex-col items-start gap-3">
 				<h2 className="eyebrow">Account</h2>
 				<dl className="flex w-full flex-col gap-2.5 rounded-panel border border-border bg-surface px-4 py-3.5">
@@ -39,6 +37,8 @@ export function SettingsPage() {
 				<h2 className="eyebrow">Appearance</h2>
 				<ThemeChoice />
 			</section>
+
+			<ConnectGitLab />
 		</Page>
 	);
 }

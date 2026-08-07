@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """A stand-in GitLab instance: /api/v4/user, a paginated /api/v4/todos, merge requests, issues,
-threads and the caller's own activity feed.
+threads, the caller's own activity feed, and the OAuth token endpoint.
 
 Every dataset is re-read from disk on every request, so a test can change what the instance returns
 between phases without restarting anything.
 """
 import json
 import os
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 PORT = int(os.environ.get("PORT", "7788"))
 TODOS_FILE = os.environ["TODOS_FILE"]
@@ -16,9 +17,37 @@ MRS_FILE = os.environ.get("MRS_FILE")
 ISSUES_FILE = os.environ.get("ISSUES_FILE")
 DISCUSSIONS_FILE = os.environ.get("DISCUSSIONS_FILE")
 EVENTS_FILE = os.environ.get("EVENTS_FILE")
-# touching this file makes the instance reject every token, standing in for a revoked PAT
+# touching this file makes the instance reject every token, standing in for an approval withdrawn
 REVOKE_FILE = os.environ.get("REVOKE_FILE", "/nonexistent")
-GOOD_TOKEN = "good-token"
+
+OAUTH_CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "sift-verify")
+OAUTH_CLIENT_SECRET = os.environ.get("OAUTH_CLIENT_SECRET", "sift-verify-secret")
+# seconds. set it to 1 and every sweep has to renew, which is how the refresh is exercised.
+OAUTH_EXPIRES_IN = int(os.environ.get("OAUTH_EXPIRES_IN", "7200"))
+
+# One chain per authorization, exactly as a real server keeps them. Renewing advances that chain
+# and kills its own previous pair; it leaves every other chain alone. Both halves matter: a spent
+# token must stop working, and one user authorizing must not sign another user out.
+OAUTH = {
+    "issued": 0,
+    "valid_access": set(),      # every access token still usable, across all chains
+    "refresh_chain": {},        # refresh token -> the chain it belongs to
+    "chain_access": {},         # chain -> the access token currently issued on it
+}
+OAUTH_LOCK = threading.Lock()
+
+
+def _issue(chain):
+    """Puts a fresh pair on a chain and retires whatever that chain held before."""
+    OAUTH["issued"] += 1
+    serial = OAUTH["issued"]
+    OAUTH["valid_access"].discard(OAUTH["chain_access"].get(chain))
+    access = f"oauth-access-{serial}"
+    refresh = f"oauth-refresh-{serial}"
+    OAUTH["valid_access"].add(access)
+    OAUTH["chain_access"][chain] = access
+    OAUTH["refresh_chain"][refresh] = chain
+    return access, refresh
 
 USER = {
     "id": 42,
@@ -53,13 +82,88 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self):
-        if os.path.exists(REVOKE_FILE) or self.headers.get("PRIVATE-TOKEN") != GOOD_TOKEN:
-            self._send(401, {"message": "401 Unauthorized"})
+    def _authorized(self):
+        """Only the newest OAuth access token, as a bearer. A real GitLab is this strict too."""
+        if os.path.exists(REVOKE_FILE):
+            return False
+        header = self.headers.get("Authorization", "")
+        if not header.startswith("Bearer "):
+            return False
+        with OAUTH_LOCK:
+            return header[len("Bearer "):] in OAUTH["valid_access"]
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path != "/oauth/token":
+            self._send(404, {"message": "404 Not Found"})
             return
 
+        length = int(self.headers.get("Content-Length", "0"))
+        form = parse_qs(self.rfile.read(length).decode())
+
+        def field(name):
+            return form.get(name, [""])[0]
+
+        if field("client_id") != OAUTH_CLIENT_ID or field("client_secret") != OAUTH_CLIENT_SECRET:
+            self._send(401, {"error": "invalid_client"})
+            return
+
+        grant = field("grant_type")
+        with OAUTH_LOCK:
+            if grant == "authorization_code":
+                # PKCE is not optional here: a flow that forgets the verifier must fail loudly
+                if not field("code") or not field("code_verifier") or not field("redirect_uri"):
+                    self._send(400, {"error": "invalid_request"})
+                    return
+                # every approval starts a chain of its own, so two users do not share one token
+                chain = OAUTH["issued"] + 1
+            elif grant == "refresh_token":
+                # popped, so presenting the same refresh token twice is refused the second time
+                chain = OAUTH["refresh_chain"].pop(field("refresh_token"), None)
+                if chain is None:
+                    self._send(400, {"error": "invalid_grant"})
+                    return
+            else:
+                self._send(400, {"error": "unsupported_grant_type"})
+                return
+
+            access, refresh = _issue(chain)
+
+        self._send(200, {
+            "access_token": access,
+            "refresh_token": refresh,
+            "token_type": "bearer",
+            "expires_in": OAUTH_EXPIRES_IN,
+            "scope": "read_api",
+        })
+
+    def do_GET(self):
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
+
+        # test-only introspection: how many times a token has been granted, which is the only way a
+        # suite can see that a renewal actually happened rather than assuming it did
+        if parsed.path == "/oauth/issued":
+            with OAUTH_LOCK:
+                self._send(200, {"issued": OAUTH["issued"]})
+            return
+
+        # the approval page, which approves at once and sends the browser straight back. it is what
+        # lets the browser suite click the real button, and what makes the whole flow work locally
+        # with no application registered anywhere.
+        if parsed.path == "/oauth/authorize":
+            redirect = query.get("redirect_uri", [""])[0]
+            state = query.get("state", [""])[0]
+            back = f"{redirect}?code=a-code&state={quote(state)}"
+            self.send_response(302)
+            self.send_header("Location", back)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        if not self._authorized():
+            self._send(401, {"message": "401 Unauthorized"})
+            return
 
         if parsed.path == "/api/v4/user":
             self._send(200, USER)
