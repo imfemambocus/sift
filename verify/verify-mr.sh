@@ -12,6 +12,8 @@ TODOS="$WORK/mr-todos.json"
 MRS="$WORK/mr-mrs.json"
 BASE=http://localhost:7779
 FAKE=http://127.0.0.1:7788
+# shellcheck source=oauth-connect.sh
+source "$HERE/oauth-connect.sh"
 PASS=0; FAIL=0
 
 cleanup() {
@@ -41,7 +43,7 @@ JSON
 
 PORT=7788 TODOS_FILE="$TODOS" MRS_FILE="$MRS" python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
-for _ in $(seq 1 30); do curl -sf -o /dev/null -H 'PRIVATE-TOKEN: good-token' "$FAKE/api/v4/user" && break; sleep 1; done
+for _ in $(seq 1 30); do curl -sf -o /dev/null "$FAKE/oauth/issued" && break; sleep 1; done
 
 docker run -d --rm --name sift-mr-db -e POSTGRES_DB=sift -e POSTGRES_USER=sift \
   -e POSTGRES_PASSWORD=sift -p 5439:5432 postgres:17-alpine >/dev/null
@@ -49,7 +51,7 @@ for _ in $(seq 1 60); do docker exec sift-mr-db pg_isready -U sift -d sift >/dev
 
 SIFT_DB_URL=jdbc:postgresql://localhost:5439/sift SIFT_DB_USER=sift SIFT_DB_PASSWORD=sift \
 SIFT_ENCRYPTION_KEY="$(openssl rand -base64 32)" SIFT_SYNC_INITIAL_DELAY=PT1H SIFT_PORT=7779 \
-  "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/mr-boot.log" 2>&1 &
+  env $(sift_oauth_env) "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/mr-boot.log" 2>&1 &
 BOOT_PID=$!
 for _ in $(seq 1 150); do
   grep -q "Started SiftApplication" "$WORK/mr-boot.log" 2>/dev/null && break
@@ -69,7 +71,7 @@ post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json'
 api "$BASE/actuator/health" >/dev/null
 post -d '{"email":"a@b.co","displayName":"A","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
 post -d '{"email":"a@b.co","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
-CONNECT=$(post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect")
+sift_connect_gitlab >/dev/null
 
 FEED=$(feed)
 echo "$FEED" | python3 -c '
@@ -89,7 +91,7 @@ check "exactly one row per merge request awaiting review" 1 "$(echo "$FEED" | py
 check "the to-do covered MR contributes no mr: row" 0 "$(echo "$FEED" | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if i["url"].endswith("/merge_requests/11") and i["kind"].startswith("mr_")))')"
 check "the draft is skipped" 0 "$(echo "$FEED" | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if "Draft" in i["title"]))')"
 check "project path came from references.full" '"sift/frontend"' "$(echo "$FEED" | python3 -c 'import json,sys; print(json.dumps(next(i["contextLabel"] for i in json.load(sys.stdin) if i["kind"]=="mr_review_requested")))')"
-check "sync reported no failure" '"OK"' "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["status"]))')"
+check "sync reported no failure" '"OK"' "$(api "$BASE/api/sources" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)[0]["status"]))')"
 check "no unique key violation in the log" 0 "$(grep -ci 'constraint\|duplicate key' "$WORK/mr-boot.log")"
 
 echo

@@ -5,7 +5,6 @@ import dev.emambocus.sift.auth.EmailDomainNotAllowedException;
 import dev.emambocus.sift.credential.UnknownSourceException;
 import dev.emambocus.sift.feed.FeedItemNotFoundException;
 import dev.emambocus.sift.feed.InvalidFeedRequestException;
-import dev.emambocus.sift.sources.InvalidSourceUrlException;
 import dev.emambocus.sift.sync.SourceAuthException;
 import dev.emambocus.sift.sync.SourceUnavailableException;
 import org.springframework.http.HttpStatus;
@@ -34,8 +33,7 @@ public class ApiExceptionHandler {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Incorrect email or password.");
 	}
 
-	@ExceptionHandler({ InvalidSourceUrlException.class, UnknownSourceException.class,
-			InvalidFeedRequestException.class })
+	@ExceptionHandler({ UnknownSourceException.class, InvalidFeedRequestException.class })
 	public ProblemDetail handleBadSourceRequest(RuntimeException ex) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
 	}

@@ -15,6 +15,8 @@ DISC="$WORK/p-disc.json"
 EVENTS="$WORK/p-events.json"
 BASE=http://localhost:7779
 FAKE=http://127.0.0.1:7788
+# shellcheck source=oauth-connect.sh
+source "$HERE/oauth-connect.sh"
 PASS=0; FAIL=0
 
 cleanup() {
@@ -59,7 +61,7 @@ JSON
 PORT=7788 TODOS_FILE="$TODOS" MRS_FILE="$MRS" ISSUES_FILE="$ISSUES" DISCUSSIONS_FILE="$DISC" \
   EVENTS_FILE="$EVENTS" python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
-for _ in $(seq 1 30); do curl -sf -o /dev/null -H 'PRIVATE-TOKEN: good-token' "$FAKE/api/v4/user" && break; sleep 1; done
+for _ in $(seq 1 30); do curl -sf -o /dev/null "$FAKE/oauth/issued" && break; sleep 1; done
 
 docker rm -f sift-p-db >/dev/null 2>&1
 docker run -d --rm --name sift-p-db -e POSTGRES_DB=sift -e POSTGRES_USER=sift \
@@ -68,7 +70,7 @@ for _ in $(seq 1 60); do docker exec sift-p-db pg_isready -U sift -d sift >/dev/
 
 SIFT_DB_URL=jdbc:postgresql://localhost:5439/sift SIFT_DB_USER=sift SIFT_DB_PASSWORD=sift \
 SIFT_ENCRYPTION_KEY="$(openssl rand -base64 32)" SIFT_SYNC_INITIAL_DELAY=PT1H SIFT_PORT=7779 \
-  "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/p-boot.log" 2>&1 &
+  env $(sift_oauth_env) "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/p-boot.log" 2>&1 &
 BOOT_PID=$!
 for _ in $(seq 1 150); do
   grep -q "Started SiftApplication" "$WORK/p-boot.log" 2>/dev/null && break
@@ -84,7 +86,7 @@ api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
 # and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
 feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
-connect() { post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null; }
+connect() { sift_connect_gitlab >/dev/null; }
 kinds() { feed | python3 -c 'import json,sys; print(" ".join(sorted(i["kind"] for i in json.load(sys.stdin))))'; }
 count() { feed | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1'))"; }
 settled() { feed | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['kind']=='$1' and i['resolved']))"; }

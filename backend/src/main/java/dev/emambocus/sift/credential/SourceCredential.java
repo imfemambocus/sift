@@ -69,27 +69,39 @@ public class SourceCredential {
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
-	public static SourceCredential personalAccessToken(UUID userId, SourceType source, String instanceUrl,
-			String token, Instant at) {
+	public static SourceCredential oauth(UUID userId, SourceType source, String instanceUrl, String accessToken,
+			String refreshToken, Instant expiresAt, Instant at) {
 		SourceCredential credential = new SourceCredential();
 		credential.userId = userId;
 		credential.source = source;
-		credential.credentialType = CredentialType.PERSONAL_ACCESS_TOKEN;
+		credential.credentialType = CredentialType.OAUTH;
 		credential.instanceUrl = instanceUrl;
-		credential.accessToken = token;
+		credential.accessToken = accessToken;
+		credential.refreshToken = refreshToken;
+		credential.expiresAt = expiresAt;
 		credential.createdAt = at;
 		return credential;
 	}
 
-	/** Reconnecting clears the previous failure, so the sweep starts picking it up again. */
-	public void replacePersonalAccessToken(String instanceUrl, String token) {
-		this.credentialType = CredentialType.PERSONAL_ACCESS_TOKEN;
+	/** Authorizing again over the same connection, which also clears the previous failure. */
+	public void replaceWithOAuth(String instanceUrl, String accessToken, String refreshToken, Instant expiresAt) {
+		this.credentialType = CredentialType.OAUTH;
 		this.instanceUrl = instanceUrl;
-		this.accessToken = token;
-		this.refreshToken = null;
-		this.expiresAt = null;
+		this.accessToken = accessToken;
+		this.refreshToken = refreshToken;
+		this.expiresAt = expiresAt;
 		this.lastSyncStatus = SyncStatus.NEVER_RUN;
 		this.lastError = null;
+	}
+
+	/**
+	 * Applies a renewal to this copy after it has been written. The sync outcome is not touched: a
+	 * refresh happens in the middle of a sweep whose result is not known yet.
+	 */
+	public void applyRefreshedTokens(String accessToken, String refreshToken, Instant expiresAt) {
+		this.accessToken = accessToken;
+		this.refreshToken = refreshToken;
+		this.expiresAt = expiresAt;
 	}
 
 	/*

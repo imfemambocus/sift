@@ -24,6 +24,14 @@ import org.testcontainers.containers.PostgreSQLContainer;
 		// the sweep must never fire mid-test: these tests drive the sync themselves
 		"sift.sync.initial-delay=PT2H",
 		"sift.sync.interval=PT2H",
+		/*
+		 * an OAuth application, so the flow is configured. the instance URL is a placeholder: a
+		 * refresh goes to the credential's own instance, which is the stand-in on an ephemeral port.
+		 */
+		"sift.gitlab.oauth.instance-url=https://gl.example.org",
+		"sift.gitlab.oauth.client-id=sift-under-test",
+		"sift.gitlab.oauth.client-secret=not-a-real-secret",
+		"sift.gitlab.oauth.redirect-uri=http://localhost:7777/api/sources/gitlab/oauth/callback",
 })
 // every user-owned table cascades from users, so one delete is the whole reset
 @Sql(statements = "delete from users", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)

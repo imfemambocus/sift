@@ -49,5 +49,22 @@ public interface SourceCredentialRepository extends Repository<SourceCredential,
 	int recordSyncOutcome(@Param("id") UUID id, @Param("at") Instant at,
 			@Param("status") SyncStatus status, @Param("error") String error);
 
+	/*
+	 * a renewed OAuth pair, written the same targeted way and for a second reason of its own: this
+	 * runs in the middle of a sweep, so saving the whole entity would also write a sync outcome that
+	 * is not known yet. GitLab invalidates the old refresh token on every renewal, so if this write
+	 * is lost the connection is dead.
+	 */
+	@Modifying
+	@Query("""
+			update SourceCredential credential
+			   set credential.accessToken = :accessToken,
+			       credential.refreshToken = :refreshToken,
+			       credential.expiresAt = :expiresAt
+			 where credential.id = :id
+			""")
+	int replaceTokens(@Param("id") UUID id, @Param("accessToken") String accessToken,
+			@Param("refreshToken") String refreshToken, @Param("expiresAt") Instant expiresAt);
+
 	void delete(SourceCredential credential);
 }

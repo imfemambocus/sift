@@ -5,7 +5,6 @@ const require = createRequire(`${process.env.SIFT_FRONTEND ?? new URL("../fronte
 const puppeteer = require("puppeteer");
 
 const BASE = "http://localhost:5174";
-const STUB = "http://127.0.0.1:7788";
 const WORK = process.env.SIFT_VERIFY_WORK;
 const OUT = process.env.SIFT_VERIFY_SHOTS ?? `${WORK}/shots`;
 mkdirSync(OUT, { recursive: true });
@@ -63,20 +62,32 @@ await page.waitForSelector('nav[aria-label="Sections"]', { timeout: 20000 });
 // home with nothing connected
 await shot("f01-home-nothing-connected");
 
-// the connect form
+// the connect screen, which offers one thing: approving on GitLab
 await page.click('a[aria-label="Settings"]');
-await page.waitForSelector('input[name="instanceUrl"]', { timeout: 10000 });
-await page.type('input[name="instanceUrl"]', STUB);
-await page.type('input[name="token"]', "good-token");
-await shot("f02-connect-form-dark");
+const connectButton = 'button::-p-text(Connect with GitLab)';
+await page.waitForSelector(connectButton, { timeout: 10000 });
+await shot("f02-connect-authorize-dark");
 
-// connect, which syncs inline
-await page.click('form button[type="submit"]');
-await page.waitForFunction(
-  () => !document.querySelector('input[name="instanceUrl"]'),
-  { timeout: 30000 },
-);
-await shot("f03-settings-connected-dark");
+/*
+ * the whole authorization, in a real browser: the app hands it to the stand-in instance, which
+ * approves at once and sends it back to the callback, which stores the credential, syncs inline and
+ * redirects to /settings. the token never touches this page, which is the point of the flow.
+ */
+await Promise.all([
+  page.waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 }),
+  page.click(connectButton),
+]);
+// says where it actually landed rather than throwing a selector timeout, which named no cause
+const connected = await page.waitForSelector('button::-p-text(Disconnect)', { timeout: 30000 })
+  .catch(() => null);
+if (connected === null) {
+  problems.push(`the authorization did not connect anything; it ended on ${page.url()}`);
+  console.log(`  NOT CONNECTED, ended on ${page.url()}`);
+  await shot("f03-authorization-failed");
+} else {
+  console.log("  authorized on the stand-in instance and came back connected");
+  await shot("f03-settings-connected-dark");
+}
 
 // the two fixes: buttons must look clickable
 for (const [label, selector] of [["theme toggle", 'button[aria-label^="Theme"]'], ["sign out", 'button[aria-label="Sign out"]']]) {
@@ -251,16 +262,49 @@ if (settled === null) {
 }
 await shot("f06e-resolved-history-dark");
 
-// and Home counts what is waiting, which is no longer the size of the feed
-await page.click('a[aria-label="Home"]');
-// the rail links to /gitlab as well, so the card is the one that talks about waiting
-await page.waitForFunction(() => [...document.querySelectorAll('a[href="/gitlab"]')]
-  .some((el) => el.textContent.includes("waiting")), { timeout: 15000 });
-const card = await page.evaluate(() => [...document.querySelectorAll('a[href="/gitlab"]')]
-  .map((el) => el.textContent).find((text) => text.includes("waiting")) ?? "");
-const waiting = /(\d+)\s*(?:item )?waiting/.exec(card);
-console.log(`  home says ${waiting?.[1]} waiting, out of 12 in the feed`);
-if (waiting?.[1] !== "11") problems.push(`Home counts history as waiting: "${card}"`);
+/*
+ * Home leads with unread and keeps waiting as context, so both numbers are checked. they answer
+ * different questions and the card used to lead with the wrong one: reading every row leaves the
+ * source still reporting all of them, so "15 waiting" stayed put and read as nothing had been done.
+ */
+/*
+ * read off the elements, never off the card's textContent: the family counts abut the footer, so
+ * "Everything else" with 2 followed by "11 waiting" reads as one run of "211 waiting" and a regex
+ * over the whole string quietly answers 211.
+ */
+async function homeCounts() {
+  await page.click('a[aria-label="Home"]');
+  // the rail links to /gitlab as well, so the card is the one that talks about waiting
+  await page.waitForFunction(() => [...document.querySelectorAll('a[href="/gitlab"]')]
+    .some((el) => el.textContent.includes("waiting")), { timeout: 15000 });
+  return page.evaluate(() => {
+    const card = [...document.querySelectorAll('a[href="/gitlab"]')]
+      .find((el) => el.textContent.includes("waiting"));
+    const spans = [...card.querySelectorAll("span")].map((el) => ({ el, text: el.textContent.trim() }));
+    const label = spans.find((s) => s.text === "unread" || s.text === "unread item");
+    const waiting = spans.map((s) => s.text).find((t) => /^\d+ waiting$/.test(t));
+    return {
+      unread: label?.el.previousElementSibling?.textContent.trim() ?? null,
+      waiting: waiting?.split(" ")[0] ?? null,
+    };
+  });
+}
+
+const home = await homeCounts();
+console.log(`  home says ${home.unread} unread and ${home.waiting} waiting, out of 12 in the feed`);
+if (home.waiting !== "11") problems.push(`Home counts history as waiting: ${JSON.stringify(home)}`);
+if (home.unread !== "11") problems.push(`Home leads with the wrong number: ${JSON.stringify(home)}`);
+
+// and reading everything must take the headline to zero while waiting stays exactly where it was
+await page.click('a[href="/gitlab"]');
+await page.waitForSelector('button::-p-text(Mark all read)', { timeout: 15000 });
+await page.click('button::-p-text(Mark all read)');
+await settle(1500);
+const afterReading = await homeCounts();
+console.log(`  after mark-all-read: ${afterReading.unread} unread, ${afterReading.waiting} still waiting`);
+if (afterReading.unread !== "0") problems.push(`reading everything left Home at ${afterReading.unread} unread`);
+if (afterReading.waiting !== "11") problems.push(`reading everything moved waiting to ${afterReading.waiting}`);
+await shot("f06f-home-all-read-dark");
 
 // mobile
 await page.setViewport({ width: 430, height: 900, deviceScaleFactor: 2 });
@@ -269,9 +313,9 @@ await page.waitForSelector('a[href="/gitlab"]', { timeout: 15000 });
 await shot("f07-home-cards-mobile");
 await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 2 });
 
-// revoke the token upstream and let the fast sweep notice, to capture the alert
+// withdraw the approval upstream and let the fast sweep notice, to capture the alert
 writeFileSync(`${WORK}/revoked`, "");
-console.log("  revoked the stub token, waiting for the sweep");
+console.log("  withdrew the approval upstream, waiting for the sweep");
 await settle(12000);
 await page.goto(`${BASE}/`, { waitUntil: "networkidle0" });
 await shot("f08-home-token-rejected");

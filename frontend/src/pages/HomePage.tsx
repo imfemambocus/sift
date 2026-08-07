@@ -10,7 +10,7 @@ import { SourceAlerts } from "../sources/SourceAlerts";
 import { useIsSyncing, useSources } from "../sources/sources";
 
 export function HomePage() {
-	// counts, not rows: a card says how much is waiting, and the rows are a page away
+	// counts, not rows: a card says how much is new, and the rows are a page away
 	const { data: summary, isPending } = useFeedSummary();
 	const { data: sources } = useSources();
 	// any source, since a card here summarises each of them
@@ -36,7 +36,7 @@ export function HomePage() {
 	}
 
 	return (
-		<Page title="Home" description="How much is waiting, and where.">
+		<Page title="Home" description="What is new, and where.">
 			<SourceAlerts />
 			{body}
 		</Page>

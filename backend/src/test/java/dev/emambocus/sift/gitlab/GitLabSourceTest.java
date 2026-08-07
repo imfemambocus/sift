@@ -198,8 +198,9 @@ class GitLabSourceTest extends SiftIntegrationTest {
 
 	private Map<String, IncomingItem> fetch() {
 		UUID userId = newUser("gitlab@uni.lu");
-		SourceCredential credential = credentials.save(SourceCredential.personalAccessToken(
-				userId, SourceType.GITLAB, gitlab.baseUrl(), "good-token", Instant.now()));
+		// well clear of the expiry margin, so nothing here is about renewing: that is GitLabOAuthTest
+		SourceCredential credential = credentials.save(SourceCredential.oauth(userId, SourceType.GITLAB,
+				gitlab.baseUrl(), "good-token", "a-refresh-token", Instant.now().plusSeconds(7200), Instant.now()));
 
 		return source.fetch(credential).stream()
 				.collect(Collectors.toMap(IncomingItem::sourceId, Function.identity()));

@@ -8,7 +8,6 @@ import dev.emambocus.sift.credential.SourceType;
 import dev.emambocus.sift.feed.Priority;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.NotificationSource;
-import dev.emambocus.sift.sync.SourceAccount;
 import dev.emambocus.sift.sync.SourceUnavailableException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -53,14 +52,16 @@ public class GitLabSource implements NotificationSource {
 	private final Set<String> reportedUnknownActions = ConcurrentHashMap.newKeySet();
 
 	private final GitLabClient client;
+	private final GitLabOAuth oauth;
 	private final GitLabParticipation participation;
 	private final GitLabCommentedOn commentedOn;
 	private final ObjectMapper objectMapper;
 	private final int maxPages;
 
-	GitLabSource(GitLabClient client, GitLabParticipation participation, GitLabCommentedOn commentedOn,
-			ObjectMapper objectMapper, SiftProperties properties) {
+	GitLabSource(GitLabClient client, GitLabOAuth oauth, GitLabParticipation participation,
+			GitLabCommentedOn commentedOn, ObjectMapper objectMapper, SiftProperties properties) {
 		this.client = client;
+		this.oauth = oauth;
 		this.participation = participation;
 		this.commentedOn = commentedOn;
 		this.objectMapper = objectMapper;
@@ -72,12 +73,6 @@ public class GitLabSource implements NotificationSource {
 		return SourceType.GITLAB;
 	}
 
-	@Override
-	public SourceAccount verify(String instanceUrl, String token) {
-		GitLabResponses.User user = client.fetchCurrentUser(instanceUrl, token);
-		return new SourceAccount(user.username(), user.name(), user.avatarUrl(), user.webUrl());
-	}
-
 	/*
 	 * Todos alone are not enough. A to-do is an event: GitLab does not always raise one, it can be
 	 * dismissed, and once it is gone the merge request waiting on you is invisible. So open merge
@@ -87,27 +82,26 @@ public class GitLabSource implements NotificationSource {
 	 */
 	@Override
 	public List<IncomingItem> fetch(SourceCredential credential) {
-		String instanceUrl = credential.getInstanceUrl();
-		String token = credential.getAccessToken();
+		// an OAuth token lives about two hours, so every sweep starts by renewing one that is due
+		GitLabAccess access = oauth.accessFor(credential);
 
 		// also the cheapest possible check that the token still works, before any real paging
-		GitLabResponses.User me = client.fetchCurrentUser(instanceUrl, token);
+		GitLabResponses.User me = client.fetchCurrentUser(access);
 		if (me.id() == null) {
 			throw new SourceUnavailableException("GitLab did not say who the token belongs to.");
 		}
 
-		List<GitLabResponses.Todo> todos = client.fetchPendingTodos(instanceUrl, token, maxPages);
+		List<GitLabResponses.Todo> todos = client.fetchPendingTodos(access, maxPages);
 		Set<String> covered = todos.stream()
 				.map(GitLabResponses.Todo::targetUrl)
 				.filter(Objects::nonNull)
 				.collect(Collectors.toUnmodifiableSet());
 
-		List<GitLabResponses.MergeRequest> reviewing =
-				client.fetchReviewRequested(instanceUrl, token, me.id(), maxPages);
-		List<GitLabResponses.MergeRequest> assigned = client.fetchAssignedToMe(instanceUrl, token, maxPages);
-		List<GitLabResponses.MergeRequest> authored = client.fetchAuthoredMergeRequests(instanceUrl, token, maxPages);
-		List<GitLabResponses.Issue> assignedIssues = client.fetchIssues(instanceUrl, token, "assigned_to_me", maxPages);
-		List<GitLabResponses.Issue> authoredIssues = client.fetchIssues(instanceUrl, token, "created_by_me", maxPages);
+		List<GitLabResponses.MergeRequest> reviewing = client.fetchReviewRequested(access, me.id(), maxPages);
+		List<GitLabResponses.MergeRequest> assigned = client.fetchAssignedToMe(access, maxPages);
+		List<GitLabResponses.MergeRequest> authored = client.fetchAuthoredMergeRequests(access, maxPages);
+		List<GitLabResponses.Issue> assignedIssues = client.fetchIssues(access, "assigned_to_me", maxPages);
+		List<GitLabResponses.Issue> authoredIssues = client.fetchIssues(access, "created_by_me", maxPages);
 
 		Map<String, IncomingItem> items = new LinkedHashMap<>();
 		for (GitLabResponses.Todo todo : todos) {
@@ -135,11 +129,11 @@ public class GitLabSource implements NotificationSource {
 		addWatchedIssues(watched, authoredIssues, GitLabWatchReason.INVOLVED);
 
 		// and the ones no list above can find: nobody put you on them, you just replied to them
-		GitLabCommentedOn.Found commented = commentedOn.discover(credential, keys(watched), maxPages);
+		GitLabCommentedOn.Found commented = commentedOn.discover(access, keys(watched), maxPages);
 		addWatched(watched, commented.mergeRequests(), GitLabWatchReason.COMMENTED);
 		addWatchedIssues(watched, commented.issues(), GitLabWatchReason.COMMENTED);
 
-		for (IncomingItem item : participation.collect(credential, me.id(), watched, maxPages)) {
+		for (IncomingItem item : participation.collect(credential, access, me.id(), watched, maxPages)) {
 			items.putIfAbsent(item.sourceId(), item);
 		}
 

@@ -1,5 +1,6 @@
 package dev.emambocus.sift.gitlab;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -24,6 +25,7 @@ final class FakeGitLab implements AutoCloseable {
 	private final Map<String, String> bodies = new HashMap<>();
 	private final Map<String, Integer> statuses = new HashMap<>();
 	private final Map<String, AtomicInteger> hits = new HashMap<>();
+	private final Map<String, Headers> seenHeaders = new HashMap<>();
 
 	FakeGitLab() {
 		try {
@@ -56,9 +58,18 @@ final class FakeGitLab implements AutoCloseable {
 		return count == null ? 0 : count.get();
 	}
 
+	/** Which header a call authenticated with, which is the whole difference between the two token kinds. */
+	String header(String path, String name) {
+		Headers headers = seenHeaders.get(path);
+		return headers == null ? null : headers.getFirst(name);
+	}
+
 	private void handle(HttpExchange exchange) throws IOException {
 		String path = exchange.getRequestURI().getPath();
 		hits.computeIfAbsent(path, key -> new AtomicInteger()).incrementAndGet();
+		seenHeaders.put(path, exchange.getRequestHeaders());
+		// a form post has a body, and leaving it unread closes the connection under the client
+		exchange.getRequestBody().readAllBytes();
 
 		Integer failure = statuses.get(path);
 		if (failure != null) {

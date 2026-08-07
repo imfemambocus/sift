@@ -39,12 +39,12 @@ about itself, and Sift ignores them.
 
 These parts are built:
 
-- accounts, and a GitLab connection from Settings
+- accounts, and a GitLab connection you approve on GitLab itself
 - every item in the list above
 - the feed in day groups, with a colour for each type of event
 - read and unread
 - a Home page with one card for each source
-- a warning when a token no longer works. An empty list then never looks like good news.
+- a warning when a connection no longer works. An empty list then never looks like good news.
 
 Read and unread behaves like this:
 
@@ -74,9 +74,10 @@ request merges. The row stays in the list. It turns grey and it says "done". The
 history. Read and unread is the only axis you filter it on. Finished work does not count as unread,
 because nothing waits for you there.
 
-These parts are not built yet. The first is a GitLab connection that asks GitLab for permission,
-instead of a token you paste. Your Sift account stays an email address and a password. No source
-ever becomes your way in. The second is email as a second source. Email covers Outlook and Gmail.
+One part is not built yet. That part is email as a second source. Email covers Outlook and Gmail.
+
+Your Sift account is an email address and a password. A source gives Sift permission to read that
+source. A source never becomes your way in to Sift.
 
 ## Run it
 
@@ -87,8 +88,10 @@ your machine does not matter.
 make up        # builds and runs everything on http://localhost:7777
 ```
 
-That is the whole setup. On the first run Sift writes a `.env` file with a new encryption key. It
-waits for the database. It applies the migrations. It then serves the app.
+That is the whole setup of the app. On the first run Sift writes a `.env` file with a new encryption
+key. It waits for the database. It applies the migrations. It then serves the app.
+
+To connect GitLab you must also make an application on your GitLab. See **Connect GitLab** below.
 
 The search uses the `fuzzystrmatch` extension of Postgres, and a migration creates it. The bundled
 database allows this. If you point Sift at a database of your own, give its user permission to
@@ -107,25 +110,44 @@ deletes the volume.
 
 ## Connect GitLab
 
-Open **Settings**. Enter the URL of your instance. Sift shows you a link. The link opens GitLab's
-token page with the name and the scope already complete. Copy the new token. Paste it into Sift.
-Then connect.
+Sift asks GitLab for permission. You do not paste a token. First you make an application on your
+GitLab. You do this one time.
 
-Sift checks the token against your instance before it stores the token. A typo therefore fails at
-once. It does not fail silently five minutes later. Sift also reads the source in the same step.
-Your feed is full straight away. After that, Sift reads the source every five minutes.
+1. Open **User Settings**, then **Applications**, on your GitLab.
+2. Give the application a name, for example `Sift`.
+3. Set the redirect URI to `http://localhost:7777/api/sources/gitlab/oauth/callback`.
+4. Select the scope `read_api`. Select no other scope.
+5. Keep **Confidential** selected.
+6. Save. GitLab then shows an Application ID and a Secret. GitLab shows the secret one time only.
 
-If a token expires, Sift says so on the feed itself. It does the same when somebody revokes a token.
-Settings offers to replace it.
+Put those two values in `.env`, with the address of your GitLab:
+
+```
+SIFT_GITLAB_URL=https://gitlab.com
+SIFT_GITLAB_CLIENT_ID=<the Application ID>
+SIFT_GITLAB_CLIENT_SECRET=<the Secret>
+SIFT_GITLAB_REDIRECT_URI=http://localhost:7777/api/sources/gitlab/oauth/callback
+```
+
+Run `make up` again. Open **Settings** and press **Connect with GitLab**. GitLab asks you to approve.
+Sift then reads the source immediately. Your feed is full straight away. After that, Sift reads the
+source every five minutes.
+
+An administrator can prevent a person from making an application. If your instance does this, ask the
+administrator for an application. Sift has no other way to connect a source.
+
+The access token expires after approximately two hours, and Sift renews it without your help. If the
+permission stops working, Sift says so on the feed itself. Settings then offers to connect again. You
+can withdraw the permission on GitLab at any time.
 
 You always know how current the list is. Each source tab gives the time of the last read, and a
 refresh control sits next to it. Settings has the same function as a **Check now** button. Both read
 the source immediately. Neither one waits for the next pass. If a read fails, Sift gives you the
 reason.
 
-The `read_api` scope is read-only, on purpose. To mark a to-do done through the API, Sift needs the
-full `api` scope. That scope permits reads and writes across everything you can see. Sift gives you
-a link to GitLab for those actions instead.
+The `read_api` scope is read-only, on purpose. Sift changes nothing on your GitLab. To mark a to-do
+done through the API, Sift needs the full `api` scope. That scope permits reads and writes across
+everything you can see. Sift gives you a link to GitLab for those actions instead.
 
 ## Ports
 
@@ -138,12 +160,17 @@ origin. The session cookie and the CSRF handshake behave exactly as they do in a
 
 ## Configuration
 
-Everything is in `.env`. Copy that file from `.env.example`.
+Everything is in `.env`. Copy that file from `.env.example`. The four `SIFT_GITLAB_` values are
+necessary to connect GitLab. Without them Settings tells you how to make an application.
 
 | Variable | Meaning |
 | --- | --- |
 | `SIFT_ENCRYPTION_KEY` | Base64 of 32 random bytes. Required. If you change it, Sift cannot decrypt any stored token. |
 | `SIFT_ALLOWED_EMAIL_DOMAINS` | A comma separated list. If it is empty, any address can register. Use an empty value on a local instance only. |
+| `SIFT_GITLAB_URL` | The address of your GitLab, for example `https://gitlab.com`. |
+| `SIFT_GITLAB_CLIENT_ID` | The Application ID of your GitLab application. |
+| `SIFT_GITLAB_CLIENT_SECRET` | The Secret of your GitLab application. |
+| `SIFT_GITLAB_REDIRECT_URI` | The redirect URI of your GitLab application. It must agree with GitLab character for character. |
 | `SIFT_SYNC_INTERVAL` | The time between two reads of each source, as an ISO-8601 duration. The default is `PT5M`. Use a short value such as `PT20S` for a test. You then see a change in 20 seconds. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | The database credentials. |
 
@@ -175,6 +202,9 @@ Sift is a backend-for-frontend. The browser holds a session cookie and nothing e
 tokens stay on the server, and Sift encrypts them. Every call to GitLab goes through the server. The
 API and the app come from one origin, and there is no CORS configuration anywhere.
 
+Sift also completes the GitLab approval on the server. No access token and no renewal token reaches
+your browser at any point.
+
 Sift encrypts a token with AES-GCM before the token reaches the database. Nobody can read a token
 straight out of the database. On a machine only you can reach, this protects against two things: a
 casual look at the data, and an old backup. A hosted instance relies on the same protection.
@@ -192,7 +222,7 @@ Each row also gives the reason it is in your list, next to the time. A colour gr
 needs review, assigned to you, you were named, a discussion moved, something broke, or merged. The
 reason is a word. You do not decode a colour.
 
-The style of an action shows what the action costs you. Check a source, replace a token and
+The style of an action shows what the action costs you. Check a source, connect a source again and
 disconnect a source sit next to each other, and the three look different. The destructive one is
 red, and it asks you twice.
 

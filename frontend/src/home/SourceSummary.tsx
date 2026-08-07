@@ -26,9 +26,15 @@ type SourceSummaryProps = {
 
 export function SourceSummary({ source, counts }: SourceSummaryProps) {
 	/*
-	 * every number here is over what the source still reports, never the whole history. the feed
-	 * holds a merged merge request; it does not belong in "11 waiting".
+	 * the headline is unread, because the question a dashboard answers is "is there anything for me".
+	 * waiting cannot answer it: reading a row here does not complete the to-do in GitLab, so a source
+	 * that still reports 15 items reports them whether or not you have dealt with every one.
+	 *
+	 * it is counts.unread rather than counts.waitingUnread so this and the tab badge can never print
+	 * different numbers. the two are equal anyway, since a row is stamped read the moment it resolves.
 	 */
+	const unread = counts.unread;
+	// the breakdown below stays over what the source still reports: it is the shape of the workload
 	const waiting = counts.waiting;
 	const byFamily = countByFamily(counts.waitingByKind);
 	const present = FAMILY_ORDER.filter((family) => byFamily[family] > 0);
@@ -45,9 +51,16 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 				{rejected && <span className="text-[11px] text-danger">Token rejected</span>}
 			</div>
 
+			{/* brass while there is something, muted at zero: a nothing-state should read as calm */}
 			<div className="flex items-baseline gap-2">
-				<span className="text-[32px] font-semibold leading-none tracking-[-0.03em] text-fg">{waiting}</span>
-				<span className="text-[13px] text-fg-muted">{waiting === 1 ? "item waiting" : "waiting"}</span>
+				<span
+					className={`text-[32px] font-semibold leading-none tracking-[-0.03em] ${
+						unread > 0 ? "text-accent" : "text-fg-muted"
+					}`}
+				>
+					{unread}
+				</span>
+				<span className="text-[13px] text-fg-muted">{unread === 1 ? "unread item" : "unread"}</span>
 			</div>
 
 			{present.length > 0 && (
@@ -74,9 +87,10 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 				</div>
 			)}
 
+			{/* waiting keeps its place as context, since it is what the breakdown above is counting */}
 			<div className="flex flex-wrap items-baseline gap-x-2 text-[12px] text-fg-muted">
-				{counts.waitingUnread > 0 && <span className="text-accent">{counts.waitingUnread} unread</span>}
-				{counts.waitingUnread > 0 && <span aria-hidden className="text-fg-muted/45">&middot;</span>}
+				<span>{waiting === 1 ? "1 waiting" : `${waiting} waiting`}</span>
+				<span aria-hidden className="text-fg-muted/45">&middot;</span>
 				<span>{source.lastSyncAt === null ? "Not synced yet" : `Synced ${agoPhrase(source.lastSyncAt)}`}</span>
 			</div>
 		</Link>

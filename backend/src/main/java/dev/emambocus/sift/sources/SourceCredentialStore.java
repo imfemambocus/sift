@@ -5,6 +5,7 @@ import dev.emambocus.sift.credential.SourceCredentialRepository;
 import dev.emambocus.sift.credential.SourceType;
 import dev.emambocus.sift.feed.FeedItemRepository;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,15 +31,26 @@ public class SourceCredentialStore {
 	}
 
 	@Transactional
-	public SourceCredential upsertPersonalAccessToken(UUID userId, SourceType source, String instanceUrl,
-			String token) {
+	public SourceCredential upsertOAuth(UUID userId, SourceType source, String instanceUrl, String accessToken,
+			String refreshToken, Instant expiresAt) {
 		return credentials.findByUserIdAndSource(userId, source)
 				.map(existing -> {
-					existing.replacePersonalAccessToken(instanceUrl, token);
+					existing.replaceWithOAuth(instanceUrl, accessToken, refreshToken, expiresAt);
 					return credentials.save(existing);
 				})
-				.orElseGet(() -> credentials.save(
-						SourceCredential.personalAccessToken(userId, source, instanceUrl, token, clock.instant())));
+				.orElseGet(() -> credentials.save(SourceCredential.oauth(
+						userId, source, instanceUrl, accessToken, refreshToken, expiresAt, clock.instant())));
+	}
+
+	/**
+	 * Stores a renewed OAuth pair, and applies it to the caller's copy, which is detached and is about
+	 * to be read with. It is a targeted update: see {@code replaceTokens} on the repository.
+	 */
+	@Transactional
+	public void refreshTokens(SourceCredential credential, String accessToken, String refreshToken,
+			Instant expiresAt) {
+		credentials.replaceTokens(credential.getId(), accessToken, refreshToken, expiresAt);
+		credential.applyRefreshedTokens(accessToken, refreshToken, expiresAt);
 	}
 
 	@Transactional(readOnly = true)

@@ -8,6 +8,12 @@ ROOT="$(cd "$HERE/.." && pwd)"
 WORK="${SIFT_VERIFY_WORK:-$(mktemp -d)}"
 mkdir -p "$WORK"
 TODOS="$WORK/todos.json"
+FAKE=http://127.0.0.1:7788
+# the browser lives on the vite origin, so the callback has to come back there and not to the
+# backend directly. vite proxies /api to 7779, and the redirect to /settings then stays on 5174.
+BASE=http://localhost:5174
+# shellcheck source=oauth-connect.sh
+source "$HERE/oauth-connect.sh"
 
 cleanup() {
   [ -n "${VITE_PID:-}" ] && kill "$VITE_PID" 2>/dev/null
@@ -29,7 +35,7 @@ cat > "$WORK/feed-disc.json" <<'JSON'
 JSON
 PORT=7788 TODOS_FILE="$TODOS" MRS_FILE="$WORK/feed-mrs.json" DISCUSSIONS_FILE="$WORK/feed-disc.json" REVOKE_FILE="$WORK/revoked" python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
-for _ in $(seq 1 30); do curl -sf -o /dev/null -H 'PRIVATE-TOKEN: good-token' http://127.0.0.1:7788/api/v4/user && break; sleep 1; done
+for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:7788/oauth/issued && break; sleep 1; done
 echo "stub gitlab up"
 
 docker rm -f sift-ui2-db >/dev/null 2>&1
@@ -41,7 +47,7 @@ for _ in $(seq 1 60); do docker exec sift-ui2-db pg_isready -U sift -d sift >/de
 SIFT_DB_URL=jdbc:postgresql://localhost:5439/sift SIFT_DB_USER=sift SIFT_DB_PASSWORD=sift \
 SIFT_ENCRYPTION_KEY="$(openssl rand -base64 32)" SIFT_ALLOWED_EMAIL_DOMAINS=uni.lu \
 SIFT_SYNC_INITIAL_DELAY=PT3S SIFT_SYNC_INTERVAL=PT4S SIFT_PORT=7779 \
-  "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/feed-boot.log" 2>&1 &
+  env $(sift_oauth_env) "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/feed-boot.log" 2>&1 &
 BOOT_PID=$!
 for _ in $(seq 1 150); do
   grep -q "Started SiftApplication" "$WORK/feed-boot.log" 2>/dev/null && break

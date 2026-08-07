@@ -12,6 +12,8 @@ JAR="$WORK/sync-cookies.txt"
 TODOS="$WORK/todos.json"
 BASE=http://localhost:7779
 FAKE=http://127.0.0.1:7788
+# shellcheck source=oauth-connect.sh
+source "$HERE/oauth-connect.sh"
 PASS=0
 FAIL=0
 
@@ -33,7 +35,7 @@ python3 "$HERE/make-todos.py" full "$TODOS" >/dev/null
 
 PORT=7788 TODOS_FILE="$TODOS" REVOKE_FILE="$WORK/revoked" python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
-for _ in $(seq 1 30); do curl -sf -o /dev/null -H 'PRIVATE-TOKEN: good-token' "$FAKE/api/v4/user" && break; sleep 1; done
+for _ in $(seq 1 30); do curl -sf -o /dev/null "$FAKE/oauth/issued" && break; sleep 1; done
 echo "stub gitlab up"
 
 docker rm -f sift-sync-db >/dev/null 2>&1
@@ -44,7 +46,7 @@ for _ in $(seq 1 60); do docker exec sift-sync-db pg_isready -U sift -d sift >/d
 SIFT_DB_URL=jdbc:postgresql://localhost:5439/sift SIFT_DB_USER=sift SIFT_DB_PASSWORD=sift \
 SIFT_ENCRYPTION_KEY="$KEY" SIFT_ALLOWED_EMAIL_DOMAINS=uni.lu SIFT_PORT=7779 \
 SIFT_SYNC_INITIAL_DELAY=PT1H \
-  "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$LOG" 2>&1 &
+  env $(sift_oauth_env) "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$LOG" 2>&1 &
 BOOT_PID=$!
 for _ in $(seq 1 150); do
   grep -q "Started SiftApplication" "$LOG" 2>/dev/null && break
@@ -68,21 +70,20 @@ api "$BASE/actuator/health" >/dev/null
 post -d '{"email":"isfaaq@uni.lu","displayName":"Isfaaq","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
 post -d '{"email":"isfaaq@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
 
-echo "--- connect validation ---"
-check "bad instance url" 400 "$(postcode -d '{"instanceUrl":"not a url","token":"good-token"}' "$BASE/api/sources/gitlab/connect")"
-check "non-http scheme" 400 "$(postcode -d '{"instanceUrl":"ftp://gitlab.example.org","token":"good-token"}' "$BASE/api/sources/gitlab/connect")"
-check "unknown source name" 400 "$(postcode -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/bitbucket/connect")"
-check "token rejected by instance" 422 "$(postcode -d '{"instanceUrl":"'$FAKE'","token":"wrong-token"}' "$BASE/api/sources/gitlab/connect")"
-check "unreachable instance" 502 "$(postcode -d '{"instanceUrl":"http://127.0.0.1:7799","token":"good-token"}' "$BASE/api/sources/gitlab/connect")"
+# the connect endpoint is gone: authorizing is the only way in, and verify-oauth.sh is where the
+# flow itself is checked. an unknown source name still has its own path, so it keeps its check.
+echo "--- an unknown source is still refused ---"
+check "unknown source name" 400 "$(postcode "$BASE/api/sources/bitbucket/sync")"
 
 echo
-echo "--- connect and first sync (trailing slash deliberately included) ---"
-CONNECT=$(post -d '{"instanceUrl":"'$FAKE'/","token":"good-token"}' "$BASE/api/sources/gitlab/connect")
+echo "--- authorize, and the first sync it runs ---"
+check "the callback redirects" 302 "$(sift_connect_gitlab)"
+CONNECT=$(api "$BASE/api/sources" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)[0], sys.stdout)')
 echo "  $CONNECT" | head -c 400; echo
-check "status OK"        '"OK"'    "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["status"]))')"
-check "item count"       8         "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["itemCount"])')"
-check "trailing slash trimmed" "\"$FAKE\"" "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["instanceUrl"]))')"
-check "account resolved" '"isfaaq"' "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["account"]["username"]))')"
+check "status OK"            '"OK"'    "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["status"]))')"
+check "item count"           8         "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["itemCount"])')"
+check "instance from config" "\"$FAKE\"" "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["instanceUrl"]))')"
+check "credential type"      '"OAUTH"' "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["credentialType"]))')"
 
 echo
 echo "--- feed shape and priority mapping ---"
@@ -129,7 +130,7 @@ check "feed?source=nope" 400 "$(code "$BASE/api/feed?source=nope")"
 echo
 echo "--- items that disappear upstream are resolved, and stay in the feed as history ---"
 python3 "$HERE/make-todos.py" shrunk "$TODOS" >/dev/null
-post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
+sift_connect_gitlab >/dev/null
 check "the feed still holds all 8" 8 "$(feed | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
 check "two of them read as resolved" 2 "$(feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if i["resolved"]))')"
 # nothing is waiting on a finished item, so it must not sit in the unread count for ever
@@ -166,7 +167,7 @@ check "is:read and is:unread at once" 0 "$(feed 'q=is:read%20is:unread' | len)"
 echo
 echo "--- pagination past one page of 100 ---"
 python3 "$HERE/make-todos.py" many:150 "$TODOS" >/dev/null
-post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
+sift_connect_gitlab >/dev/null
 # the earlier eight are still in the feed as resolved history, so the live rows are what counts here
 check "all 150 read across 2 pages" 150 "$(feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if not i["resolved"]))')"
 
@@ -209,12 +210,12 @@ check "disconnect again is 404" 404 "$(curl -s -o /dev/null -w '%{http_code}' -c
 echo
 echo "--- an unreadable stored token degrades, it does not 500 ---"
 python3 "$HERE/make-todos.py" full "$TODOS" >/dev/null
-post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
+sift_connect_gitlab >/dev/null
 docker exec sift-sync-db psql -U sift -d sift -qtAc "update source_credentials set access_token_enc = 'not-real-ciphertext'" >/dev/null
 check "GET /api/sources still answers" 200 "$(code "$BASE/api/sources")"
 check "credential still listed" 1 "$(api "$BASE/api/sources" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
 # put a usable token back for the sweep phase
-post -d '{"instanceUrl":"'$FAKE'","token":"good-token"}' "$BASE/api/sources/gitlab/connect" >/dev/null
+sift_connect_gitlab >/dev/null
 
 echo
 echo "--- the scheduled sweep: a revoked token becomes AUTH_FAILED, then is skipped ---"
@@ -223,7 +224,7 @@ kill "$BOOT_PID" 2>/dev/null; wait "$BOOT_PID" 2>/dev/null
 SIFT_DB_URL=jdbc:postgresql://localhost:5439/sift SIFT_DB_USER=sift SIFT_DB_PASSWORD=sift \
 SIFT_ENCRYPTION_KEY="$KEY" SIFT_ALLOWED_EMAIL_DOMAINS=uni.lu SIFT_PORT=7779 \
 SIFT_SYNC_INITIAL_DELAY=PT2S SIFT_SYNC_INTERVAL=PT3S \
-  "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/sweep-boot.log" 2>&1 &
+  env $(sift_oauth_env) "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/sweep-boot.log" 2>&1 &
 BOOT_PID=$!
 for _ in $(seq 1 150); do grep -q "Started SiftApplication" "$WORK/sweep-boot.log" 2>/dev/null && break; sleep 1; done
 echo "  backend restarted with a 3s sweep"

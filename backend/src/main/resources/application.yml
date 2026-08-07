@@ -22,6 +22,11 @@ server:
   # deliberately clear of 8080-8090, which local service stacks tend to occupy
   port: ${SIFT_PORT:7777}
   shutdown: graceful
+  tomcat:
+    # the OAuth callback redirects to /settings. left false, tomcat expands that into an absolute
+    # URL built from the Host it was called with, which behind a proxy is the backend's own origin:
+    # the browser then leaves the origin it started on. true sends the Location header as written.
+    use-relative-redirects: true
 
 management:
   endpoints:
@@ -39,6 +44,15 @@ sift:
   registration:
     # empty means any address may register, which is only appropriate for a local instance
     allowed-email-domains: ${SIFT_ALLOWED_EMAIL_DOMAINS:}
+  gitlab:
+    # the OAuth application registered on one GitLab instance. all four or none: with any of them
+    # absent, Settings offers the pasted-token form only.
+    oauth:
+      instance-url: ${SIFT_GITLAB_URL:}
+      client-id: ${SIFT_GITLAB_CLIENT_ID:}
+      client-secret: ${SIFT_GITLAB_CLIENT_SECRET:}
+      # must match the application's redirect URI on GitLab exactly, character for character
+      redirect-uri: ${SIFT_GITLAB_REDIRECT_URI:http://localhost:7777/api/sources/gitlab/oauth/callback}
   sync:
     # the scheduled sweep reads it as a placeholder, so it must always have a value here
     interval: ${SIFT_SYNC_INTERVAL:PT5M}
