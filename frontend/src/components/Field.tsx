@@ -20,7 +20,9 @@ export function Field({ label, hint, className = "", ...inputProps }: FieldProps
 				{...inputProps}
 				id={inputId}
 				aria-describedby={hint === undefined ? undefined : hintId}
-				className={`h-10 rounded-control border border-border bg-surface px-3 text-[13px] text-fg transition-colors placeholder:text-fg-muted/70 hover:border-fg-muted/50 ${className}`}
+				// hover yields to focus: a utility sits in a later layer than the base rule and would
+				// otherwise repaint the border grey while the field is focused
+				className={`h-10 rounded-control border border-border bg-surface px-3 text-[13px] text-fg transition-colors placeholder:text-fg-muted/70 hover:not-focus:border-fg-muted/50 ${className}`}
 			/>
 			{hint !== undefined && (
 				<p id={hintId} className="text-xs text-fg-muted">

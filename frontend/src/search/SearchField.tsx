@@ -33,7 +33,7 @@ export function SearchField({ value, onChange }: SearchFieldProps) {
 				onKeyDown={onKeyDown}
 				aria-label="Search everything"
 				placeholder="Search everything, or narrow it: is:unread, is:mr, project:web, from:maxime"
-				className="h-10 w-full rounded-control border border-border bg-surface pl-9 pr-10 text-[13px] text-fg transition-colors placeholder:text-fg-muted/70 focus:border-accent focus:outline-none"
+				className="h-10 w-full rounded-control border border-border bg-surface pl-9 pr-10 text-[13px] text-fg transition-colors placeholder:text-fg-muted/70"
 			/>
 			{value !== "" && (
 				<button

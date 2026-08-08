@@ -169,6 +169,34 @@
 		outline-offset: 2px;
 	}
 
+	/*
+	 * a text field marks focus by recolouring the border it already carries, at the same width, so
+	 * nothing on the page can move. buttons and links keep the outline above, which is what makes
+	 * focus visible on something that has no border of its own.
+	 */
+	input:focus-visible,
+	textarea:focus-visible {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	/*
+	 * a browser paints its own background and text colour onto an autofilled field, which knows
+	 * nothing about the theme. the background cannot be set directly, so an inset shadow covers it
+	 * and text-fill-color replaces the text. the hover and focus states repeat it because the
+	 * browser reapplies its own colours on each of them.
+	 *
+	 * `:is()` is forgiving, so the rule survives in a browser that knows only one of the two names,
+	 * where a plain selector list holding an unknown name would be dropped whole.
+	 */
+	input:is(:autofill, :-webkit-autofill),
+	input:is(:autofill, :-webkit-autofill):hover,
+	input:is(:autofill, :-webkit-autofill):focus {
+		box-shadow: inset 0 0 0 100px var(--surface);
+		-webkit-text-fill-color: var(--fg);
+		caret-color: var(--fg);
+	}
+
 	::selection {
 		background-color: var(--accent);
 		color: var(--accent-fg);
