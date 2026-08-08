@@ -1,9 +1,9 @@
 # shellcheck shell=bash
 # Connecting GitLab, for every suite that needs a connected source but is not about the flow itself.
 #
-# There is no other way in: the pasted-token endpoint was removed on 2026-08-07, so a suite has to
-# walk the real authorization code flow. It is cheap, because the stand-in instance answers the
-# token endpoint directly and no approval page is involved.
+# An approval is the only way to connect a source, so a suite has to walk the real authorization
+# code flow. It is cheap, because the stand-in instance answers the token endpoint directly and no
+# approval page is involved.
 #
 # Source this after $BASE, $JAR and a `post` helper are defined, and start the backend with the four
 # SIFT_GITLAB_* values. `sift_oauth_env` prints them, so no suite has to remember all four.

@@ -1,5 +1,5 @@
 /*
- * Both of these are query parameters now rather than something applied to a list in the browser: the
+ * Both of these are query parameters rather than something applied to a list in the browser: the
  * server narrows and orders the whole history, and the client only ever holds the pages it asked for.
  * The wording of the values matches what the API accepts.
  */

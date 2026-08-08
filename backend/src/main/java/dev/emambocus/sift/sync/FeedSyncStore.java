@@ -86,6 +86,14 @@ public class FeedSyncStore {
 				stored.setSource(source);
 				stored.setSourceId(item.sourceId());
 				stored.setFirstSeenAt(now);
+				/*
+				 * only where the row is new. after that Sift's own read state owns it, so a message
+				 * you read here does not come back unread because the mailbox still says so, and one
+				 * you deliberately marked unread here is not overwritten either.
+				 */
+				if (item.alreadyRead()) {
+					stored.setReadAt(now);
+				}
 				added++;
 			}
 			else {
@@ -133,7 +141,6 @@ public class FeedSyncStore {
 
 	private static void apply(FeedItem stored, IncomingItem item, Instant now) {
 		stored.setKind(item.kind());
-		stored.setPriority(item.priority());
 		stored.setTitle(item.title());
 		stored.setBody(item.body());
 		stored.setActorName(item.actorName());
@@ -142,7 +149,7 @@ public class FeedSyncStore {
 		stored.setContextUrl(item.contextUrl());
 		stored.setUrl(item.url());
 		// recomputed rather than set once, since a source may correct the url of a row it already sent
-		stored.setGroupKey(GroupKeys.of(stored.getSource(), item.url()));
+		stored.setGroupKey(groupKeyOf(stored.getSource(), item));
 		/*
 		 * both columns are NOT NULL, and a source that omits a timestamp must degrade rather than
 		 * fail the whole sync. one guard here beats one per adapter.
@@ -165,8 +172,13 @@ public class FeedSyncStore {
 		stored.setRawPayload(item.rawPayload());
 		stored.setResolveWhenAbsent(item.resolveWhenAbsent());
 		stored.setLastSeenAt(now);
-		// something that came back is live again, but notifiedAt is left alone so it is not
-		// announced a second time
 		stored.setResolvedAt(null);
+	}
+
+	private static String groupKeyOf(SourceType source, IncomingItem item) {
+		if (item.conversationId() == null) {
+			return GroupKeys.of(source, item.url());
+		}
+		return GroupKeys.ofConversation(source, item.conversationId());
 	}
 }

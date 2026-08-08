@@ -24,6 +24,9 @@ const LABELS: Record<string, string> = {
 	new_comment: "New replies",
 	changes_pushed: "Changes pushed",
 	mr_merged: "Merged",
+
+	// mail: one row per message, so the wording says what happened rather than what it wants
+	mail_received: "New message",
 };
 
 export function kindLabel(kind: string): string {

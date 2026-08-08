@@ -2,11 +2,13 @@ import { LogOut } from "lucide-react";
 import { useSession, useSignOut } from "../auth/session";
 import { Button } from "../components/Button";
 import { Page } from "../layout/Page";
-import { ConnectGitLab } from "../sources/ConnectGitLab";
+import { ConnectSource } from "../sources/ConnectSource";
+import { useConnectors } from "../sources/sources";
 import { ThemeChoice } from "../theme/ThemeControls";
 
 export function SettingsPage() {
 	const { data: session } = useSession();
+	const { data: connectors } = useConnectors();
 	const signOut = useSignOut();
 
 	if (session === null || session === undefined) {
@@ -38,7 +40,10 @@ export function SettingsPage() {
 				<ThemeChoice />
 			</section>
 
-			<ConnectGitLab />
+			{/* one section per source the app knows, so a new one needs no edit here */}
+			{(connectors ?? []).map((connector) => (
+				<ConnectSource key={connector.source} source={connector.source} />
+			))}
 		</Page>
 	);
 }

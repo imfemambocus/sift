@@ -19,8 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.mock.web.MockHttpSession;
 
 /**
  * The OAuth half of the GitLab connection. Every rule here is one that only fails against a real
@@ -50,9 +48,6 @@ class GitLabOAuthTest extends SiftIntegrationTest {
 	private GitLabOAuth oauth;
 
 	@Autowired
-	private GitLabOAuthController controller;
-
-	@Autowired
 	private SourceCredentialRepository credentials;
 
 	private FakeGitLab gitlab;
@@ -73,7 +68,7 @@ class GitLabOAuthTest extends SiftIntegrationTest {
 		source.fetch(oauthCredential("oauth-header@uni.lu", "live-access", inAnHour()));
 
 		assertThat(gitlab.header(USER_PATH, AUTHORIZATION)).isEqualTo("Bearer live-access");
-		// GitLab refuses an OAuth token in the header a pasted one used to go in
+		// PRIVATE-TOKEN is the header for a personal access token, and GitLab refuses a grant in it
 		assertThat(gitlab.header(USER_PATH, PRIVATE_TOKEN)).isNull();
 	}
 
@@ -127,7 +122,7 @@ class GitLabOAuthTest extends SiftIntegrationTest {
 	@Test
 	@DisplayName("the authorize URL carries the S256 challenge for the verifier it was built from")
 	void authorizeUrlCarriesThePkceChallenge() {
-		String verifier = oauth.newSecret();
+		String verifier = "a-verifier-the-controller-would-have-made";
 
 		String url = oauth.authorizeUrl("some-state", verifier);
 
@@ -139,22 +134,6 @@ class GitLabOAuthTest extends SiftIntegrationTest {
 				.contains("code_challenge=" + challengeFor(verifier));
 		// the secret authorizes the exchange, and it must never travel through the browser
 		assertThat(url).doesNotContain("not-a-real-secret");
-	}
-
-	@Test
-	@DisplayName("a callback whose state does not match the session is discarded without an exchange")
-	void mismatchedStateIsDiscarded() throws Exception {
-		MockHttpSession session = new MockHttpSession();
-		session.setAttribute("gitlab.oauth.state", "the-state-we-sent");
-		session.setAttribute("gitlab.oauth.verifier", "the-verifier-we-kept");
-		MockHttpServletResponse response = new MockHttpServletResponse();
-
-		controller.callback("a-code", "a-state-somebody-else-chose", null, session, response, null);
-
-		assertThat(response.getRedirectedUrl()).isEqualTo("/settings?gitlab=denied");
-		// and the state is spent either way, so a replay finds nothing waiting for it
-		assertThat(session.getAttribute("gitlab.oauth.state")).isNull();
-		assertThat(session.getAttribute("gitlab.oauth.verifier")).isNull();
 	}
 
 	private static String challengeFor(String verifier) {

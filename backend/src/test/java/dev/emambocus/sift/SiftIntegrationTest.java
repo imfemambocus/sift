@@ -1,5 +1,6 @@
 package dev.emambocus.sift;
 
+import dev.emambocus.sift.gmail.FakeGmail;
 import dev.emambocus.sift.user.User;
 import dev.emambocus.sift.user.UserRepository;
 import java.util.UUID;
@@ -7,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 import org.testcontainers.containers.PostgreSQLContainer;
 
@@ -32,6 +35,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
 		"sift.gitlab.oauth.client-id=sift-under-test",
 		"sift.gitlab.oauth.client-secret=not-a-real-secret",
 		"sift.gitlab.oauth.redirect-uri=http://localhost:7777/api/sources/gitlab/oauth/callback",
+		// and a Gmail client, so both flows are configured and the connectors list is complete
+		"sift.gmail.client-id=sift-mail-under-test",
+		"sift.gmail.client-secret=not-a-real-secret-either",
+		"sift.gmail.redirect-uri=http://localhost:7777/api/sources/gmail/oauth/callback",
 })
 // every user-owned table cascades from users, so one delete is the whole reset
 @Sql(statements = "delete from users", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
@@ -48,8 +55,21 @@ public abstract class SiftIntegrationTest {
 	// the same image compose runs, so a migration that passes here passes there
 	static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine");
 
+	/*
+	 * static for the same reason the container is. Google's three hosts are configuration rather than
+	 * something a credential carries, so pointing the source at a stand-in means setting a property,
+	 * and a property that differed per class would build a second application context. One server for
+	 * the whole run, reset by whichever test uses it.
+	 */
+	protected static final FakeGmail GMAIL = new FakeGmail();
+
 	static {
 		POSTGRES.start();
+	}
+
+	@DynamicPropertySource
+	static void gmailEndpoints(DynamicPropertyRegistry registry) {
+		registry.add("sift.gmail.base-url", GMAIL::baseUrl);
 	}
 
 	@Autowired

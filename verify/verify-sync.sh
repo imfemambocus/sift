@@ -59,7 +59,7 @@ echo
 
 csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
 api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
-# the feed is paged over groups now, so a suite asks for one page large enough to hold every fixture
+# the feed is paged over groups, so a suite asks for one page large enough to hold every fixture
 # and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
 feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 code() { curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" "$@"; }
@@ -86,24 +86,23 @@ check "instance from config" "\"$FAKE\"" "$(echo "$CONNECT" | python3 -c 'import
 check "credential type"      '"OAUTH"' "$(echo "$CONNECT" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["credentialType"]))')"
 
 echo
-echo "--- feed shape and priority mapping ---"
+echo "--- feed shape, and every action arriving under its own name ---"
 FEED=$(feed)
 python3 - "$FEED" <<'PY'
 import json, sys
 feed = json.loads(sys.argv[1])
 by_kind = {item["kind"]: item for item in feed}
-expected = {
-    "assigned": "HIGH", "review_requested": "HIGH", "approval_required": "HIGH",
-    "directly_addressed": "HIGH", "mentioned": "NORMAL", "build_failed": "NORMAL",
-    "an_action_gitlab_added_later": "NORMAL", "marked": "LOW",
-}
+# the last one is deliberately not a GitLab action: an action added later must still reach the feed
+expected = [
+    "assigned", "review_requested", "approval_required", "directly_addressed",
+    "mentioned", "build_failed", "marked", "an_action_gitlab_added_later",
+]
 ok = fail = 0
-for kind, want in expected.items():
-    got = by_kind.get(kind, {}).get("priority")
-    if got == want:
-        print(f"  ok    {kind:<32} {got}"); ok += 1
+for kind in expected:
+    if kind in by_kind:
+        print(f"  ok    {kind:<32} arrived"); ok += 1
     else:
-        print(f"  FAIL  {kind:<32} expected {want}, got {got}"); fail += 1
+        print(f"  FAIL  {kind:<32} missing from the feed"); fail += 1
 group = by_kind.get("approval_required", {})
 if group.get("contextLabel") == "lcsb/platform":
     print("  ok    group todo falls back to group path"); ok += 1
@@ -141,7 +140,7 @@ check "two rows marked resolved" 2 "$(docker exec sift-sync-db psql -U sift -d s
 check "first_seen_at preserved on survivors" 6 "$(docker exec sift-sync-db psql -U sift -d sift -qtAc 'select count(*) from feed_items where resolved_at is null and first_seen_at < last_seen_at' | tr -d ' ')"
 
 echo
-echo "--- narrowing, ordering and searching, all of which the server does now ---"
+echo "--- narrowing, ordering and searching, all of which the server does ---"
 len() { python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
 check "filter=unread"                 6 "$(feed 'filter=unread' | len)"
 check "filter=read"                   2 "$(feed 'filter=read' | len)"
@@ -168,12 +167,12 @@ echo
 echo "--- pagination past one page of 100 ---"
 python3 "$HERE/make-todos.py" many:150 "$TODOS" >/dev/null
 sift_connect_gitlab >/dev/null
-# the earlier eight are still in the feed as resolved history, so the live rows are what counts here
+# the eight from the first fixture are still in the feed as resolved history, so count the live rows
 check "all 150 read across 2 pages" 150 "$(feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if not i["resolved"]))')"
 
 echo
 echo "--- the page bound, and the cursor that walks past it ---"
-# the whole history no longer arrives in one response, which is the point of the change
+# a response carries one page of groups, never the whole history
 check "a page defaults to 50 groups" 50 "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["items"]))')"
 check "and says where the next starts" True "$(api "$BASE/api/feed" | python3 -c 'import json,sys; print(json.load(sys.stdin)["nextCursor"] is not None)')"
 check "the last page says it is last" None "$(api "$BASE/api/feed?limit=500" | python3 -c 'import json,sys; print(json.load(sys.stdin)["nextCursor"])')"
@@ -191,7 +190,7 @@ check "the cursor reaches every row" 158 "$(echo "$IDS" | grep -c .)"
 check "and never hands one out twice" 158 "$(echo "$IDS" | sort -u | grep -c .)"
 
 echo
-echo "--- the counts the browser used to work out for itself ---"
+echo "--- the counts, which no single page could work out ---"
 summary() { api "$BASE/api/feed/summary" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['$1'])"; }
 check "total is the whole history"    158 "$(summary total)"
 check "waiting is what is still sent" 150 "$(summary waiting)"
@@ -236,9 +235,6 @@ check "sweep tried it exactly once, then skipped it" 1 "$(grep -c 'sync failed f
 check "items left intact, not wiped by the failure" 8 "$(docker exec sift-sync-db psql -U sift -d sift -qtAc 'select count(*) from feed_items' | tr -d ' ')"
 rm -f "$WORK/revoked"
 
-echo
-echo "--- unmapped action logged once per run ---"
-grep -c "unmapped GitLab todo action 'an_action_gitlab_added_later'" "$LOG" | sed 's/^/  log lines in first run: /'
 
 echo
 echo "RESULT: $PASS passed, $FAIL failed (plus the feed subtotal above)"

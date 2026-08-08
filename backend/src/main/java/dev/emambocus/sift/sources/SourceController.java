@@ -29,6 +29,12 @@ public class SourceController {
 		return sources.statuses(principal.id());
 	}
 
+	/** What could be connected, which is what Home offers. {@code GET /api/sources} answers only what is. */
+	@GetMapping("/connectors")
+	public List<ConnectorResponse> connectors(@AuthenticationPrincipal SiftUserDetails principal) {
+		return sources.connectors(principal.id());
+	}
+
 	@PostMapping("/{source}/sync")
 	public SourceStatusResponse sync(@PathVariable String source,
 			@AuthenticationPrincipal SiftUserDetails principal) {

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 /**
  * Holds a value back until it stops changing.
  *
- * <p>The search runs in the database now, so a query that became a query key on every keystroke
+ * <p>The search runs in the database, so a query that became a query key on every keystroke
  * would be six requests for the word "review". This makes it one.
  */
 export function useDebounced<T>(value: T, delay: number): T {

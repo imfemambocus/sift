@@ -5,13 +5,12 @@ import java.util.UUID;
 
 /**
  * Shaped for the list that renders it rather than for the table it came from: already normalised,
- * already prioritised, with the source's own vocabulary reduced to {@code kind}.
+ * already narrowed, with the source's own vocabulary reduced to {@code kind}.
  */
 public record FeedItemResponse(
 		UUID id,
 		String source,
 		String kind,
-		Priority priority,
 		String title,
 		String body,
 		String actorName,
@@ -38,7 +37,6 @@ public record FeedItemResponse(
 				item.getId(),
 				item.getSource().slug(),
 				item.getKind(),
-				item.getPriority(),
 				item.getTitle(),
 				item.getBody(),
 				item.getActorName(),

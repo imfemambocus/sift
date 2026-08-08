@@ -44,7 +44,7 @@ export function AppLayout() {
 						</div>
 					</div>
 				) : (
-					// `Page` carries less top padding now that the frame usually sits above it, so a page
+					// `Page` carries less top padding than the frame above it needs, so a page
 					// without the field puts the difference back rather than starting up against the edge
 					<div className="pt-6" />
 				)}

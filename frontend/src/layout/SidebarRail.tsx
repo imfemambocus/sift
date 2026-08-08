@@ -1,10 +1,12 @@
-import { GitBranch, House, LogOut, Settings } from "lucide-react";
+import { House, LogOut, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { NavLink } from "react-router";
 import { useSignOut } from "../auth/session";
 import { RAIL_ACTIVE, RAIL_BUTTON, RAIL_IDLE, RailTooltip } from "../components/rail";
 import { SiftMark } from "../components/SiftMark";
+import { sourceIcon, sourceName, sourcePath } from "../sources/labels";
+import { useSources } from "../sources/sources";
 import { ThemeCycleButton } from "../theme/ThemeControls";
 
 type RailItem = {
@@ -13,11 +15,7 @@ type RailItem = {
 	readonly icon: LucideIcon;
 };
 
-const SECTIONS: readonly RailItem[] = [
-	{ to: "/", label: "Home", icon: House },
-	{ to: "/gitlab", label: "GitLab", icon: GitBranch },
-];
-
+const HOME: RailItem = { to: "/", label: "Home", icon: House };
 const SETTINGS: RailItem = { to: "/settings", label: "Settings", icon: Settings };
 
 function RailLink({ to, label, icon: Icon }: RailItem) {
@@ -48,6 +46,12 @@ function RailLink({ to, label, icon: Icon }: RailItem) {
 
 export function SidebarRail() {
 	const signOut = useSignOut();
+	/*
+	 * a source appears in the rail once it is connected and not before. an icon that leads to a page
+	 * saying "not connected" is a dead end, and the offer to connect belongs on Home where it can say
+	 * what the source is for.
+	 */
+	const { data: sources } = useSources();
 
 	return (
 		<nav
@@ -58,8 +62,15 @@ export function SidebarRail() {
 				<SiftMark className="size-4.5" label="Sift" />
 			</span>
 
-			{SECTIONS.map((section) => (
-				<RailLink key={section.to} {...section} />
+			<RailLink {...HOME} />
+
+			{(sources ?? []).map((source) => (
+				<RailLink
+					key={source.source}
+					to={sourcePath(source.source)}
+					label={sourceName(source.source)}
+					icon={sourceIcon(source.source)}
+				/>
 			))}
 
 			<div className="mt-auto flex flex-col items-center gap-1">

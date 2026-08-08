@@ -7,16 +7,15 @@ const TAB_ON = `${TAB} bg-raised text-fg`;
 const TAB_OFF = `${TAB} text-fg-muted hover:text-fg`;
 
 type FeedFiltersProps = {
-	/** The counts come from the server now: the list on screen is one page of a longer history. */
+	/** The counts come from the server: the list on screen is one page of a longer history. */
 	readonly counts: FeedSummary;
 	readonly filter: FeedFilter;
 	readonly onChange: (filter: FeedFilter) => void;
 };
 
 /**
- * The counts are the control. They used to be a read-only line saying "3 unread · 12 read", and the
- * numbers you would want to filter by were already the numbers on screen, so there was no reason to
- * put a second thing next to them.
+ * The counts are the control. The numbers you would want to filter by are already the numbers on
+ * screen, so a separate filter beside them would say the same thing twice.
  */
 export function FeedFilters({ counts, filter, onChange }: FeedFiltersProps) {
 	if (counts.total === 0) {

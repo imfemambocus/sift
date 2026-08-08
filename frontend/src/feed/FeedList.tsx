@@ -29,7 +29,7 @@ function intoDays(groups: readonly FeedGroup[]): Section[] {
 
 /*
  * paged over groups, never over items, so a merge request's events cannot be split across the
- * boundary with half of them behind a button. the server does that paging now and hands back whole
+ * boundary with half of them behind a button. the server does that paging and hands back whole
  * groups, so this asks for the next page rather than slicing a list it is already holding.
  */
 type FeedListProps = {

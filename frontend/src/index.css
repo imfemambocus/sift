@@ -35,12 +35,13 @@
 	--danger: #b4342a;
 	--danger-fg: #ffffff;
 
-	/* event families. muted on purpose: six hues on a quiet page becomes a fruit salad fast */
+	/* event families. muted on purpose: seven hues on a quiet page becomes a fruit salad fast */
 	--event-review: #5b4bc4;
 	--event-assigned: #2a6bb0;
 	--event-mention: #b03d7a;
 	--event-discussion: #1f7d70;
 	--event-blocked: #b4342a;
+	--event-message: #7a6a2e;
 	--event-other: #8a8f98;
 
 	color-scheme: light;
@@ -65,6 +66,7 @@
 	--event-mention: #e07ab4;
 	--event-discussion: #4fbfae;
 	--event-blocked: #e2685c;
+	--event-message: #c2a95e;
 	--event-other: #6e747e;
 
 	color-scheme: dark;
@@ -89,6 +91,7 @@
 	--color-event-mention: var(--event-mention);
 	--color-event-discussion: var(--event-discussion);
 	--color-event-blocked: var(--event-blocked);
+	--color-event-message: var(--event-message);
 	--color-event-other: var(--event-other);
 
 	--font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;

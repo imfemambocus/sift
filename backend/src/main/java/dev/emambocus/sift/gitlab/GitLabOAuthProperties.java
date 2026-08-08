@@ -11,8 +11,8 @@ import org.springframework.util.StringUtils;
  * than anything a user types. It lives here and not in {@code SiftProperties} because it belongs to
  * a source: a second source with its own application would add its own record beside this one.
  *
- * <p>All four values or none. With any of them absent Sift offers the pasted-token form only, which
- * is what a deployment that has never registered an application should see.
+ * <p>All four values or none. With any of them absent nothing can connect GitLab at all, and the
+ * settings page says how to register an application instead of showing a button that cannot work.
  */
 @ConfigurationProperties(prefix = "sift.gitlab.oauth")
 record GitLabOAuthProperties(String instanceUrl, String clientId, String clientSecret, String redirectUri) {

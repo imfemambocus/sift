@@ -85,7 +85,17 @@ post -d '{"email":"isfaaq@uni.lu","password":"correct-horse-battery"}' "$BASE/ap
 echo "--- availability ---"
 AVAIL=$(api "$BASE/api/sources/gitlab/oauth")
 check "configured"   "True"    "$(echo "$AVAIL" | field '"configured"')"
-check "instance url" "$FAKE"   "$(echo "$AVAIL" | field '"instanceUrl"')"
+# "target" rather than "instanceUrl" since the flow became a seam two sources share: gmail has no
+# instance, so the field names what the offer says rather than what only gitlab has
+check "target"       "$FAKE"   "$(echo "$AVAIL" | field '"target"')"
+
+CONNECTORS=$(api "$BASE/api/sources/connectors")
+check "both connectors offered" "['gitlab', 'gmail']" \
+  "$(echo "$CONNECTORS" | python3 -c 'import json,sys; print([c["source"] for c in json.load(sys.stdin)])')"
+check "gitlab not connected yet" "False" \
+  "$(echo "$CONNECTORS" | python3 -c 'import json,sys; print(next(c["connected"] for c in json.load(sys.stdin) if c["source"]=="gitlab"))')"
+check "gmail is not configured here" "False" \
+  "$(echo "$CONNECTORS" | python3 -c 'import json,sys; print(next(c["configured"] for c in json.load(sys.stdin) if c["source"]=="gmail"))')"
 check "start needs the csrf header" 403 \
   "$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" -X POST "$BASE/api/sources/gitlab/oauth/start")"
 
@@ -124,7 +134,8 @@ echo
 echo "--- the real thing ---"
 STATE3=$(python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sys.argv[1]).query)["state"][0])' \
   "$(post "$BASE/api/sources/gitlab/oauth/start" | field '"authorizeUrl"')")
-check "the callback sends the browser back" "$BASE/settings" \
+# home, not settings: home is where the source has a card, and where the offer to connect sits
+check "the callback sends the browser to home" "$BASE/" \
   "$(location "$BASE/api/sources/gitlab/oauth/callback?code=a-real-code&state=$STATE3")"
 # two grants, not one: the exchange, then the inline first read renewing a token the stub issued
 # with one second of life. with a real two-hour token that second grant would not happen.

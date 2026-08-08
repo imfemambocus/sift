@@ -31,7 +31,7 @@ page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 
 /*
  * a page load costs one page of the feed and one read of the counts, and they are counted apart:
- * the summary is a second endpoint now, so lumping them together would hide a page that quietly
+ * the summary is a second endpoint, so lumping them together would hide a page that quietly
  * fires two list queries. GET only, so marking read does not count.
  */
 let feedReads = 0;
@@ -71,21 +71,30 @@ await shot("f02-connect-authorize-dark");
 /*
  * the whole authorization, in a real browser: the app hands it to the stand-in instance, which
  * approves at once and sends it back to the callback, which stores the credential, syncs inline and
- * redirects to /settings. the token never touches this page, which is the point of the flow.
+ * redirects to home. the token never touches this page, which is the point of the flow.
  */
 await Promise.all([
   page.waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 }),
   page.click(connectButton),
 ]);
-// says where it actually landed rather than throwing a selector timeout, which named no cause
-const connected = await page.waitForSelector('button::-p-text(Disconnect)', { timeout: 30000 })
-  .catch(() => null);
+/*
+ * the rail link is the proof of both rules at once: the source connected, and a connected source is
+ * what puts an icon in the rail. it also says where it actually landed rather than throwing a
+ * selector timeout, which named no cause.
+ */
+const connected = await page.waitForSelector('a[href="/gitlab"]', { timeout: 30000 }).catch(() => null);
 if (connected === null) {
   problems.push(`the authorization did not connect anything; it ended on ${page.url()}`);
   console.log(`  NOT CONNECTED, ended on ${page.url()}`);
   await shot("f03-authorization-failed");
 } else {
-  console.log("  authorized on the stand-in instance and came back connected");
+  const landed = new URL(page.url()).pathname;
+  if (landed !== "/") problems.push(`connecting landed on ${landed}, not on home`);
+  console.log(`  authorized on the stand-in instance and came back connected, on ${landed}`);
+  await shot("f03a-home-connected-dark");
+
+  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle0" });
+  await page.waitForSelector('button::-p-text(Disconnect)', { timeout: 15000 });
   await shot("f03-settings-connected-dark");
 }
 
@@ -228,7 +237,7 @@ const tab = await page.evaluate(() => ({
   icon: document.querySelector('link[rel="icon"]')?.getAttribute("href"),
 }));
 console.log(`  tab title "${tab.title}", favicon ${tab.icon}`);
-if (!/^\(\d+\) Sift$/.test(tab.title)) problems.push(`the tab title carries no unread count: "${tab.title}"`);
+if (!/^Sift \(\d+\)$/.test(tab.title)) problems.push(`the tab title carries no unread count: "${tab.title}"`);
 
 /*
  * a to-do somebody completes upstream is history, not something that disappears: the row stays in the
@@ -258,14 +267,14 @@ if (settled === null) {
 } else {
   console.log(`  completed upstream: still listed, done tag ${settled.done}, tab "${settled.title}"`);
   if (!settled.done) problems.push("a resolved row does not say it is done, so it reads as still waiting");
-  if (settled.title !== "(11) Sift") problems.push(`the unread count still holds finished work: "${settled.title}"`);
+  if (settled.title !== "Sift (11)") problems.push(`the unread count still holds finished work: "${settled.title}"`);
 }
 await shot("f06e-resolved-history-dark");
 
 /*
  * Home leads with unread and keeps waiting as context, so both numbers are checked. they answer
- * different questions and the card used to lead with the wrong one: reading every row leaves the
- * source still reporting all of them, so "15 waiting" stayed put and read as nothing had been done.
+ * different questions: reading every row leaves the source still reporting all of them, so waiting
+ * does not move and only unread says whether anything has been dealt with.
  */
 /*
  * read off the elements, never off the card's textContent: the family counts abut the footer, so

@@ -6,7 +6,6 @@ import dev.emambocus.sift.SiftIntegrationTest;
 import dev.emambocus.sift.credential.SourceCredential;
 import dev.emambocus.sift.credential.SourceCredentialRepository;
 import dev.emambocus.sift.credential.SourceType;
-import dev.emambocus.sift.feed.Priority;
 import dev.emambocus.sift.sync.IncomingItem;
 import java.time.Instant;
 import java.util.Map;
@@ -75,7 +74,6 @@ class GitLabSourceTest extends SiftIntegrationTest {
 
 		assertThat(items).hasSize(1);
 		assertThat(items.get("mr:700").kind()).isEqualTo("mr_review_requested");
-		assertThat(items.get("mr:700").priority()).isEqualTo(Priority.HIGH);
 	}
 
 	@Test
@@ -125,8 +123,8 @@ class GitLabSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("an unrecognised action is normal, never low: this app hides things")
-	void unknownActionIsNormal() {
+	@DisplayName("an action GitLab adds later still reaches the feed, under its own name")
+	void unknownActionStillArrives() {
 		gitlab = stub().on("/api/v4/todos", """
 				[{"id": 3, "action_name": "something_gitlab_added_later",
 				  "target_url": "https://gl.example.org/x",
@@ -134,7 +132,7 @@ class GitLabSourceTest extends SiftIntegrationTest {
 				  "target": {"title": "New kind of thing"}}]
 				""");
 
-		assertThat(fetch().get("todo:3").priority()).isEqualTo(Priority.NORMAL);
+		assertThat(fetch().get("todo:3").kind()).isEqualTo("something_gitlab_added_later");
 	}
 
 	@Test

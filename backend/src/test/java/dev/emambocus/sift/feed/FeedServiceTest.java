@@ -183,13 +183,13 @@ class FeedServiceTest extends SiftIntegrationTest {
 	}
 
 	private static IncomingItem item(String sourceId, Instant created, Instant activity) {
-		return new IncomingItem(sourceId, "assigned", Priority.NORMAL, "Title", null, "A Colleague",
+		return new IncomingItem(sourceId, "assigned", "Title", null, "A Colleague",
 				null, "team/web", null, "https://gl.example.org/team/web/-/merge_requests/1",
-				created, activity, null, true);
+				null, created, activity, false, null, true);
 	}
 
 	private static IncomingItem at(String sourceId, String url) {
-		return new IncomingItem(sourceId, "assigned", Priority.NORMAL, "Title", null, null, null,
-				"team/web", null, url, MONDAY, MONDAY, null, true);
+		return new IncomingItem(sourceId, "assigned", "Title", null, null, null,
+				"team/web", null, url, null, MONDAY, MONDAY, false, null, true);
 	}
 }

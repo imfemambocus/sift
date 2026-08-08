@@ -1,11 +1,8 @@
 package dev.emambocus.sift.gitlab;
 
-import static java.util.Map.entry;
-
 import dev.emambocus.sift.config.SiftProperties;
 import dev.emambocus.sift.credential.SourceCredential;
 import dev.emambocus.sift.credential.SourceType;
-import dev.emambocus.sift.feed.Priority;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.NotificationSource;
 import dev.emambocus.sift.sync.SourceUnavailableException;
@@ -15,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,24 +28,7 @@ public class GitLabSource implements NotificationSource {
 
 	private static final Logger log = LoggerFactory.getLogger(GitLabSource.class);
 
-	private static final Map<String, Priority> PRIORITY_BY_ACTION = Map.ofEntries(
-			entry("assigned", Priority.HIGH),
-			entry("review_requested", Priority.HIGH),
-			entry("approval_required", Priority.HIGH),
-			entry("directly_addressed", Priority.HIGH),
-			entry("mentioned", Priority.NORMAL),
-			entry("build_failed", Priority.NORMAL),
-			entry("unmergeable", Priority.NORMAL),
-			entry("merge_train_removed", Priority.NORMAL),
-			entry("review_submitted", Priority.NORMAL),
-			entry("okr_checkin_requested", Priority.NORMAL),
-			entry("marked", Priority.LOW),
-			entry("member_access_requested", Priority.LOW));
-
 	private static final String UNTITLED = "Untitled";
-
-	/** So an action GitLab adds later is reported once, not on every sweep. */
-	private final Set<String> reportedUnknownActions = ConcurrentHashMap.newKeySet();
 
 	private final GitLabClient client;
 	private final GitLabOAuth oauth;
@@ -234,7 +213,6 @@ public class GitLabSource implements NotificationSource {
 		return new IncomingItem(
 				"mr:" + mergeRequest.id(),
 				kind,
-				Priority.HIGH,
 				mergeRequest.title(),
 				summary(mergeRequest),
 				mergeRequest.author() == null ? null : mergeRequest.author().name(),
@@ -242,8 +220,10 @@ public class GitLabSource implements NotificationSource {
 				GitLabUrls.projectPath(mergeRequest.references()),
 				GitLabUrls.projectUrl(mergeRequest.webUrl()),
 				mergeRequest.webUrl(),
+				null,
 				mergeRequest.createdAt(),
 				mergeRequest.updatedAt() == null ? mergeRequest.createdAt() : mergeRequest.updatedAt(),
+				false,
 				rawPayload(mergeRequest),
 				// an open merge request that stops being listed has been merged or closed
 				true);
@@ -254,7 +234,6 @@ public class GitLabSource implements NotificationSource {
 		return new IncomingItem(
 				"todo:" + todo.id(),
 				todo.actionName(),
-				priorityOf(todo.actionName()),
 				title,
 				// the todo body is very often just the target's title again
 				Objects.equals(todo.body(), title) ? null : todo.body(),
@@ -263,26 +242,13 @@ public class GitLabSource implements NotificationSource {
 				contextLabel(todo),
 				contextUrl(todo),
 				todo.targetUrl(),
+				null,
 				todo.createdAt(),
 				todo.updatedAt() == null ? todo.createdAt() : todo.updatedAt(),
+				false,
 				rawPayload(todo),
 				// a to-do that stops being pending has been dealt with in GitLab
 				true);
-	}
-
-	private Priority priorityOf(String actionName) {
-		Priority known = PRIORITY_BY_ACTION.get(actionName);
-		if (known != null) {
-			return known;
-		}
-		/*
-		 * an unrecognised action becomes NORMAL rather than LOW on purpose. this app hides things,
-		 * so the failure mode of guessing wrong must be a little noise, never a silently buried item.
-		 */
-		if (reportedUnknownActions.add(actionName)) {
-			log.info("unmapped GitLab todo action '{}', treating it as normal priority", actionName);
-		}
-		return Priority.NORMAL;
 	}
 
 	private static String title(GitLabResponses.Todo todo) {

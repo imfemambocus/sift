@@ -1,5 +1,6 @@
 package dev.emambocus.sift.gitlab;
 
+import dev.emambocus.sift.sources.SourceHttp;
 import dev.emambocus.sift.sync.SourceAuthException;
 import dev.emambocus.sift.sync.SourceUnavailableException;
 import java.time.LocalDate;
@@ -47,9 +48,9 @@ class GitLabClient {
 
 	private static final int PER_PAGE = 100;
 
-	private final GitLabHttp http;
+	private final SourceHttp http;
 
-	GitLabClient(GitLabHttp http) {
+	GitLabClient(SourceHttp http) {
 		this.http = http;
 	}
 

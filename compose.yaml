@@ -40,6 +40,11 @@ services:
       SIFT_GITLAB_CLIENT_ID: ${SIFT_GITLAB_CLIENT_ID:-}
       SIFT_GITLAB_CLIENT_SECRET: ${SIFT_GITLAB_CLIENT_SECRET:-}
       SIFT_GITLAB_REDIRECT_URI: ${SIFT_GITLAB_REDIRECT_URI:-http://localhost:7777/api/sources/gitlab/oauth/callback}
+      SIFT_GMAIL_CLIENT_ID: ${SIFT_GMAIL_CLIENT_ID:-}
+      SIFT_GMAIL_CLIENT_SECRET: ${SIFT_GMAIL_CLIENT_SECRET:-}
+      SIFT_GMAIL_REDIRECT_URI: ${SIFT_GMAIL_REDIRECT_URI:-http://localhost:7777/api/sources/gmail/oauth/callback}
+      # how far back connecting a mailbox reads. every sweep after that takes only what is newer.
+      SIFT_GMAIL_WINDOW: ${SIFT_GMAIL_WINDOW:-P14D}
       # forwarded so the sweep stays tunable from .env; shortening it is the only practical way to
       # watch a sync happen without waiting five minutes
       SIFT_SYNC_INTERVAL: ${SIFT_SYNC_INTERVAL:-PT5M}
@@ -49,6 +54,16 @@ services:
     # the app's side would break the mapping
     ports:
       - "127.0.0.1:7777:7777"
+    # busybox wget is in the alpine JRE image already, so this adds nothing to it. actuator exposes
+    # health alone and /actuator/health/** is permitAll, so an unauthenticated probe is a real
+    # answer rather than a 401 that always passes
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:7777/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # flyway plus the context is about half a minute on a cold start
+      start_period: 45s
 
 volumes:
   db-data:

@@ -89,9 +89,8 @@ function pathFor(view: FeedView, cursor: string | null): string {
 /**
  * One page of the feed at a time, as whole groups.
  *
- * <p>The server narrows, orders, searches and pages, which is a change from the whole history
- * arriving in one request. It had to be: that request grew without a bound and the poll carried all
- * of it every thirty seconds. Everything that used to count the rows the browser held now reads
+ * <p>The server narrows, orders, searches and pages, so neither this request nor the poll behind it
+ * grows with the history. Anything that needs a number over more than the loaded pages reads
  * {@link useFeedSummary} instead.
  */
 export function useFeedPages(view: FeedView, enabled = true) {
@@ -102,8 +101,12 @@ export function useFeedPages(view: FeedView, enabled = true) {
 		getNextPageParam: (last: FeedPage) => last.nextCursor,
 		// off while a search query is still being typed, so a half-word never asks for the whole feed
 		enabled,
-		// tanstack pauses interval refetching while the tab is in the background, so this is only
-		// every 30s when someone is actually looking at it. it refreshes the pages already loaded.
+		/*
+		 * tanstack's default of pausing while the tab is in the background is wanted here: nobody
+		 * reads a list they are not looking at, and refetching every loaded page in a hidden tab is
+		 * the expensive half of the app. The summary overrides it, since the tab badge is read
+		 * precisely when this list is not.
+		 */
 		refetchInterval: 30_000,
 	});
 }
@@ -122,6 +125,14 @@ export function useFeedSummary() {
 		queryKey: [SUMMARY_KEY],
 		queryFn: async () => summarySchema.parse(await request<unknown>("/api/feed/summary")),
 		refetchInterval: 30_000,
+		/*
+		 * TanStack pauses an interval whenever the window loses focus, and this one must not: the
+		 * count on the tab is read while somebody is looking at something else, so a paused poll
+		 * would make it true only once they looked, which is when it stops being needed. One small
+		 * request, so a background poll is cheap. A browser throttles a timer in a hidden tab, so
+		 * treat 30s as about a minute there.
+		 */
+		refetchIntervalInBackground: true,
 	});
 }
 
@@ -168,9 +179,9 @@ function rollback(queryClient: ReturnType<typeof useQueryClient>, previous: Cach
 }
 
 /**
- * Anything that changes the rows changes the counts as well, and the two are separate requests now,
- * so they are refreshed together. Every caller has to use this rather than the feed key alone: a
- * page whose list moved while its All / Unread / Read numbers did not is the visible failure.
+ * Anything that changes the rows changes the counts as well, and the two are separate requests, so
+ * they are refreshed together. Every caller has to use this rather than the feed key alone: a page
+ * whose list moved while its All / Unread / Read numbers did not is the visible failure.
  *
  * <p>The counts are refetched rather than written optimistically. The row greying out under the
  * cursor is what would look broken if it waited for a round trip; a number in the corner catching up

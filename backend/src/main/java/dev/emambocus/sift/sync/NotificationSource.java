@@ -9,9 +9,8 @@ import java.util.List;
  * new {@link SourceType} constant: the scheduler and the feed endpoint work on {@link IncomingItem}
  * and never on source-shaped data.
  *
- * <p>There is no {@code verify} here any more. A credential used to be proved before it was stored,
- * because it was pasted in and could be a typo. An OAuth grant cannot be, and the exchange that
- * issued it has already proved it, so the seam is one method.
+ * <p>Nothing here proves a credential before it is stored. An OAuth grant cannot be a typo, and the
+ * exchange that issued it has already proved it works, so the seam is these two methods.
  */
 public interface NotificationSource {
 

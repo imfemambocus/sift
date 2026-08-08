@@ -1,13 +1,16 @@
 package dev.emambocus.sift.gitlab;
 
 import dev.emambocus.sift.credential.SourceCredential;
+import dev.emambocus.sift.credential.SourceType;
+import dev.emambocus.sift.sources.OAuthTokens;
 import dev.emambocus.sift.sources.SourceCredentialStore;
+import dev.emambocus.sift.sources.SourceHttp;
+import dev.emambocus.sift.sources.SourceOAuthFlow;
 import dev.emambocus.sift.sync.SourceAuthException;
 import dev.emambocus.sift.sync.SourceUnavailableException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,16 +31,13 @@ import org.springframework.web.util.UriComponentsBuilder;
  *
  * <p>The exchange happens here and never in the browser, which is the whole reason the app is shaped
  * as a backend-for-frontend: no access token and no refresh token ever reaches JavaScript.
- *
- * <p>There is no generic OAuth seam yet, on purpose. One source has one flow, and inventing an
- * interface for it would be guessing at what the second one needs.
  */
 @Component
-class GitLabOAuth {
+class GitLabOAuth implements SourceOAuthFlow {
 
 	private static final Logger log = LoggerFactory.getLogger(GitLabOAuth.class);
 
-	/** The same read-only scope the pasted token asks for. Sift never writes to GitLab. */
+	/** Read-only. Sift never writes to GitLab, and there is no narrower scope for the to-do list. */
 	static final String SCOPE = "read_api";
 
 	/*
@@ -46,37 +46,40 @@ class GitLabOAuth {
 	 */
 	private static final Duration EXPIRY_MARGIN = Duration.ofMinutes(2);
 
-	private static final int VERIFIER_BYTES = 32;
-
 	private final GitLabOAuthProperties config;
-	private final GitLabHttp http;
+	private final SourceHttp http;
 	private final SourceCredentialStore store;
-	private final SecureRandom random = new SecureRandom();
 	private final Clock clock;
 
-	GitLabOAuth(GitLabOAuthProperties config, GitLabHttp http, SourceCredentialStore store, Clock clock) {
+	GitLabOAuth(GitLabOAuthProperties config, SourceHttp http, SourceCredentialStore store, Clock clock) {
 		this.config = config;
 		this.http = http;
 		this.store = store;
 		this.clock = clock;
 	}
 
-	boolean isConfigured() {
+	@Override
+	public SourceType source() {
+		return SourceType.GITLAB;
+	}
+
+	@Override
+	public boolean configured() {
 		return config.configured();
 	}
 
-	String instanceUrl() {
+	@Override
+	public String target() {
 		return config.instanceUrl();
 	}
 
-	/** A fresh PKCE verifier. The caller keeps it in the session until the code comes back. */
-	String newSecret() {
-		byte[] bytes = new byte[VERIFIER_BYTES];
-		random.nextBytes(bytes);
-		return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+	@Override
+	public String accountUrl() {
+		return config.instanceUrl();
 	}
 
-	String authorizeUrl(String state, String codeVerifier) {
+	@Override
+	public String authorizeUrl(String state, String codeVerifier) {
 		return UriComponentsBuilder.fromUriString(config.instanceUrl())
 				.path("/oauth/authorize")
 				.queryParam("client_id", config.clientId())
@@ -90,17 +93,18 @@ class GitLabOAuth {
 				.toUriString();
 	}
 
-	GitLabResponses.OAuthToken exchange(String code, String codeVerifier) {
+	@Override
+	public OAuthTokens exchange(String code, String codeVerifier) {
 		MultiValueMap<String, String> form = form("authorization_code");
 		form.add("code", code);
 		form.add("redirect_uri", config.redirectUri());
 		form.add("code_verifier", codeVerifier);
-		return post(config.instanceUrl(), form, "exchanging the authorization code");
+		return tokensOf(post(config.instanceUrl(), form, "exchanging the authorization code"), null);
 	}
 
 	/**
-	 * The access to read a credential with, renewing it first when it is an OAuth one close to
-	 * expiring. Every sweep goes through here, which is what keeps a two-hour token alive.
+	 * The access to read a credential with, renewing it first when it is close to expiring. Every
+	 * sweep goes through here, which is what keeps a two-hour token alive.
 	 */
 	GitLabAccess accessFor(SourceCredential credential) {
 		if (!isExpiring(credential.getExpiresAt())) {
@@ -118,19 +122,26 @@ class GitLabOAuth {
 		// the credential's own instance, not the configured one: the token belongs to whoever issued it
 		GitLabResponses.OAuthToken renewed =
 				post(credential.getInstanceUrl(), form, "renewing the access token");
+		OAuthTokens tokens = tokensOf(renewed, refreshToken);
 
 		/*
 		 * written before it is used, and both halves together: GitLab invalidates the old refresh
 		 * token the moment it issues a new one, so a renewal that is not stored ends the connection.
 		 */
-		store.refreshTokens(credential, renewed.accessToken(), renewed.refreshToken(), expiryOf(renewed));
+		store.refreshTokens(credential, tokens.accessToken(), tokens.refreshToken(), tokens.expiresAt());
 		log.debug("renewed the GitLab access token for credential {}", credential.getId());
 		return GitLabAccess.of(credential);
 	}
 
-	Instant expiryOf(GitLabResponses.OAuthToken token) {
+	/**
+	 * @param fallbackRefreshToken kept when the response omits one, which GitLab does not do today but
+	 *     which costs nothing to survive
+	 */
+	private OAuthTokens tokensOf(GitLabResponses.OAuthToken token, String fallbackRefreshToken) {
 		// an instance old enough to issue a token that never expires simply has nothing to renew
-		return token.expiresIn() == null ? null : clock.instant().plusSeconds(token.expiresIn());
+		Instant expiresAt = token.expiresIn() == null ? null : clock.instant().plusSeconds(token.expiresIn());
+		String refreshToken = token.refreshToken() == null ? fallbackRefreshToken : token.refreshToken();
+		return new OAuthTokens(token.accessToken(), refreshToken, expiresAt);
 	}
 
 	private boolean isExpiring(Instant expiresAt) {

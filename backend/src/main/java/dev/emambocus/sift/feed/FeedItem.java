@@ -44,13 +44,9 @@ public class FeedItem {
 	@Column(name = "source_id", nullable = false)
 	private String sourceId;
 
-	/** The source's own action token, e.g. {@code review_requested}. Rules match on this. */
+	/** The source's own action token, e.g. {@code review_requested}. The search matches on this. */
 	@Column(nullable = false)
 	private String kind;
-
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
-	private Priority priority;
 
 	@Column(nullable = false)
 	private String title;
@@ -94,13 +90,8 @@ public class FeedItem {
 	@Column(name = "read_at")
 	private Instant readAt;
 
-	@Column(name = "notified_at")
-	private Instant notifiedAt;
-
-	/*
-	 * set when the item stops coming back from the source, rather than deleting the row: it keeps
-	 * the history, and it stops a reappearing item being notified a second time
-	 */
+	// set when the item stops coming back from the source, rather than deleting the row, so the
+	// feed keeps the whole history
 	@Column(name = "resolved_at")
 	private Instant resolvedAt;
 

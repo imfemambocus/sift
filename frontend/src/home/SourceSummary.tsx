@@ -12,7 +12,7 @@ import type { SourceStatus } from "../sources/sources";
  * that answer belongs on this side.
  */
 function countByFamily(byKind: Readonly<Record<string, number>>): Record<EventFamily, number> {
-	const counts = { review: 0, assigned: 0, mention: 0, discussion: 0, blocked: 0, other: 0 };
+	const counts = { review: 0, assigned: 0, mention: 0, discussion: 0, blocked: 0, message: 0, other: 0 };
 	for (const [kind, count] of Object.entries(byKind)) {
 		counts[eventFamily(kind)] += count;
 	}
