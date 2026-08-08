@@ -24,7 +24,7 @@ import json
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 PORT = int(os.environ.get("PORT", "7790"))
 MESSAGES_FILE = os.environ["MESSAGES_FILE"]
@@ -156,6 +156,17 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/oauth/issued":
             with OAUTH_LOCK:
                 self._send(200, {"issued": OAUTH["issued"]})
+            return
+
+        # the consent screen, which a browser reaches by a top-level navigation. no approval page:
+        # it sends the browser straight back with a code, which is the half a curl suite skips.
+        if parsed.path == "/o/oauth2/v2/auth":
+            redirect = query.get("redirect_uri", [""])[0]
+            state = query.get("state", [""])[0]
+            self.send_response(302)
+            self.send_header("Location", f"{redirect}?code=a-code&state={quote(state)}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
             return
 
         if not self._authorized():

@@ -322,6 +322,61 @@ await page.waitForSelector('a[href="/gitlab"]', { timeout: 15000 });
 await shot("f07-home-cards-mobile");
 await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 2 });
 
+/*
+ * the Gmail leg. verify-gmail.sh drives the same flow over real HTTP, so what is here is only what
+ * needs a browser: the offer on Home, the redirect landing back on the app's own origin, mail on
+ * screen, and the count the rail carries once there is more than one source to tell apart.
+ */
+await page.goto(`${BASE}/`, { waitUntil: "networkidle0" });
+const gmailOffer = await page.waitForSelector("span::-p-text(Connect Gmail)", { timeout: 10000 }).catch(() => null);
+if (gmailOffer === null) {
+  problems.push("Home offered no way to connect Gmail");
+} else {
+  await shot("f11-home-gmail-offer-dark");
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 }).catch(() => null),
+    gmailOffer.click(),
+  ]);
+  const railGmail = await page.waitForSelector('a[href="/gmail"]', { timeout: 30000 }).catch(() => null);
+  if (railGmail === null) {
+    problems.push(`connecting Gmail from Home connected nothing; it ended on ${page.url()}`);
+  } else {
+    const landed = new URL(page.url()).pathname;
+    console.log(`  connected Gmail from the Home card, on ${landed}`);
+    if (landed !== "/") problems.push(`connecting Gmail landed on ${landed}, not on home`);
+    await shot("f12-home-both-sources-dark");
+  }
+}
+
+await page.goto(`${BASE}/gmail`, { waitUntil: "networkidle0" });
+await page.waitForSelector("time", { timeout: 20000 }).catch(() => null);
+const mail = await page.evaluate(() => {
+  const rows = [...document.querySelectorAll('a[href^="https://mail.google.com"]')];
+  return { rows: rows.length, sent: rows.filter((a) => a.textContent.includes("Sent")).length };
+});
+console.log(`  ${mail.rows} mail row(s) on screen, ${mail.sent} of them sent`);
+if (mail.rows === 0) problems.push("the Gmail feed shows no messages");
+if (mail.sent === 0) problems.push("mail you sent never reaches the feed");
+await shot("f13-gmail-feed-dark");
+
+/*
+ * the rail badge. the accessible name is the assertion, because that is the contract: the number is
+ * in the link's label and the painted badge is aria-hidden, so it is announced once and not twice.
+ */
+const railCount = await page.evaluate(() => {
+  const link = document.querySelector('a[href="/gmail"]');
+  if (link === null) return null;
+  const badge = link.querySelector("span.rounded-full");
+  return { label: link.getAttribute("aria-label"), badge: badge === null ? null : badge.textContent };
+});
+console.log(`  rail Gmail link: ${JSON.stringify(railCount)}`);
+if (railCount === null || !/, \d+ unread$/.test(railCount.label ?? "")) {
+  problems.push(`the rail link carries no unread count in its label: ${JSON.stringify(railCount)}`);
+}
+if (railCount !== null && railCount.badge === null) {
+  problems.push("the rail shows no badge while Gmail has unread mail");
+}
+
 // withdraw the approval upstream and let the fast sweep notice, to capture the alert
 writeFileSync(`${WORK}/revoked`, "");
 console.log("  withdrew the approval upstream, waiting for the sweep");

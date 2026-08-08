@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# stub gitlab + postgres + backend + vite, then drive the real UI through connecting and reading
+# stub gitlab + stub google + postgres + backend + vite, then drive the real UI through connecting
+# both sources and reading them
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -8,7 +9,9 @@ ROOT="$(cd "$HERE/.." && pwd)"
 WORK="${SIFT_VERIFY_WORK:-$(mktemp -d)}"
 mkdir -p "$WORK"
 TODOS="$WORK/todos.json"
+MAIL="$WORK/feed-mail.json"
 FAKE=http://127.0.0.1:7788
+GOOGLE=http://127.0.0.1:7790
 # the browser lives on the vite origin, so the callback has to come back there and not to the
 # backend directly. vite proxies /api to 7779, and the redirect to home then stays on 5174.
 BASE=http://localhost:5174
@@ -19,6 +22,7 @@ cleanup() {
   [ -n "${VITE_PID:-}" ] && kill "$VITE_PID" 2>/dev/null
   [ -n "${BOOT_PID:-}" ] && kill "$BOOT_PID" 2>/dev/null
   [ -n "${STUB_PID:-}" ] && kill "$STUB_PID" 2>/dev/null
+  [ -n "${GOOGLE_PID:-}" ] && kill "$GOOGLE_PID" 2>/dev/null
   docker rm -f sift-ui2-db >/dev/null 2>&1
   rm -f "$WORK/revoked"
 }
@@ -38,6 +42,15 @@ STUB_PID=$!
 for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:7788/oauth/issued && break; sleep 1; done
 echo "stub gitlab up"
 
+# the same base time for every rewrite of the mailbox, so a message already read cannot look new
+NOW_MS=$(python3 -c 'import time; print(int(time.time() * 1000))')
+python3 "$HERE/make-mail.py" base "$MAIL" "$NOW_MS" >/dev/null
+PORT=7790 MESSAGES_FILE="$MAIL" OAUTH_CLIENT_ID="$SIFT_OAUTH_CLIENT_ID" \
+  OAUTH_CLIENT_SECRET="$SIFT_OAUTH_CLIENT_SECRET" python3 "$HERE/fake-google.py" &
+GOOGLE_PID=$!
+for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:7790/oauth/issued && break; sleep 1; done
+echo "stub google up"
+
 docker rm -f sift-ui2-db >/dev/null 2>&1
 docker run -d --rm --name sift-ui2-db -e POSTGRES_DB=sift -e POSTGRES_USER=sift \
   -e POSTGRES_PASSWORD=sift -p 5439:5432 postgres:17-alpine >/dev/null
@@ -47,7 +60,7 @@ for _ in $(seq 1 60); do docker exec sift-ui2-db pg_isready -U sift -d sift >/de
 SIFT_DB_URL=jdbc:postgresql://localhost:5439/sift SIFT_DB_USER=sift SIFT_DB_PASSWORD=sift \
 SIFT_ENCRYPTION_KEY="$(openssl rand -base64 32)" SIFT_ALLOWED_EMAIL_DOMAINS=uni.lu \
 SIFT_SYNC_INITIAL_DELAY=PT3S SIFT_SYNC_INTERVAL=PT4S SIFT_PORT=7779 \
-  env $(sift_oauth_env) "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/feed-boot.log" 2>&1 &
+  env $(sift_oauth_env) $(sift_gmail_env) "$ROOT/backend/gradlew" -p "$ROOT/backend" bootRun --console=plain >"$WORK/feed-boot.log" 2>&1 &
 BOOT_PID=$!
 for _ in $(seq 1 150); do
   grep -q "Started SiftApplication" "$WORK/feed-boot.log" 2>/dev/null && break
