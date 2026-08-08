@@ -64,6 +64,8 @@ Read and unread behaves like this:
   message unread in Sift, a later read of your mailbox does not change it back.
 - The counts above the feed are also the filter. All, Unread and Read are one click each.
 - One button clears every unread item at once.
+- The sidebar shows the unread count of each source on its icon. This tells you which source wants
+  you, without a click.
 - The browser tab shows the unread count after the name, as `Sift (3)`, and on its icon. The count
   stays current while you look at a different tab. Your browser slows a timer in a tab you do not
   look at, so expect the count to change after approximately one minute. Sift must be open in a tab.
@@ -257,6 +259,11 @@ The first read takes the newest messages. Each read after it does two things. It
 that arrived since the last read. It also takes one more group of older messages. Sift thus moves
 back through your mailbox until it gets to the first message. A large mailbox needs many reads. You
 can use Sift while this happens.
+
+Sift usually shows many more items than Gmail shows you. There are two reasons. Gmail counts a
+conversation as one line, and Sift makes a row for each message in it. Gmail also opens on your
+Inbox, and Sift reads all of your mail. To compare the two numbers, use **All Mail** in Gmail and
+not the Inbox.
 
 Each message costs one request to Google. If you make `SIFT_SYNC_INTERVAL` very short, Google can
 refuse the requests while Sift reads a large mailbox. Use a longer value until your mailbox is
