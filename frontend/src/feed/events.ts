@@ -81,6 +81,21 @@ export const FAMILY_TEXT: Record<EventFamily, string> = {
 	other: "text-event-other",
 };
 
+/*
+ * the same hue held back, for a row that has no kind wording to carry it. a name is read as a name
+ * first, so it takes less colour than a word whose whole job is to say what kind of row this is.
+ * written out rather than composed, because tailwind reads these class names out of the source.
+ */
+export const FAMILY_TEXT_SOFT: Record<EventFamily, string> = {
+	review: "text-event-review/70",
+	assigned: "text-event-assigned/70",
+	mention: "text-event-mention/70",
+	discussion: "text-event-discussion/70",
+	blocked: "text-event-blocked/70",
+	message: "text-event-message/70",
+	other: "text-event-other/70",
+};
+
 export const FAMILY_FILL: Record<EventFamily, string> = {
 	review: "bg-event-review",
 	assigned: "bg-event-assigned",

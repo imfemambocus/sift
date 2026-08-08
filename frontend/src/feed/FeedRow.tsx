@@ -1,9 +1,9 @@
 import { motion } from "motion/react";
 import type { FeedItem } from "./feed";
 import { useSetRead } from "./feed";
-import { FAMILY_TEXT, rowFamily } from "./events";
-import { kindLabel } from "./kinds";
-import { Dot, DoneTag, edgeClass, ReadToggle, ROW_MOTION } from "./row";
+import { FAMILY_TEXT, FAMILY_TEXT_SOFT, rowFamily } from "./events";
+import { kindLabel, namesItsKind } from "./kinds";
+import { DoneTag, edgeClass, MetaLine, ReadToggle, ROW_MOTION } from "./row";
 import { fullTimestamp, shortAgo } from "../lib/time";
 
 /*
@@ -47,32 +47,21 @@ export function FeedRow({ item }: { readonly item: FeedItem }) {
 					<span className="line-clamp-2 text-[12.5px] leading-snug text-fg-muted">{item.body}</span>
 				)}
 
-				<span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px] text-fg-muted">
-					{/* each optional part carries its own trailing separator, since the kind always follows */}
+				<MetaLine>
 					{item.contextLabel !== null && (
-						<>
-							<span className="font-mono text-[11px]">{item.contextLabel}</span>
-							<Dot />
-						</>
+						<span className="font-mono text-[11px]">{item.contextLabel}</span>
 					)}
 
 					{item.actorName !== null && (
-						<>
-							<span>{item.actorName}</span>
-							<Dot />
-						</>
+						<span className={namesItsKind(item.kind) ? "" : FAMILY_TEXT_SOFT[family]}>{item.actorName}</span>
 					)}
 
-					<span className={`font-medium ${FAMILY_TEXT[family]}`}>{kindLabel(item.kind)}</span>
-
-					{item.resolved && (
-						<>
-							<Dot />
-							<DoneTag />
-						</>
+					{namesItsKind(item.kind) && (
+						<span className={`font-medium ${FAMILY_TEXT[family]}`}>{kindLabel(item.kind)}</span>
 					)}
 
-					<Dot />
+					{item.resolved && <DoneTag />}
+
 					{/* the time shown is the last activity, not the creation date: an MR opened last
 					    week that got commits an hour ago is an hour old as far as anyone cares */}
 					<time
@@ -82,7 +71,7 @@ export function FeedRow({ item }: { readonly item: FeedItem }) {
 					>
 						{shortAgo(item.activityAt)}
 					</time>
-				</span>
+				</MetaLine>
 			</a>
 
 			<ReadToggle

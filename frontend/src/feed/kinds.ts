@@ -30,6 +30,16 @@ const LABELS: Record<string, string> = {
 	mail_sent: "Sent",
 };
 
+/*
+ * mail is the one source where every row is the same kind, so printing that kind on each row says
+ * nothing. sent mail keeps its name, because that one tells two rows apart.
+ */
+const UNNAMED_ON_A_ROW = new Set(["mail_received"]);
+
+export function namesItsKind(kind: string): boolean {
+	return !UNNAMED_ON_A_ROW.has(kind);
+}
+
 export function kindLabel(kind: string): string {
 	const known = LABELS[kind];
 	if (known !== undefined) {

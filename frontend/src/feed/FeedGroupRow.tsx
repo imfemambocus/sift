@@ -3,11 +3,11 @@ import { motion } from "motion/react";
 import { useId, useState } from "react";
 import type { FeedItem } from "./feed";
 import { useSetRead } from "./feed";
-import { FAMILY_TEXT, rowFamily } from "./events";
+import { FAMILY_TEXT, FAMILY_TEXT_SOFT, rowFamily } from "./events";
 import type { FeedGroup } from "./grouping";
 import { groupUnread } from "./grouping";
-import { kindLabel } from "./kinds";
-import { Dot, DoneTag, edgeClass, ReadToggle, ROW_MOTION, UnreadDot } from "./row";
+import { kindLabel, namesItsKind } from "./kinds";
+import { DoneTag, edgeClass, MetaLine, ReadToggle, ROW_MOTION, UnreadDot } from "./row";
 import { fullTimestamp, shortAgo } from "../lib/time";
 
 /*
@@ -71,15 +71,11 @@ export function FeedGroupRow({ group }: { readonly group: FeedGroup }) {
 						{lead.title}
 					</span>
 
-					<span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px] text-fg-muted">
+					<MetaLine>
 						{lead.contextLabel !== null && (
-							<>
-								<span className="font-mono text-[11px]">{lead.contextLabel}</span>
-								<Dot />
-							</>
+							<span className="font-mono text-[11px]">{lead.contextLabel}</span>
 						)}
 						<span>{group.items.length} updates</span>
-						<Dot />
 						<time
 							dateTime={lead.activityAt}
 							title={`Last activity ${fullTimestamp(lead.activityAt)}`}
@@ -87,7 +83,7 @@ export function FeedGroupRow({ group }: { readonly group: FeedGroup }) {
 						>
 							{shortAgo(lead.activityAt)}
 						</time>
-					</span>
+					</MetaLine>
 				</a>
 
 				<button
@@ -167,24 +163,19 @@ function GroupedEvent({ item }: { readonly item: FeedItem }) {
 				<UnreadDot read={item.read} />
 
 				<span className="flex min-w-0 flex-col gap-0.5">
-					<span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px] text-fg-muted">
-						<span className={`${item.read ? "" : "font-medium"} ${FAMILY_TEXT[family]}`}>{kindLabel(item.kind)}</span>
-
-						{item.resolved && (
-							<>
-								<Dot />
-								<DoneTag />
-							</>
+					<MetaLine>
+						{namesItsKind(item.kind) && (
+							<span className={`${item.read ? "" : "font-medium"} ${FAMILY_TEXT[family]}`}>
+								{kindLabel(item.kind)}
+							</span>
 						)}
+
+						{item.resolved && <DoneTag />}
 
 						{item.actorName !== null && (
-							<>
-								<Dot />
-								<span>{item.actorName}</span>
-							</>
+							<span className={namesItsKind(item.kind) ? "" : FAMILY_TEXT_SOFT[family]}>{item.actorName}</span>
 						)}
 
-						<Dot />
 						<time
 							dateTime={item.activityAt}
 							title={`Last activity ${fullTimestamp(item.activityAt)}\nCreated ${fullTimestamp(item.createdAt)}`}
@@ -192,7 +183,7 @@ function GroupedEvent({ item }: { readonly item: FeedItem }) {
 						>
 							{shortAgo(item.activityAt)}
 						</time>
-					</span>
+					</MetaLine>
 
 					{item.body !== null && (
 						<span className="line-clamp-2 text-[12.5px] leading-snug text-fg-muted">{item.body}</span>

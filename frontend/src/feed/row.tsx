@@ -1,4 +1,5 @@
 import { Check, Circle } from "lucide-react";
+import type { ReactNode } from "react";
 
 /*
  * the pieces a feed row and a grouped one both wear, kept here so the two cannot drift apart: the
@@ -67,10 +68,16 @@ export function DoneTag() {
 	return <span className="font-mono text-[11px] text-fg-muted/70">done</span>;
 }
 
-export function Dot() {
+/*
+ * the small facts under a title. css draws the separator between one part and the next, so a part
+ * that is absent takes its separator with it and no part has to know what comes before it.
+ *
+ * children must be plain elements rather than fragments, since the rule selects direct children.
+ */
+export function MetaLine({ children }: { readonly children: ReactNode }) {
 	return (
-		<span aria-hidden className="text-fg-muted/45">
-			&middot;
+		<span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px] text-fg-muted [&>*+*]:before:mr-2 [&>*+*]:before:text-fg-muted/45 [&>*+*]:before:content-['·']">
+			{children}
 		</span>
 	);
 }
