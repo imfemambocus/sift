@@ -36,11 +36,12 @@ the same feed as your GitLab items, and its search covers all of it.
   in a visible way.
 - **A failure.** A pipeline fails. A merge request cannot merge.
 - **Every message in your mailbox.** Sift makes no judgement about your mail. Each message becomes a
-  row. Each row opens that message in Gmail. Messages of one conversation make one entry.
+  row. This includes the mail that you sent. Each row opens that message in Gmail. Messages of one
+  conversation make one entry.
 
 Your own comments never notify you. Your own commits never notify you. GitLab writes system notes
-about itself, and Sift ignores them. Your own sent mail and your drafts do not become rows, for the
-same reason. Sift also leaves out spam and trash, because Gmail leaves them out.
+about itself, and Sift ignores them. Sift leaves out your drafts and your chats. A draft is not sent,
+and a chat is not mail. Sift also leaves out spam and trash, because Gmail leaves them out.
 
 ## Status
 
@@ -249,9 +250,17 @@ necessary only to remove that message for other people.
 
 ### What Sift reads
 
-The first read takes the messages of the last 14 days. `SIFT_GMAIL_WINDOW` changes that period. Each
-read after the first takes only the messages that arrived after the newest message Sift already has.
-Your history therefore grows, and Sift does not read your whole mailbox again every five minutes.
+Sift reads all of your mailbox. The search finds only the messages that Sift read, and the search is
+why Gmail is in Sift. A limit on how far back Sift reads is thus a limit on what you can find.
+
+The first read takes the newest messages. Each read after it does two things. It takes the messages
+that arrived since the last read. It also takes one more group of older messages. Sift thus moves
+back through your mailbox until it gets to the first message. A large mailbox needs many reads. You
+can use Sift while this happens.
+
+Each message costs one request to Google. If you make `SIFT_SYNC_INTERVAL` very short, Google can
+refuse the requests while Sift reads a large mailbox. Use a longer value until your mailbox is
+complete.
 
 The `gmail.readonly` scope is read-only. Sift sends no mail. It applies no label. It deletes nothing.
 It cannot mark a message read in Gmail. You can withdraw the permission in your Google account at any
@@ -283,7 +292,6 @@ sets are independent. Without a set, Sift tells you how to register that applica
 | `SIFT_GMAIL_CLIENT_ID` | The client ID of your Google OAuth client. |
 | `SIFT_GMAIL_CLIENT_SECRET` | The client secret of your Google OAuth client. |
 | `SIFT_GMAIL_REDIRECT_URI` | The redirect URI of your Google OAuth client. It must agree with Google character for character. |
-| `SIFT_GMAIL_WINDOW` | How far back the first read of your mailbox goes, as an ISO-8601 duration. The default is `P14D`. Later reads take only newer messages. |
 | `SIFT_SYNC_INTERVAL` | The time between two reads of each source, as an ISO-8601 duration. The default is `PT5M`. Use a short value such as `PT20S` for a test. You then see a change in 20 seconds. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | The database credentials. |
 

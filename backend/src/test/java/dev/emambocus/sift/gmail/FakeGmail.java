@@ -20,26 +20,33 @@ import java.util.concurrent.atomic.AtomicInteger;
  * gives: the client installs its own request factory for the timeouts, so anything intercepting at
  * the builder would test a client production does not use.
  *
- * <p>It honours {@code after:} in the search itself rather than answering a fixed list, because the
- * watermark is the part of this adapter most worth proving: a sweep that re-read the whole window
- * every time would pass a test that only checked the rows.
+ * <p>It honours {@code after:} and {@code before:} in the search itself rather than answering a fixed
+ * list, and it answers newest first as Gmail does. Both are the parts of this adapter most worth
+ * proving: a stub that ignored the query, or that answered in an order of its own, would pass a test
+ * that only checked the rows and would say nothing about how the mailbox is walked.
  */
 public final class FakeGmail implements AutoCloseable {
 
 	/** One message, as the fixtures describe it. Labels are Gmail's own vocabulary. */
-	public record Msg(String id, String threadId, long arrivedAtMillis, String from, String subject,
+	public record Msg(String id, String threadId, long arrivedAtMillis, String from, String to, String subject,
 			String snippet, List<String> labels) {
 
 		public static Msg unread(String id, String threadId, long arrivedAtMillis, String from, String subject) {
-			return new Msg(id, threadId, arrivedAtMillis, from, subject, "a snippet", List.of("INBOX", "UNREAD"));
+			return new Msg(id, threadId, arrivedAtMillis, from, null, subject, "a snippet",
+					List.of("INBOX", "UNREAD"));
 		}
 
 		public static Msg read(String id, String threadId, long arrivedAtMillis, String from, String subject) {
-			return new Msg(id, threadId, arrivedAtMillis, from, subject, "a snippet", List.of("INBOX"));
+			return new Msg(id, threadId, arrivedAtMillis, from, null, subject, "a snippet", List.of("INBOX"));
+		}
+
+		/** Mail you wrote: Gmail labels it SENT, and the recipient is who it is about. */
+		public static Msg sent(String id, String threadId, long arrivedAtMillis, String to, String subject) {
+			return new Msg(id, threadId, arrivedAtMillis, "me@uni.lu", to, subject, "a snippet", List.of("SENT"));
 		}
 
 		public Msg labelled(String... labels) {
-			return new Msg(id, threadId, arrivedAtMillis, from, subject, snippet, List.of(labels));
+			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, List.of(labels));
 		}
 	}
 
@@ -149,11 +156,13 @@ public final class FakeGmail implements AutoCloseable {
 		return ("Bearer " + accessToken).equals(header);
 	}
 
-	/** Newest first, like Gmail, and honouring the {@code after:} seconds in the query. */
+	/** Newest first, like Gmail, and honouring both bounds in the query. */
 	private String listFor(String query) {
-		long after = afterSecondsIn(query);
+		long after = secondsIn(query, "after");
+		long before = secondsIn(query, "before");
 		List<Msg> matching = new ArrayList<>(messages.values().stream()
 				.filter(message -> message.arrivedAtMillis() / 1000 > after)
+				.filter(message -> before == 0 || message.arrivedAtMillis() / 1000 < before)
 				.sorted(Comparator.comparingLong(Msg::arrivedAtMillis).reversed())
 				.toList());
 
@@ -169,18 +178,17 @@ public final class FakeGmail implements AutoCloseable {
 		return json.append("]}").toString();
 	}
 
-	private static long afterSecondsIn(String query) {
+	/** The seconds against one Gmail search operator, whether the colon arrived encoded or not. */
+	private static long secondsIn(String query, String operator) {
 		if (query == null) {
 			return 0;
 		}
 		for (String part : query.split("&")) {
-			int marker = part.indexOf("after%3A");
-			int plain = part.indexOf("after:");
-			if (marker >= 0) {
-				return Long.parseLong(part.substring(marker + "after%3A".length()));
-			}
-			if (plain >= 0) {
-				return Long.parseLong(part.substring(plain + "after:".length()));
+			for (String form : new String[] {operator + "%3A", operator + ":"}) {
+				int marker = part.indexOf(form);
+				if (marker >= 0) {
+					return Long.parseLong(part.substring(marker + form.length()));
+				}
 			}
 		}
 		return 0;
@@ -194,15 +202,17 @@ public final class FakeGmail implements AutoCloseable {
 			}
 			labels.append('"').append(label).append('"');
 		}
+		String to = message.to() == null ? ""
+				: ",{\"name\": \"To\", \"value\": \"" + escape(message.to()) + "\"}";
 		return """
 				{"id": "%s", "threadId": "%s", "labelIds": [%s], "internalDate": "%d",
 				 "snippet": "%s",
 				 "payload": {"headers": [
 				   {"name": "Subject", "value": "%s"},
-				   {"name": "From", "value": "%s"}
+				   {"name": "From", "value": "%s"}%s
 				 ]}}
 				""".formatted(message.id(), message.threadId(), labels, message.arrivedAtMillis(),
-				escape(message.snippet()), escape(message.subject()), escape(message.from()));
+				escape(message.snippet()), escape(message.subject()), escape(message.from()), to);
 	}
 
 	// a From header legitimately contains quotes, and an unescaped one makes the whole body unreadable

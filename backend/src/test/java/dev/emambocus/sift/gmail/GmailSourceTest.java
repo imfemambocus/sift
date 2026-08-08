@@ -32,6 +32,8 @@ class GmailSourceTest extends SiftIntegrationTest {
 
 	private static final String ADA = "\"Ada Lovelace\" <ada@uni.lu>";
 
+	private static final String LIST_PATH = "/gmail/v1/users/me/messages";
+
 	@Autowired
 	private GmailSource source;
 
@@ -84,8 +86,8 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("a second sweep reads only what arrived after the first, never the window again")
-	void theWatermarkBoundsEverySweepAfterTheFirst() {
+	@DisplayName("a second sweep reads only what arrived after the first, never the mailbox again")
+	void theForwardEdgeBoundsEverySweepAfterTheFirst() {
 		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(30), ADA, "The first one"));
 		SourceCredential credential = credential("watermark@uni.lu");
 
@@ -130,16 +132,99 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("your own sent mail and drafts raise nothing, as your own GitLab replies do not")
-	void yourOwnMailIsNotNews() {
+	@DisplayName("drafts and chats are left out, and they are the only things Sift itself decides")
+	void draftsAndChatsAreNotMail() {
 		GMAIL.deliver(
 				Msg.unread("m1", "t1", minutesAgo(10), ADA, "Something that arrived"),
-				Msg.unread("m2", "t2", minutesAgo(9), "me@uni.lu", "Something I sent").labelled("SENT"),
-				Msg.unread("m3", "t3", minutesAgo(8), "me@uni.lu", "Half written").labelled("DRAFT"));
+				Msg.sent("m2", "t2", minutesAgo(9), "grete@uni.lu", "Something I sent"),
+				Msg.unread("m3", "t3", minutesAgo(8), "me@uni.lu", "Half written").labelled("DRAFT"),
+				Msg.unread("m4", "t4", minutesAgo(7), "me@uni.lu", "A chat line").labelled("CHAT"));
 
-		List<IncomingItem> fetched = source.fetch(credential("mine@uni.lu"));
+		List<IncomingItem> fetched = source.fetch(credential("kept@uni.lu"));
 
-		assertThat(fetched).extracting(IncomingItem::sourceId).containsExactly("msg:m1");
+		// mail you wrote is part of an archive you search, so only the two that are not mail go
+		assertThat(fetched).extracting(IncomingItem::sourceId).containsExactlyInAnyOrder("msg:m1", "msg:m2");
+	}
+
+	@Test
+	@DisplayName("mail you sent is a row about who received it, so it is findable by where it went")
+	void sentMailIsARowAboutItsRecipient() {
+		GMAIL.deliver(Msg.sent("m1", "t1", minutesAgo(10),
+				"\"Grete Hermann\" <grete@uni.lu>", "The figures you asked for"));
+
+		IncomingItem item = source.fetch(credential("sent@uni.lu")).getFirst();
+
+		assertThat(item.kind()).isEqualTo(GmailSource.KIND_SENT);
+		assertThat(item.actorName()).isEqualTo("Grete Hermann");
+		assertThat(item.contextLabel()).isEqualTo("grete@uni.lu");
+	}
+
+	@Test
+	@DisplayName("a message to several people keeps the first, and a comma inside a name is not a separator")
+	void severalRecipientsKeepTheFirst() {
+		GMAIL.deliver(Msg.sent("m1", "t1", minutesAgo(5),
+				"\"Hermann, Grete\" <grete@uni.lu>, ada@uni.lu", "To both of you"));
+
+		IncomingItem item = source.fetch(credential("many@uni.lu")).getFirst();
+
+		assertThat(item.actorName()).isEqualTo("Hermann, Grete");
+		assertThat(item.contextLabel()).isEqualTo("grete@uni.lu");
+	}
+
+	@Test
+	@DisplayName("a mailbox larger than one sweep can hold is read whole, not cut off at the ceiling")
+	void theWholeMailboxIsReadPastTheCeiling() {
+		Msg[] mailbox = new Msg[250];
+		for (int i = 0; i < mailbox.length; i++) {
+			mailbox[i] = Msg.unread("m" + i, "t" + i, minutesAgo(i + 1), ADA, "Message " + i);
+		}
+		GMAIL.deliver(mailbox);
+
+		List<IncomingItem> fetched = source.fetch(credential("whole@uni.lu"));
+
+		/*
+		 * all of them, past the 200 one sweep reads at the top. gmail lists newest first, so a source
+		 * that only moved a forward edge would take the newest chunk and step over everything under it.
+		 */
+		assertThat(fetched).hasSize(250);
+	}
+
+	@Test
+	@DisplayName("more arriving at once than one sweep can hold is read oldest first, so none is skipped")
+	void aBurstLargerThanOneSweepIsReadOldestFirst() {
+		GMAIL.deliver(Msg.unread("seed", "t0", minutesAgo(400), ADA, "The one already read"));
+		SourceCredential credential = credential("burst@uni.lu");
+		assertThat(source.fetch(credential)).hasSize(1);
+
+		Msg[] burst = new Msg[250];
+		for (int i = 0; i < burst.length; i++) {
+			burst[i] = Msg.unread("m" + i, "t" + i, minutesAgo(250 - i), ADA, "Message " + i);
+		}
+		GMAIL.deliver(burst);
+
+		List<IncomingItem> second = source.fetch(credential);
+		List<IncomingItem> third = source.fetch(credential);
+
+		assertThat(second).hasSize(200);
+		// the 50 the ceiling left behind, which only arrive because the edge moved to the oldest 200
+		assertThat(third).hasSize(50);
+	}
+
+	@Test
+	@DisplayName("the walk back ends at the beginning of the mailbox and is not asked for again")
+	void theWalkBackEndsAndStaysEnded() {
+		GMAIL.deliver(
+				Msg.unread("m1", "t1", minutesAgo(30), ADA, "The older one"),
+				Msg.unread("m2", "t2", minutesAgo(10), ADA, "The newer one"));
+		SourceCredential credential = credential("complete@uni.lu");
+
+		source.fetch(credential);
+		int listedByThen = GMAIL.hits(LIST_PATH);
+
+		source.fetch(credential);
+
+		// one list call, the forward one: nothing asks for what is below the floor a second time
+		assertThat(GMAIL.hits(LIST_PATH) - listedByThen).isEqualTo(1);
 	}
 
 	@Test

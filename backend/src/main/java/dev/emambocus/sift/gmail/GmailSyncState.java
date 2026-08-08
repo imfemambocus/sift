@@ -32,6 +32,17 @@ public class GmailSyncState {
 	@Column(name = "newest_message_at", nullable = false)
 	private Instant newestMessageAt;
 
+	/**
+	 * The arrival time of the oldest message read so far. The next sweep asks for one chunk below it,
+	 * which is what walks the mailbox back to its beginning.
+	 */
+	@Column(name = "oldest_message_at")
+	private Instant oldestMessageAt;
+
+	/** True once nothing older than {@link #oldestMessageAt} is left, so the walk back is over. */
+	@Column(name = "backfill_done", nullable = false)
+	private boolean backfillDone;
+
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 }

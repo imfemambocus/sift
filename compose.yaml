@@ -44,7 +44,6 @@ services:
       SIFT_GMAIL_CLIENT_SECRET: ${SIFT_GMAIL_CLIENT_SECRET:-}
       SIFT_GMAIL_REDIRECT_URI: ${SIFT_GMAIL_REDIRECT_URI:-http://localhost:7777/api/sources/gmail/oauth/callback}
       # how far back connecting a mailbox reads. every sweep after that takes only what is newer.
-      SIFT_GMAIL_WINDOW: ${SIFT_GMAIL_WINDOW:-P14D}
       # forwarded so the sweep stays tunable from .env; shortening it is the only practical way to
       # watch a sync happen without waiting five minutes
       SIFT_SYNC_INTERVAL: ${SIFT_SYNC_INTERVAL:-PT5M}

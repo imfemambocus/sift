@@ -1,6 +1,5 @@
 package dev.emambocus.sift.gmail;
 
-import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.StringUtils;
 
@@ -12,23 +11,21 @@ import org.springframework.util.StringUtils;
  * this is not about the grant. There is no instance URL among it: Google is one place, so its three
  * hosts are constants rather than a value a deployment can get wrong.
  *
+ * <p>How far back a mailbox is read is deliberately not among it. The whole mailbox is read, because
+ * the search is the reason mail is here and a search can only find what was read.
+ *
  * @param baseUrl overrides all three Google hosts at once, which is how a test points the whole
  *     source at one stand-in server. Leave it unset everywhere else.
- * @param window how far back the very first read goes. Later reads take everything since the newest
- *     message they have already seen, so this bounds only what connecting a mailbox pulls in.
  */
 @ConfigurationProperties(prefix = "sift.gmail")
-record GmailProperties(String clientId, String clientSecret, String redirectUri, String baseUrl, Duration window) {
+record GmailProperties(String clientId, String clientSecret, String redirectUri, String baseUrl) {
 
 	private static final String ACCOUNTS = "https://accounts.google.com";
 	private static final String OAUTH = "https://oauth2.googleapis.com";
 	private static final String API = "https://gmail.googleapis.com";
 
-	private static final Duration DEFAULT_WINDOW = Duration.ofDays(14);
-
 	GmailProperties {
 		baseUrl = trimTrailingSlashes(baseUrl);
-		window = window == null ? DEFAULT_WINDOW : window;
 	}
 
 	boolean configured() {

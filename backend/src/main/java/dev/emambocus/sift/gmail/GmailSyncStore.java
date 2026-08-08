@@ -24,27 +24,46 @@ class GmailSyncStore {
 	}
 
 	@Transactional(readOnly = true)
-	Optional<Instant> newestSeen(UUID userId) {
-		return states.findByUserId(userId).map(GmailSyncState::getNewestMessageAt);
+	Optional<GmailCursor> cursorFor(UUID userId) {
+		return states.findByUserId(userId).map(state -> new GmailCursor(
+				state.getNewestMessageAt(), state.getOldestMessageAt(), state.isBackfillDone()));
 	}
 
 	/**
-	 * Moves the watermark forward, never back. A sweep that read nothing new must not rewind it, and
-	 * two sweeps that overlap must not either.
+	 * Widens the stored run and never narrows it: the forward edge only moves forward, the floor only
+	 * moves back, and the completed flag only latches on. Two sweeps that overlap therefore cannot make
+	 * Sift forget a stretch of mailbox it has already read.
 	 */
 	@Transactional
-	void remember(UUID userId, Instant newestMessageAt) {
+	void advance(UUID userId, GmailCursor cursor) {
+		if (!cursor.started()) {
+			return;
+		}
+
 		GmailSyncState state = states.findByUserId(userId).orElseGet(() -> {
 			GmailSyncState fresh = new GmailSyncState();
 			fresh.setUserId(userId);
 			return fresh;
 		});
 
-		if (state.getNewestMessageAt() != null && !newestMessageAt.isAfter(state.getNewestMessageAt())) {
-			return;
+		if (isFurtherForward(cursor.newest(), state.getNewestMessageAt())) {
+			state.setNewestMessageAt(cursor.newest());
 		}
-		state.setNewestMessageAt(newestMessageAt);
+		if (isFurtherBack(cursor.oldest(), state.getOldestMessageAt())) {
+			state.setOldestMessageAt(cursor.oldest());
+		}
+		if (cursor.backfillDone()) {
+			state.setBackfillDone(true);
+		}
 		state.setUpdatedAt(clock.instant());
 		states.save(state);
+	}
+
+	private static boolean isFurtherForward(Instant candidate, Instant stored) {
+		return stored == null || candidate.isAfter(stored);
+	}
+
+	private static boolean isFurtherBack(Instant candidate, Instant stored) {
+		return candidate != null && (stored == null || candidate.isBefore(stored));
 	}
 }

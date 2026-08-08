@@ -147,13 +147,21 @@ check "connectors says connected" "True" \
 
 echo
 echo "--- every message becomes a row, and only a message does ---"
-# four of the seven: the other three are your own sent mail, your own draft, and spam
-check "four rows from seven messages" 4 "$(rows)"
-check "every row is a message" "mail_received mail_received mail_received mail_received" "$(values kind)"
+# five of the seven: the other two are your own draft and spam. mail you wrote is a row.
+check "five rows from seven messages" 5 "$(rows)"
+check "every row is mail" "mail_received mail_received mail_received mail_received mail_sent" \
+  "$(values kind)"
 absent() { feed | python3 -c "import json,sys; print(sum(1 for i in json.load(sys.stdin) if i['title']=='$1'))"; }
-check "your own sent mail raised nothing" 0 "$(absent 'My own reply')"
-check "your own draft raised nothing"     0 "$(absent 'Half written')"
-check "spam raised nothing"               0 "$(absent 'You have won')"
+check "your own draft raised nothing" 0 "$(absent 'Half written')"
+check "spam raised nothing"           0 "$(absent 'You have won')"
+
+echo
+echo "--- mail you sent is a row about whoever received it ---"
+# the search is the reason mail is in Sift, so an archive that could not find what you wrote
+# would miss one of the most common reasons to search a mailbox at all
+check "sent mail is a row"        1                "$(feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if i["kind"]=="mail_sent"))')"
+check "and it is named for its recipient" "Ada Lovelace" "$(titled 'My own reply' actorName)"
+check "and carries their address"        "ada@uni.lu"   "$(titled 'My own reply' contextLabel)"
 
 echo
 echo "--- what a row carries ---"
@@ -164,7 +172,7 @@ check "the sender's address"        "ada@uni.lu"       "$(titled 'Chart V2 revie
 check "a sender with no name falls back to the address" "grete@uni.lu" "$(titled 'Seminar on Thursday' actorName)"
 check "the row opens that message"  "https://mail.google.com/mail/u/0/#all/m1" "$(titled 'Chart V2 review' url)"
 # a message happened once, so a later sweep not listing it must never mark it done
-check "nothing is resolved by absence" "False False False False" "$(values resolved)"
+check "nothing is resolved by absence" "False False False False False" "$(values resolved)"
 
 echo
 echo "--- a conversation is one entry, not one per message ---"
@@ -188,10 +196,11 @@ echo
 echo "--- the watermark: every sweep after the first reads only what is newer ---"
 python3 "$HERE/make-mail.py" plus-old "$MAIL" "$NOW_MS"
 post "$BASE/api/sources/gmail/sync" >/dev/null
-check "the new message arrived"    5 "$(rows)"
+check "the new message arrived"    6 "$(rows)"
 check "it is the new one"          "One more thing" "$(titled 'One more thing' title)"
-# older than the watermark the first read left behind, so `after:` must keep it out for ever
-check "an older message is never read" 0 "$(absent 'Ancient history')"
+# the walk back reached the beginning of this mailbox on the first read, so nothing looks below
+# the floor again and a message that appears down there afterwards stays out
+check "a message below a finished floor stays out" 0 "$(absent 'Ancient history')"
 # and a sweep must not undo a decision made here
 check "Sift still owns the read state" "False" "$(titled 'Seminar on Thursday' read)"
 
@@ -205,7 +214,7 @@ check "it renewed again"  "$((BEFORE + 1))" "$AFTER"
 check "the read still succeeded" '"OK"' \
   "$(api "$BASE/api/sources" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)[0]["status"]))')"
 # and Google sends no refresh_token on a renewal, so keeping the stored one is what makes this work
-check "the feed did not lose anything" 5 "$(rows)"
+check "the feed did not lose anything" 6 "$(rows)"
 
 echo
 echo "--- disconnecting, and what survives it ---"

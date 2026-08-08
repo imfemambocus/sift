@@ -27,6 +27,7 @@ const LABELS: Record<string, string> = {
 
 	// mail: one row per message, so the wording says what happened rather than what it wants
 	mail_received: "New message",
+	mail_sent: "Sent",
 };
 
 export function kindLabel(kind: string): string {

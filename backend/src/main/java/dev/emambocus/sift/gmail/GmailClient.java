@@ -31,7 +31,7 @@ class GmailClient {
 	private static final int PER_PAGE = 100;
 
 	/** Everything the row shows. Asking for the body would multiply the payload for no gain. */
-	private static final String[] HEADERS = {"Subject", "From", "Date"};
+	private static final String[] HEADERS = {"Subject", "From", "To", "Date"};
 
 	private final SourceHttp http;
 	private final GmailProperties config;
@@ -57,6 +57,15 @@ class GmailClient {
 	 * the one narrowing Sift does to a mailbox, and it is the mailbox's own answer rather than a rule
 	 * of ours.
 	 */
+	/**
+	 * Every id matching the search, bounded only by the page cap. Listing is the cheap half of this
+	 * API, so a caller that has to know the oldest of a set can afford to list all of it and read only
+	 * the end.
+	 */
+	List<GmailResponses.MessageRef> listMessages(String accessToken, String query, int maxPages) {
+		return listMessages(accessToken, query, maxPages, Integer.MAX_VALUE);
+	}
+
 	List<GmailResponses.MessageRef> listMessages(String accessToken, String query, int maxPages, int limit) {
 		List<GmailResponses.MessageRef> collected = new ArrayList<>();
 		String pageToken = null;
@@ -83,8 +92,7 @@ class GmailClient {
 			collected.addAll(body.messages());
 
 			if (collected.size() >= limit) {
-				log.warn("stopped listing Gmail at {} messages; older ones will be read on the next sweep",
-						collected.size());
+				log.info("listed Gmail up to the {}-message ceiling; the rest is read on a later sweep", limit);
 				return collected.subList(0, limit);
 			}
 			if (body.nextPageToken() == null || body.nextPageToken().isBlank()) {

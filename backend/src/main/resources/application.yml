@@ -59,8 +59,6 @@ sift:
     client-id: ${SIFT_GMAIL_CLIENT_ID:}
     client-secret: ${SIFT_GMAIL_CLIENT_SECRET:}
     redirect-uri: ${SIFT_GMAIL_REDIRECT_URI:http://localhost:7777/api/sources/gmail/oauth/callback}
-    # how far back the very first read of a mailbox goes. later reads take only what is newer.
-    window: ${SIFT_GMAIL_WINDOW:P14D}
     # points all three Google hosts at one stand-in server. for tests. leave it unset.
     base-url: ${SIFT_GMAIL_BASE_URL:}
   sync:

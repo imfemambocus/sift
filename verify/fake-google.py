@@ -14,8 +14,9 @@ It is deliberately strict, in the ways that catch a real mistake:
   * it never sends refresh_token on a renewal, which is what Google does, so a client that stores
     what the response carried loses the connection an hour later
 
-It also honours `after:` in the search itself. The watermark is the part of the mail adapter most
-worth proving, and a stub that answered a fixed list would pass a test that only checked the rows.
+It also honours `after:` and `before:` in the search itself. How the mailbox is walked is the part
+of the mail adapter most worth proving, and a stub that answered a fixed list would pass a test that
+only checked the rows.
 
 MESSAGES_FILE is re-read on every request, so a test can deliver mail between sweeps.
 """
@@ -181,14 +182,21 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, {"error": {"code": 404, "message": "Not Found"}})
 
     def _list(self, query):
-        """Newest first, honouring `after:` and the page size, with a real page token."""
+        """Newest first, honouring `after:`, `before:` and the page size, with a real page token."""
         after = 0
+        before = 0
         for term in query.get("q", [""])[0].split():
             if term.startswith("after:"):
                 after = int(term[len("after:"):])
+            elif term.startswith("before:"):
+                before = int(term[len("before:"):])
+
+        def within(message):
+            seconds = int(message["internalDate"]) // 1000
+            return seconds > after and (before == 0 or seconds < before)
 
         matching = sorted(
-            (m for m in visible(load()) if int(m["internalDate"]) // 1000 > after),
+            (m for m in visible(load()) if within(m)),
             key=lambda m: int(m["internalDate"]),
             reverse=True,
         )

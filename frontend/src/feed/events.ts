@@ -35,6 +35,7 @@ const FAMILY_BY_KIND: Record<string, EventFamily> = {
 	new_comment: "discussion",
 
 	mail_received: "message",
+	mail_sent: "message",
 
 	build_failed: "blocked",
 	unmergeable: "blocked",

@@ -22,18 +22,22 @@ def arrived(hours_ago):
     return str(BASE_MS - int(timedelta(hours=hours_ago).total_seconds() * 1000))
 
 
-def message(ident, thread, hours_ago, sender, subject, snippet, labels):
+def message(ident, thread, hours_ago, sender, subject, snippet, labels, recipient=None):
+    headers = [
+        {"name": "Subject", "value": subject},
+        {"name": "From", "value": sender},
+        {"name": "Date", "value": "irrelevant, internalDate is what Sift reads"},
+    ]
+    if recipient:
+        # what a sent row is about: mail you wrote is named after whoever received it
+        headers.append({"name": "To", "value": recipient})
     return {
         "id": ident,
         "threadId": thread,
         "labelIds": labels,
         "internalDate": arrived(hours_ago),
         "snippet": snippet,
-        "payload": {"headers": [
-            {"name": "Subject", "value": subject},
-            {"name": "From", "value": sender},
-            {"name": "Date", "value": "irrelevant, internalDate is what Sift reads"},
-        ]},
+        "payload": {"headers": headers},
     }
 
 
@@ -50,8 +54,9 @@ BASE = [
     message("m2", "t1", 0.2, GRETE, "Re: Chart V2 review", "I pushed a fix for it.", INBOX),
     message("m3", "t2", 4, GRETE, "Seminar on Thursday", "Room B on the first floor.", SEEN),
     message("m4", "t3", 28, ADA, "Grant report draft", "Draft attached for your comments.", INBOX),
-    # none of the three below may ever become a row
-    message("m5", "t4", 1, ME, "My own reply", "Thanks, looking now.", ["SENT"]),
+    # mail you wrote is a row too: an archive you search has to hold it
+    message("m5", "t4", 1, ME, "My own reply", "Thanks, looking now.", ["SENT"], ADA),
+    # neither of the two below may ever become a row
     message("m6", "t5", 2, ME, "Half written", "TODO finish this", ["DRAFT"]),
     message("m7", "t6", 3, "spammer@example.com", "You have won", "Claim now", ["SPAM"]),
 ]
@@ -59,7 +64,8 @@ BASE = [
 # arrives after the first read, so only this one may be added by the second read
 NEW = message("m8", "t7", 0.05, ADA, "One more thing", "Forgot to say.", INBOX)
 
-# older than the watermark the first read left behind, so `after:` must keep it out for ever
+# appears below the floor after the walk back has already reached the beginning of the mailbox,
+# which is the one thing a finished walk does not go looking for again
 OLD = message("m9", "t8", 200, GRETE, "Ancient history", "From long before Sift looked.", INBOX)
 
 mode = sys.argv[1]
