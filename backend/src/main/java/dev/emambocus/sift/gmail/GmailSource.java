@@ -3,6 +3,7 @@ package dev.emambocus.sift.gmail;
 import dev.emambocus.sift.config.SiftProperties;
 import dev.emambocus.sift.credential.SourceCredential;
 import dev.emambocus.sift.credential.SourceType;
+import dev.emambocus.sift.sync.FeedSyncStore;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.NotificationSource;
 import dev.emambocus.sift.sync.SourceUnavailableException;
@@ -59,12 +60,16 @@ class GmailSource implements NotificationSource {
 	private final GmailClient client;
 	private final GmailOAuth oauth;
 	private final GmailSyncStore store;
+	private final FeedSyncStore syncStore;
 	private final int maxPages;
 
-	GmailSource(GmailClient client, GmailOAuth oauth, GmailSyncStore store, SiftProperties properties) {
+	GmailSource(GmailClient client, GmailOAuth oauth, GmailSyncStore store, FeedSyncStore syncStore,
+			SiftProperties properties) {
+
 		this.client = client;
 		this.oauth = oauth;
 		this.store = store;
+		this.syncStore = syncStore;
 		this.maxPages = properties.sync().maxPages();
 	}
 
@@ -82,6 +87,9 @@ class GmailSource implements NotificationSource {
 		if (me == null || me.emailAddress() == null) {
 			throw new SourceUnavailableException("Google did not say which mailbox the token belongs to.");
 		}
+
+		// the profile call already answers it, so naming the mailbox costs nothing extra
+		syncStore.rememberAccount(credential.getId(), me.emailAddress());
 
 		UUID userId = credential.getUserId();
 		GmailCursor stored = store.cursorFor(userId).orElseGet(GmailCursor::empty);

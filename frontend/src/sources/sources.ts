@@ -13,6 +13,8 @@ const sourceStatusSchema = z.object({
 	lastError: z.string().nullable(),
 	lastSyncAt: z.string().nullable(),
 	itemCount: z.number(),
+	/** Which account at the source. Null until a sweep has learned it. */
+	account: z.string().nullable(),
 });
 
 const sourcesSchema = z.array(sourceStatusSchema);

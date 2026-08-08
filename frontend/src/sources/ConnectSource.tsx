@@ -61,7 +61,12 @@ function SourceCard({ source, canReconnect, onReconnect, onDisconnect, disconnec
 
 	return (
 		<div className="flex w-full flex-col gap-3 rounded-panel border border-border bg-surface px-4 py-3.5">
-			<p className="font-mono text-[12px] text-fg">{source.instanceUrl}</p>
+			{/* the account is what a person recognises, so it leads and the host explains it */}
+			<p className="font-mono text-[12px] text-fg">{source.account ?? source.instanceUrl}</p>
+
+			{source.account !== null && (
+				<p className="font-mono text-[11px] text-fg-muted">{source.instanceUrl}</p>
+			)}
 
 			<p className={`text-[13px] ${TONE_CLASS[status.tone]}`}>{status.text}</p>
 

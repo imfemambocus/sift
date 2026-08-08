@@ -128,6 +128,14 @@ public class FeedSyncStore {
 		return new SyncOutcome(added, updated, resolved, unique.size());
 	}
 
+	/** Which account the credential turned out to belong to, learned on every sweep and written once. */
+	@Transactional
+	public void rememberAccount(UUID credentialId, String label) {
+		if (label != null && !label.isBlank()) {
+			credentials.recordAccount(credentialId, label);
+		}
+	}
+
 	@Transactional
 	public void markSuccess(UUID credentialId) {
 		credentials.recordSyncOutcome(credentialId, clock.instant(), SyncStatus.OK, null);

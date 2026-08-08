@@ -10,7 +10,9 @@ public record SourceStatusResponse(
 		String status,
 		String lastError,
 		Instant lastSyncAt,
-		long itemCount) {
+		long itemCount,
+		/** Which account at the source, once a sweep has learned it. Null before that. */
+		String account) {
 
 	public static SourceStatusResponse of(SourceCredential credential, long itemCount) {
 		return new SourceStatusResponse(
@@ -20,6 +22,7 @@ public record SourceStatusResponse(
 				credential.getLastSyncStatus().name(),
 				credential.getLastError(),
 				credential.getLastSyncAt(),
-				itemCount);
+				itemCount,
+				credential.getAccountLabel());
 	}
 }

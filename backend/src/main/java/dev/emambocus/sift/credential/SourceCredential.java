@@ -66,6 +66,10 @@ public class SourceCredential {
 	@Column(name = "last_error")
 	private String lastError;
 
+	/** Which account at the source this is: a mailbox address, or a username. Null until a sweep runs. */
+	@Column(name = "account_label")
+	private String accountLabel;
+
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 

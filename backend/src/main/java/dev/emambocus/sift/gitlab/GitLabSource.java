@@ -3,6 +3,7 @@ package dev.emambocus.sift.gitlab;
 import dev.emambocus.sift.config.SiftProperties;
 import dev.emambocus.sift.credential.SourceCredential;
 import dev.emambocus.sift.credential.SourceType;
+import dev.emambocus.sift.sync.FeedSyncStore;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.NotificationSource;
 import dev.emambocus.sift.sync.SourceUnavailableException;
@@ -35,15 +36,19 @@ public class GitLabSource implements NotificationSource {
 	private final GitLabParticipation participation;
 	private final GitLabCommentedOn commentedOn;
 	private final ObjectMapper objectMapper;
+	private final FeedSyncStore syncStore;
 	private final int maxPages;
 
 	GitLabSource(GitLabClient client, GitLabOAuth oauth, GitLabParticipation participation,
-			GitLabCommentedOn commentedOn, ObjectMapper objectMapper, SiftProperties properties) {
+			GitLabCommentedOn commentedOn, ObjectMapper objectMapper, FeedSyncStore syncStore,
+			SiftProperties properties) {
+
 		this.client = client;
 		this.oauth = oauth;
 		this.participation = participation;
 		this.commentedOn = commentedOn;
 		this.objectMapper = objectMapper;
+		this.syncStore = syncStore;
 		this.maxPages = properties.sync().maxPages();
 	}
 
@@ -69,6 +74,8 @@ public class GitLabSource implements NotificationSource {
 		if (me.id() == null) {
 			throw new SourceUnavailableException("GitLab did not say who the token belongs to.");
 		}
+		// the /user call already answers it, so naming the account costs nothing extra
+		syncStore.rememberAccount(credential.getId(), me.username());
 
 		List<GitLabResponses.Todo> todos = client.fetchPendingTodos(access, maxPages);
 		Set<String> covered = todos.stream()

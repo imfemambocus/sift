@@ -50,6 +50,14 @@ public interface SourceCredentialRepository extends Repository<SourceCredential,
 			@Param("status") SyncStatus status, @Param("error") String error);
 
 	/*
+	 * targeted for the same reason the outcome is: this runs inside a sweep, so saving the whole
+	 * entity would write a token and an outcome that the sweep has not decided yet.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("update SourceCredential c set c.accountLabel = :label where c.id = :id and c.accountLabel is distinct from :label")
+	int recordAccount(@Param("id") UUID id, @Param("label") String label);
+
+	/*
 	 * a renewed OAuth pair, written the same targeted way and for a second reason of its own: this
 	 * runs in the middle of a sweep, so saving the whole entity would also write a sync outcome that
 	 * is not known yet. GitLab invalidates the old refresh token on every renewal, so if this write
