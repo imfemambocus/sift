@@ -19,9 +19,14 @@ public class FeedPageQuery {
 	/*
 	 * Read it as four steps.
 	 *
-	 * `matching` is every row that survives the filter and the search. The haystack the words are
-	 * matched against is built once per row in a lateral join, so the two ways a word can match do
-	 * not each rebuild it.
+	 * `matching` is every row that survives the filter and the search. The haystack a word is matched
+	 * against, and the words of that haystack, are stored columns written when the row is: a feed
+	 * holding a mailbox is large enough that rebuilding and re-splitting both per row per query was
+	 * most of the cost of a search.
+	 *
+	 * The length band in front of levenshtein loses nothing, because an edit distance is never less
+	 * than the difference in length. It is there to keep the call off the many words that cannot
+	 * possibly be within the allowance.
 	 *
 	 * `ranked` gives each surviving group one sort key: min(sign * epoch(activity_at)) over its
 	 * items. See FeedOrder.sign for why one expression covers both directions.
@@ -50,10 +55,6 @@ public class FeedPageQuery {
 			    select i.*
 			      from feed_items i
 			      cross join args a
-			      cross join lateral (
-			          select lower(concat_ws(' ', i.title, i.body, i.context_label, i.actor_name,
-			                                 replace(i.kind, '_', ' '))) as words
-			      ) hay
 			     where i.user_id = :userId
 			       and (cast(:source as text) is null or i.source = cast(:source as text))
 			       and (:filter = 'ALL'
@@ -76,10 +77,12 @@ public class FeedPageQuery {
 			            where position(want in lower(i.url)) = 0)
 			       and not exists (
 			           select 1 from unnest(a.words) as want
-			            where position(want in hay.words) = 0
+			            where position(want in i.search_text) = 0
 			              and not exists (
-			                  select 1 from regexp_split_to_table(hay.words, '[^[:alnum:]]+') as word
+			                  select 1 from unnest(i.search_words) as word
 			                   where length(word) between 1 and 64
+			                     and abs(length(word) - length(want))
+			                         <= case when length(want) <= 4 then 1 else 2 end
 			                     and levenshtein_less_equal(word, want, 2)
 			                         <= case when length(want) <= 4 then 1 else 2 end))
 			),
