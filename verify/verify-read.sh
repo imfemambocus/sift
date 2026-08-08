@@ -61,7 +61,7 @@ echo
 
 csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
 api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
-# the feed is paged over groups now, so a suite asks for one page large enough to hold every fixture
+# the feed is paged over groups, so a suite asks for one page large enough to hold every fixture
 # and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
 feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }

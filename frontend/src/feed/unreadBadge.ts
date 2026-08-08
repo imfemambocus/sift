@@ -9,7 +9,7 @@ const ICON_UNREAD = "/favicon-unread.svg";
  * The tab is the notification: a count in its title and a badge on its favicon. Mounted once in the
  * app frame, so it is every source rather than whichever tab is open.
  *
- * <p>It reads the summary rather than counting the rows on screen, because the feed is paged now and
+ * <p>It reads the summary rather than counting the rows on screen, because the feed is paged and
  * a page cannot count what it does not hold.
  *
  * <p>Honest limit, the same one browser Notifications will have: it only says anything while a tab is
@@ -29,7 +29,12 @@ export function useUnreadBadge() {
 }
 
 function apply(unread: number) {
-	document.title = unread > 0 ? `(${unread}) ${TITLE}` : TITLE;
+	/*
+	 * the count goes after the name because a tab strip truncates from the right: the name stays
+	 * legible and the count is what goes first. the favicon carries the same signal, so a tab too
+	 * narrow for the count still shows the brass disc.
+	 */
+	document.title = unread > 0 ? `${TITLE} (${unread})` : TITLE;
 
 	const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
 	if (link !== null) {

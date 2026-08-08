@@ -1,7 +1,6 @@
 package dev.emambocus.sift.gitlab;
 
 import dev.emambocus.sift.credential.SourceCredential;
-import dev.emambocus.sift.feed.Priority;
 import dev.emambocus.sift.sync.IncomingItem;
 import java.time.Clock;
 import java.time.Instant;
@@ -239,11 +238,9 @@ class GitLabParticipation {
 	 * when someone commits to a branch that is not theirs.
 	 */
 	private static IncomingItem changesPushed(Watched resource, Instant now) {
-		Priority priority = resource.reason() == GitLabWatchReason.REVIEWING ? Priority.HIGH : Priority.NORMAL;
 		return new IncomingItem(
 				"mr-commits:" + resource.projectId() + ":" + resource.iid(),
 				"changes_pushed",
-				priority,
 				resource.title(),
 				"New commits since Sift last looked.",
 				resource.authorName(),
@@ -251,8 +248,10 @@ class GitLabParticipation {
 				resource.projectPath(),
 				null,
 				resource.webUrl(),
+				null,
 				now,
 				resource.updatedAt() == null ? now : resource.updatedAt(),
+				false,
 				null,
 				// commits landing is an event; it does not un-happen on the next sweep
 				false);
@@ -270,8 +269,6 @@ class GitLabParticipation {
 		return new IncomingItem(
 				"mr-merged:" + known.getProjectId() + ":" + known.getResourceIid(),
 				"mr_merged",
-				// nothing is waiting on you any more; this is the row that says so
-				Priority.NORMAL,
 				mergeRequest.title() == null ? known.getTitle() : mergeRequest.title(),
 				null,
 				by == null ? null : by.name(),
@@ -279,8 +276,10 @@ class GitLabParticipation {
 				GitLabUrls.projectPath(mergeRequest.references()),
 				GitLabUrls.projectUrl(mergeRequest.webUrl()),
 				mergeRequest.webUrl() == null ? known.getWebUrl() : mergeRequest.webUrl(),
+				null,
 				mergeRequest.createdAt() == null ? at : mergeRequest.createdAt(),
 				at,
+				false,
 				null,
 				// it was merged once. the next sweep not mentioning it says nothing.
 				false);
@@ -293,7 +292,6 @@ class GitLabParticipation {
 		return new IncomingItem(
 				"thread:" + discussion.id(),
 				kind,
-				Priority.NORMAL,
 				resource.title(),
 				snippet(newest.body()),
 				newest.author() == null ? null : newest.author().name(),
@@ -302,8 +300,10 @@ class GitLabParticipation {
 				null,
 				// deep link to the note, so clicking lands on what changed rather than the top
 				resource.webUrl() + "#note_" + newest.id(),
+				null,
 				newest.createdAt(),
 				newest.createdAt(),
+				false,
 				null,
 				// a reply arrived once. absence next sweep says nothing about whether it was read.
 				false);

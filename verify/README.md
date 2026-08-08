@@ -1,22 +1,25 @@
 # Verification suites
 
-Integration checks that drive the real backend over HTTP against a stand-in GitLab, on a real
-Postgres. There are no unit tests yet; these are what stands in for them, and they have caught every
-non-obvious bug in this project so far.
+Integration checks that drive the real backend over HTTP against a stand-in GitLab or a stand-in
+Google, on a real Postgres. They have caught every non-obvious bug in this project so far, including
+two in their own fixtures.
 
-Each script starts everything it needs and tears it down again. Every one of them connects GitLab
-through the real OAuth flow, since the pasted-token endpoint was removed on 2026-08-07 and there is no
-other way in. `oauth-connect.sh` holds that helper, and each suite sources it.
+Each script starts everything it needs and tears it down again. Every one connects its source through
+the real OAuth flow, since an approval is the only way in. `oauth-connect.sh` holds that helper for
+GitLab, and each GitLab suite sources it.
 
 ```
-./verify-sync.sh              connect, priority mapping, resolve, disconnect, a revoked token, and
-                              everything the server now does to the feed: the filters, the two
+./verify-sync.sh              connect, every action arriving, resolve, disconnect, a revoked token, and
+                              everything the server does to the feed: the filters, the two
                               orders, the search, the page bound, the cursor, and the counts
 ./verify-mr.sh                merge requests read as state, and the three de-duplications
 ./verify-participation.sh     threads, replies, pushed commits, grouping, and what must NOT be emitted
 ./verify-read.sh              marking items read, tenancy on it, and what a later sync un-reads
 ./verify-oauth.sh             the GitLab OAuth flow: the authorize URL, the callback, the state rule,
                               a spent state replayed, and a renewal the stand-in instance compels
+./verify-gmail.sh             Gmail end to end: the authorize URL, every message becoming a row, what
+                              is left out, threads collapsing, the seeded read state, the watermark,
+                              and a renewal that carries no refresh token
 ./verify-unreadable-token.sh  a token that will not decrypt, and "check now"
 ./verify-feed-ui.sh           the same flow in a browser, plus search, grouping, the tab badge, and
                               an item completed upstream that stays in the feed as history
@@ -24,8 +27,9 @@ other way in. `oauth-connect.sh` holds that helper, and each suite sources it.
 
 ## Two rules
 
-**Run one at a time, in the foreground.** They share the stub on 7788, the backend on 7779 and
-Postgres on 5439. Two at once, or one launched in the background, produces a wall of failures that
+**Run one at a time, in the foreground.** They share the backend on 7779 and Postgres on 5439. The
+GitLab stub is on 7788 and the Google stub on 7790, so those two do not collide, but the backend and
+the database do. Two at once, or one launched in the background, produces a wall of failures that
 look like application bugs and are not. If everything fails at once, check the boot log for
 `Started SiftApplication` before believing any of it.
 
@@ -85,12 +89,38 @@ Two routes share one fixture key. `single`, keyed `project:iid`, answers both
 404 for the first and simply missing from the second, and `state` is honoured on the list, so
 flipping a record to `merged` or `closed` is how a suite makes something depart.
 
+## The stand-in Google
+
+`fake-google.py` answers all three of Google's hosts from one server, because `sift.gmail.base-url`
+overrides all three at once: `/token`, and `/gmail/v1/users/me/{profile,messages}`. `make-mail.py`
+writes the mailbox, which the stub re-reads on every request so a suite can deliver mail between
+sweeps.
+
+It is strict in the ways that catch a real mistake. It demands the client id and secret. It refuses
+an `authorization_code` grant with no `code_verifier`. It accepts only its newest access token, so a
+renewal the app failed to store fails on the very next call. And **it never sends `refresh_token` on
+a renewal, while keeping the first one valid for ever**, which is exactly what Google does: a client
+that stores what a renewal carried has stored nothing, and loses the connection an hour later.
+
+It also honours `after:` in the search itself. The watermark is the part of the mail adapter most
+worth proving, and a stub that answered a fixed list would pass a test that only checked the rows.
+
+**Two things about it are easy to get wrong**, and both read as adapter bugs when they are wrong:
+
+- **A stub must model the provider, not a stricter provider.** Rotating the refresh token on every
+  renewal, while correctly not sending it, fails a correct client on its second renewal. Google's
+  refresh token is long-lived, so this one keeps the first and only mints another on a fresh consent.
+- **A fixture stamped relative to "now" rewrites the past.** `make-mail.py` takes a base time and
+  `verify-gmail.sh` passes the same one to every invocation, so rewriting the mailbox between sweeps
+  adds messages without moving the ones already read past the watermark.
+
 ## The Testcontainers suite is separate
 
-`cd backend && ./gradlew test` runs 56 in-process tests against a real Postgres 17 container: the
+`cd backend && ./gradlew test` runs 68 in-process tests against a real Postgres 17 container: the
 diffing rules, tenancy, the credential sync outcome, the GitLab adapter's de-duplications, the OAuth
-renewal and its PKCE, and the paging, narrowing and search of the feed query. It needs no shell script and no free ports, so it is
-the one to reach for first. The suites here cover what it cannot: real HTTP, a real browser, and the
+renewal and its PKCE, the Gmail watermark and its seeded read state, and the paging, narrowing and
+search of the feed query. It needs no shell script and no free ports, so it is the one to reach for
+first. The suites here cover what it cannot: real HTTP, a real browser, and the
 packaged container.
 
 ## One thing the suites have to remember

@@ -10,7 +10,7 @@ mkdir -p "$WORK"
 TODOS="$WORK/todos.json"
 FAKE=http://127.0.0.1:7788
 # the browser lives on the vite origin, so the callback has to come back there and not to the
-# backend directly. vite proxies /api to 7779, and the redirect to /settings then stays on 5174.
+# backend directly. vite proxies /api to 7779, and the redirect to home then stays on 5174.
 BASE=http://localhost:5174
 # shellcheck source=oauth-connect.sh
 source "$HERE/oauth-connect.sh"

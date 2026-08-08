@@ -169,7 +169,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, USER)
             return
 
-        # unconfigured routes answer with an empty list, not 404: the app now reads issues and
+        # unconfigured routes answer with an empty list, not 404: the app reads issues and
         # discussions on every sweep, and a 404 would fail syncs in tests that do not care
         if parsed.path == "/api/v4/issues":
             groups = load(ISSUES_FILE)

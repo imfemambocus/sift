@@ -5,7 +5,8 @@ import java.util.Optional;
 
 public enum SourceType {
 
-	GITLAB;
+	GITLAB,
+	GMAIL;
 
 	/** Lowercase form used in URLs and API responses, so callers never see SCREAMING_CASE. */
 	public String slug() {

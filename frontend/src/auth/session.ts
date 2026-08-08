@@ -70,9 +70,9 @@ export function useSignOut() {
 		mutationFn: () => request<null>("/api/auth/logout", { method: "POST" }),
 		onSuccess: () => {
 			/*
-			 * navigate explicitly rather than leaving it to the route guard noticing a null session.
-			 * this previously called queryClient.clear(), which also empties the mutation cache from
-			 * inside that mutation's own callback, and the redirect never happened.
+			 * remove the other queries rather than clearing the client: clear() also empties the
+			 * mutation cache from inside this mutation's own callback, and the navigate below then
+			 * never runs. the route guard is not relied on either, for the same reason.
 			 */
 			queryClient.setQueryData(SESSION_KEY, null);
 			queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SESSION_KEY[0] });

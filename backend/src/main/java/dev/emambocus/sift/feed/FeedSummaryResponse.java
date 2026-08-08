@@ -6,8 +6,8 @@ import java.util.Map;
  * What one source's rows add up to, for the parts of the app that show a number rather than a list:
  * the All / Unread / Read counts, Home's card, and the count on the tab.
  *
- * <p>It exists because the feed is paged now. Each of those used to count the rows the browser was
- * holding, which only worked while the browser held all of them.
+ * <p>It exists because the feed is paged: a browser holds some of the rows, and none of those
+ * numbers can be worked out from a page.
  */
 public record FeedSummaryResponse(
 		String source,

@@ -46,13 +46,23 @@ sift:
     allowed-email-domains: ${SIFT_ALLOWED_EMAIL_DOMAINS:}
   gitlab:
     # the OAuth application registered on one GitLab instance. all four or none: with any of them
-    # absent, Settings offers the pasted-token form only.
+    # absent, nothing can connect at all and Settings only says how to register one.
     oauth:
       instance-url: ${SIFT_GITLAB_URL:}
       client-id: ${SIFT_GITLAB_CLIENT_ID:}
       client-secret: ${SIFT_GITLAB_CLIENT_SECRET:}
       # must match the application's redirect URI on GitLab exactly, character for character
       redirect-uri: ${SIFT_GITLAB_REDIRECT_URI:http://localhost:7777/api/sources/gitlab/oauth/callback}
+  # the OAuth client registered in a Google Cloud project. all three or none, exactly as above.
+  # one level shallower than gitlab's, because window is not part of the grant.
+  gmail:
+    client-id: ${SIFT_GMAIL_CLIENT_ID:}
+    client-secret: ${SIFT_GMAIL_CLIENT_SECRET:}
+    redirect-uri: ${SIFT_GMAIL_REDIRECT_URI:http://localhost:7777/api/sources/gmail/oauth/callback}
+    # how far back the very first read of a mailbox goes. later reads take only what is newer.
+    window: ${SIFT_GMAIL_WINDOW:P14D}
+    # points all three Google hosts at one stand-in server. for tests. leave it unset.
+    base-url: ${SIFT_GMAIL_BASE_URL:}
   sync:
     # the scheduled sweep reads it as a placeholder, so it must always have a value here
     interval: ${SIFT_SYNC_INTERVAL:PT5M}

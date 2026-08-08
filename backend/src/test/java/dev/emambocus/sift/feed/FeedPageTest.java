@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Paging, narrowing and searching, all of which moved to the server once the feed stopped being
- * something the browser could hold in one request.
+ * Paging, narrowing and searching, all of which the server does: a browser holds one page, so none
+ * of them can be answered on that side.
  */
 class FeedPageTest extends SiftIntegrationTest {
 
@@ -174,7 +174,7 @@ class FeedPageTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("the summary counts what the client used to count for itself")
+	@DisplayName("the summary counts the whole feed, not the page a client is holding")
 	void summaryCounts() {
 		UUID user = newUser("summary@uni.lu");
 		store.persist(user, SourceType.GITLAB, List.of(
@@ -245,7 +245,7 @@ class FeedPageTest extends SiftIntegrationTest {
 	private static IncomingItem row(String sourceId, String kind, String title, String actor,
 			String project, String url, Instant activity) {
 
-		return new IncomingItem(sourceId, kind, Priority.NORMAL, title, null, actor, null, project,
-				null, url, MONDAY, activity, null, true);
+		return new IncomingItem(sourceId, kind, title, null, actor, null, project,
+				null, url, null, MONDAY, activity, false, null, true);
 	}
 }

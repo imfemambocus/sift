@@ -21,32 +21,49 @@ export type SourceStatus = z.infer<typeof sourceStatusSchema>;
 
 const SOURCES_KEY = ["sources"];
 
-const oauthAvailabilitySchema = z.object({
+const connectorSchema = z.object({
+	source: z.string(),
+	connected: z.boolean(),
+	// whether this deployment registered an application, which decides what the offer can say
 	configured: z.boolean(),
-	instanceUrl: z.string().nullable(),
+	target: z.string().nullable(),
 });
+
+const connectorsSchema = z.array(connectorSchema);
+
+export type Connector = z.infer<typeof connectorSchema>;
 
 const authorizationSchema = z.object({ authorizeUrl: z.string() });
 
-/** Whether this deployment has a GitLab OAuth application, which decides how Settings offers to connect. */
-export function useGitLabOAuth() {
+const CONNECTORS_KEY = ["connectors"];
+
+/**
+ * Every source the app can connect, connected or not. Home draws a card for each: a summary for the
+ * ones that are, an invitation for the ones that are not.
+ *
+ * <p>Not `staleTime: Infinity`, unlike the availability query it replaces: `connected` changes the
+ * moment somebody authorizes or disconnects one.
+ */
+export function useConnectors() {
 	return useQuery({
-		queryKey: ["gitlab-oauth"],
-		queryFn: async () =>
-			oauthAvailabilitySchema.parse(await request<unknown>("/api/sources/gitlab/oauth")),
-		// deployment configuration: it cannot change while the app is open
-		staleTime: Infinity,
+		queryKey: CONNECTORS_KEY,
+		queryFn: async () => connectorsSchema.parse(await request<unknown>("/api/sources/connectors")),
 	});
 }
 
+export function useConnector(source: string) {
+	const query = useConnectors();
+	return { ...query, data: query.data?.find((entry) => entry.source === source) };
+}
+
 /**
- * Starts the authorization, then hands the browser to GitLab. The exchange happens server-side, so
- * no token ever reaches this code.
+ * Starts the authorization, then hands the browser to the provider. The exchange happens
+ * server-side, so no token ever reaches this code.
  */
-export function useStartGitLabOAuth() {
+export function useStartOAuth(source: string) {
 	return useMutation({
 		mutationFn: async () => {
-			const payload = await request<unknown>("/api/sources/gitlab/oauth/start", { method: "POST" });
+			const payload = await request<unknown>(`/api/sources/${source}/oauth/start`, { method: "POST" });
 			const { authorizeUrl } = authorizationSchema.parse(payload);
 			window.location.assign(authorizeUrl);
 		},
@@ -102,6 +119,8 @@ export function useDisconnectSource(source: string) {
 		mutationFn: () => request<null>(`/api/sources/${source}`, { method: "DELETE" }),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
+			// this one flips `connected`, so the rail drops its icon and Home puts the offer back
+			await queryClient.invalidateQueries({ queryKey: CONNECTORS_KEY });
 			await invalidateFeed(queryClient);
 		},
 	});

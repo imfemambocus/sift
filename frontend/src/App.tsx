@@ -6,6 +6,7 @@ import { SignInPage } from "./auth/SignInPage";
 import { WindowScrollbar } from "./components/WindowScrollbar";
 import { AppLayout } from "./layout/AppLayout";
 import { GitLabPage } from "./pages/GitLabPage";
+import { GmailPage } from "./pages/GmailPage";
 import { HomePage } from "./pages/HomePage";
 import { SettingsPage } from "./pages/SettingsPage";
 
@@ -24,6 +25,7 @@ export function App() {
 					<Route element={<AppLayout />}>
 						<Route index element={<HomePage />} />
 						<Route path="gitlab" element={<GitLabPage />} />
+						<Route path="gmail" element={<GmailPage />} />
 						<Route path="settings" element={<SettingsPage />} />
 					</Route>
 				</Route>

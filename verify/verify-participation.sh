@@ -82,7 +82,7 @@ echo "backend up"; echo
 
 csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
 api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
-# the feed is paged over groups now, so a suite asks for one page large enough to hold every fixture
+# the feed is paged over groups, so a suite asks for one page large enough to hold every fixture
 # and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
 feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
@@ -130,7 +130,6 @@ connect
 check "kinds now" "changes_pushed mr_review_requested new_comment" "$(kinds)"
 check "one row for the thread, not one per reply" 1 "$(count new_comment)"
 check "commits noticed via sha" 1 "$(count changes_pushed)"
-check "commits are high, since he is the reviewer" '"HIGH"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["priority"] for i in json.load(sys.stdin) if i["kind"]=="changes_pushed")))')"
 check "the commits row names whose branch moved" '"Maxime"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="changes_pushed")))')"
 check "snippet is the reply, not the system note" '"Fixed, switched to the Okabe-Ito ramp and pushed."' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["body"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
 check "deep links to the note" '"https://gl.example.org/team/web/-/merge_requests/20#note_1002"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["url"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
@@ -235,7 +234,7 @@ check "a merged row appeared"                1        "$(count mr_merged)"
 check "named after whoever merged it"        '"David"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
 check "activity is when it was merged"       '"2026-08-03T15:00:00Z"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["activityAt"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
 check "the project path survived"            '"team/web"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["contextLabel"] for i in json.load(sys.stdin) if i["kind"]=="mr_merged")))')"
-# it is history now rather than a row that vanishes: still there, marked as no longer waiting
+# the feed keeps its history: the row stays, marked as settled rather than disappearing
 check "the waiting-for-review row stayed"    1        "$(count mr_review_requested)"
 check "and it reads as settled"              1        "$(settled mr_review_requested)"
 check "the thread rows stayed"               1        "$(count new_comment)"

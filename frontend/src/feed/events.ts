@@ -1,10 +1,21 @@
 /*
  * Kinds are the source's own vocabulary and there are already a dozen of them, with more coming
- * from participation. A colour per kind would be an unreadable legend, so they collapse into six
+ * from participation. A colour per kind would be an unreadable legend, so they collapse into seven
  * families that answer "why is this in my list": someone wants my review, it is mine, I was named,
- * a discussion moved, something is broken, or none of those.
+ * a discussion moved, something is broken, a message arrived, or none of those.
+ *
+ * `message` earns its own hue rather than borrowing one. Mail is not the quiet grey of `other`,
+ * which is for a row that wants nothing from anybody, and it is not `discussion` either: nothing
+ * moved, something arrived. It is also the family that dominates a connected mailbox.
  */
-export type EventFamily = "review" | "assigned" | "mention" | "discussion" | "blocked" | "other";
+export type EventFamily =
+	| "review"
+	| "assigned"
+	| "mention"
+	| "discussion"
+	| "blocked"
+	| "message"
+	| "other";
 
 const FAMILY_BY_KIND: Record<string, EventFamily> = {
 	review_requested: "review",
@@ -23,6 +34,8 @@ const FAMILY_BY_KIND: Record<string, EventFamily> = {
 	new_thread: "discussion",
 	new_comment: "discussion",
 
+	mail_received: "message",
+
 	build_failed: "blocked",
 	unmergeable: "blocked",
 	merge_train_removed: "blocked",
@@ -39,6 +52,7 @@ export const FAMILY_ORDER: readonly EventFamily[] = [
 	"mention",
 	"discussion",
 	"blocked",
+	"message",
 	"other",
 ];
 
@@ -48,6 +62,7 @@ export const FAMILY_LABEL: Record<EventFamily, string> = {
 	mention: "You were named",
 	discussion: "Discussion moved",
 	blocked: "Something broke",
+	message: "Mail arrived",
 	other: "Everything else",
 };
 
@@ -61,6 +76,7 @@ export const FAMILY_TEXT: Record<EventFamily, string> = {
 	mention: "text-event-mention",
 	discussion: "text-event-discussion",
 	blocked: "text-event-blocked",
+	message: "text-event-message",
 	other: "text-event-other",
 };
 
@@ -70,6 +86,7 @@ export const FAMILY_FILL: Record<EventFamily, string> = {
 	mention: "bg-event-mention",
 	discussion: "bg-event-discussion",
 	blocked: "bg-event-blocked",
+	message: "bg-event-message",
 	other: "bg-event-other",
 };
 

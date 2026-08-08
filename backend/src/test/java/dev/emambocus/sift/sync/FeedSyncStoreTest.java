@@ -7,7 +7,6 @@ import dev.emambocus.sift.credential.SourceType;
 import dev.emambocus.sift.feed.FeedItem;
 import dev.emambocus.sift.feed.FeedItemRepository;
 import dev.emambocus.sift.feed.FeedService;
-import dev.emambocus.sift.feed.Priority;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -158,8 +157,8 @@ class FeedSyncStoreTest extends SiftIntegrationTest {
 	@DisplayName("an absent timestamp degrades rather than failing the sync, since both columns are NOT NULL")
 	void missingTimestamps() {
 		UUID user = newUser("notime@uni.lu");
-		IncomingItem noTimes = new IncomingItem("todo:9", "assigned", Priority.HIGH, "No timestamps",
-				null, null, null, null, null, "https://gl.example.org/x", null, null, null, true);
+		IncomingItem noTimes = new IncomingItem("todo:9", "assigned", "No timestamps",
+				null, null, null, null, null, "https://gl.example.org/x", null, null, null, false, null, true);
 
 		store.persist(user, SourceType.GITLAB, List.of(noTimes));
 
@@ -172,9 +171,9 @@ class FeedSyncStoreTest extends SiftIntegrationTest {
 	@DisplayName("raw_payload round-trips through the jsonb column")
 	void jsonbPayload() {
 		UUID user = newUser("json@uni.lu");
-		IncomingItem withPayload = new IncomingItem("todo:5", "mentioned", Priority.NORMAL, "Payload",
-				null, null, null, null, null, "https://gl.example.org/x", MONDAY, MONDAY,
-				"{\"action_name\":\"mentioned\",\"id\":5}", true);
+		IncomingItem withPayload = new IncomingItem("todo:5", "mentioned", "Payload",
+				null, null, null, null, null, "https://gl.example.org/x", null, MONDAY, MONDAY,
+				false, "{\"action_name\":\"mentioned\",\"id\":5}", true);
 
 		store.persist(user, SourceType.GITLAB, List.of(withPayload));
 
@@ -182,9 +181,9 @@ class FeedSyncStoreTest extends SiftIntegrationTest {
 	}
 
 	private static IncomingItem item(String sourceId, String kind, Instant activityAt, boolean resolveWhenAbsent) {
-		return new IncomingItem(sourceId, kind, Priority.NORMAL, "Title for " + sourceId, null,
+		return new IncomingItem(sourceId, kind, "Title for " + sourceId, null,
 				"A Colleague", null, "team/web", "https://gl.example.org/team/web",
-				"https://gl.example.org/team/web/-/merge_requests/1", MONDAY, activityAt, null,
+				"https://gl.example.org/team/web/-/merge_requests/1", null, MONDAY, activityAt, false, null,
 				resolveWhenAbsent);
 	}
 
