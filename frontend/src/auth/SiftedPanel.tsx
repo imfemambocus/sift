@@ -1,11 +1,11 @@
 import { motion } from "motion/react";
-import { FAMILY_TEXT } from "../feed/events";
+import { FAMILY_TEXT, FAMILY_TEXT_SOFT } from "../feed/events";
 import { EDGE_UNREAD } from "../feed/row";
 
 /*
- * the panel is the product's argument, not decoration: a dense unreadable wall of what a source
- * sends you, thinning as it descends, resolving into the handful that actually names you. the two
- * eyebrows label the halves so the graphic reads as information rather than texture.
+ * the panel is the product's argument, not decoration: a dense unreadable wall of what the sources
+ * send you, thinning as it descends, resolving into the few rows you can act on. the two eyebrows
+ * label the halves so the graphic reads as information rather than texture.
  *
  * the top rows are deliberately tight and near-invisible. spaced out they read as skeleton
  * loading placeholders instead of as too much.
@@ -28,11 +28,16 @@ const NOISE_ROWS = [
 	{ id: "n14", title: 164, meta: 62, opacity: 0.21, gap: 17 },
 ] as const;
 
-// the same three signals a real row carries: brass edge for unread, and the type in its own colour
+/*
+ * the same signals a real row carries: brass edge for unread, and the type in its own colour. the
+ * mail row names no kind, exactly as it does in the feed, so it carries the sender in the softer
+ * tone and its address where a project path goes.
+ */
 const SIFTED = [
-	{ id: "s1", kind: "Review requested", family: "review", target: "sift / backend", when: "12m" },
-	{ id: "s2", kind: "You were mentioned", family: "mention", target: "sift / frontend", when: "1h" },
-	{ id: "s3", kind: "Pipeline failed on your branch", family: "blocked", target: "sift / backend", when: "3h" },
+	{ id: "s1", lead: "Review requested", family: "review", target: "sift / backend", when: "12m", soft: false },
+	{ id: "s2", lead: "You were mentioned", family: "mention", target: "sift / frontend", when: "1h", soft: false },
+	{ id: "s3", lead: "Pipeline failed on your branch", family: "blocked", target: "sift / backend", when: "3h", soft: false },
+	{ id: "s4", lead: "Faculty office", family: "message", target: "faculty.office@uni.lu", when: "2h", soft: true },
 ] as const;
 
 const ROW = {
@@ -66,22 +71,26 @@ export function SiftedPanel() {
 				<section className="flex flex-col gap-4">
 					<p className="eyebrow">What reaches you</p>
 					<div className="flex flex-col gap-3.5">
-						{SIFTED.map((item) => (
-							<motion.div
-								key={item.id}
-								variants={ROW}
-								className={`flex items-baseline gap-3 border-l-2 pl-3.5 ${EDGE_UNREAD}`}
-							>
-								<p className={`text-[13px] font-medium ${FAMILY_TEXT[item.family]}`}>{item.kind}</p>
-								<p className="truncate font-mono text-[11px] text-fg-muted">{item.target}</p>
-								<p className="ml-auto shrink-0 font-mono text-[11px] text-fg-muted">{item.when}</p>
-							</motion.div>
-						))}
+						{SIFTED.map((item) => {
+							const tone = item.soft ? FAMILY_TEXT_SOFT[item.family] : FAMILY_TEXT[item.family];
+							return (
+								<motion.div
+									key={item.id}
+									variants={ROW}
+									className={`flex items-baseline gap-3 border-l-2 pl-3.5 ${EDGE_UNREAD}`}
+								>
+									<p className={`shrink-0 text-[13px] font-medium ${tone}`}>{item.lead}</p>
+									<p className="truncate font-mono text-[11px] text-fg-muted">{item.target}</p>
+									<p className="ml-auto shrink-0 font-mono text-[11px] text-fg-muted">{item.when}</p>
+								</motion.div>
+							);
+						})}
 					</div>
 				</section>
 
 				<motion.p variants={ROW} className="max-w-[38ch] text-[13px] leading-relaxed text-fg-muted">
-					Most of what GitLab emails you is not about you. Sift shows you the part that is.
+					Most of what GitLab emails you is not about you. Sift keeps the part that is, puts your mail
+					beside it, and gives you one search that finds things.
 				</motion.p>
 			</motion.div>
 		</aside>

@@ -177,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
                     "refresh_token": refresh,
                     "token_type": "Bearer",
                     "expires_in": OAUTH_EXPIRES_IN,
-                    "scope": "https://www.googleapis.com/auth/gmail.readonly",
+                    "scope": "https://www.googleapis.com/auth/gmail.modify",
                 })
                 return
 
@@ -196,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
             "access_token": access,
             "token_type": "Bearer",
             "expires_in": OAUTH_EXPIRES_IN,
-            "scope": "https://www.googleapis.com/auth/gmail.readonly",
+            "scope": "https://www.googleapis.com/auth/gmail.modify",
         })
 
     def do_GET(self):

@@ -83,7 +83,7 @@ export function SearchField({ value, onChange }: SearchFieldProps) {
 				<div
 					id={helpId}
 					role="tooltip"
-					className="pointer-events-none invisible absolute -right-2 top-full z-20 mt-2 w-88 max-w-[calc(100vw-2rem)] rounded-panel border border-border bg-surface p-3.5 opacity-0 shadow-lg transition-opacity group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100"
+					className="pointer-events-none invisible absolute -right-2 top-full z-20 mt-3 w-88 max-w-[calc(100vw-2rem)] rounded-panel border border-border bg-surface p-3.5 opacity-0 shadow-lg transition-opacity group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100"
 				>
 					<p className="mb-3 text-[12px] leading-snug text-fg-muted">
 						Every word has to match, in any order, and one typo in each is forgiven. Each prefix

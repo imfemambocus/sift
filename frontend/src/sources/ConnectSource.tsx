@@ -158,9 +158,10 @@ function approvalNote(source: string, target: string | null): ReactNode {
 		return (
 			<>
 				Sift reads your messages so they sit in the same list as everything else, and so this app's search
-				can find them. You approve it once on Google, with the{" "}
-				<span className={MONO}>gmail.readonly</span> scope, which cannot send, label or delete anything. You
-				can withdraw it in your Google account at any time.
+				can find them. It also makes a message read or unread in Gmail when you do that here. You approve
+				it once on Google, with the <span className={MONO}>gmail.modify</span> scope, which is the
+				narrowest one Google has that can change a label. Sift sends no mail, and it deletes nothing. You
+				can withdraw the permission in your Google account at any time.
 			</>
 		);
 	}
