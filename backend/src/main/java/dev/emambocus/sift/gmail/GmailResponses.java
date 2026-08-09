@@ -15,7 +15,33 @@ final class GmailResponses {
 	private GmailResponses() {
 	}
 
-	record Profile(@JsonProperty("emailAddress") String emailAddress) {
+	/**
+	 * @param historyId where the mailbox's own record of changes stands right now, which is a 64-bit
+	 *     number sent as a string
+	 */
+	record Profile(
+			@JsonProperty("emailAddress") String emailAddress,
+			@JsonProperty("historyId") String historyId) {
+	}
+
+	/** One page of what has happened to a mailbox since a given point. */
+	record History(
+			List<HistoryRecord> history,
+			@JsonProperty("nextPageToken") String nextPageToken,
+			@JsonProperty("historyId") String historyId) {
+	}
+
+	record HistoryRecord(
+			String id,
+			@JsonProperty("labelsAdded") List<LabelChange> labelsAdded,
+			@JsonProperty("labelsRemoved") List<LabelChange> labelsRemoved,
+			@JsonProperty("messagesDeleted") List<MessageChange> messagesDeleted) {
+	}
+
+	record MessageChange(MessageRef message) {
+	}
+
+	record LabelChange(MessageRef message, @JsonProperty("labelIds") List<String> labelIds) {
 	}
 
 	/** A list page. The ids are all it carries: everything else needs a call of its own. */

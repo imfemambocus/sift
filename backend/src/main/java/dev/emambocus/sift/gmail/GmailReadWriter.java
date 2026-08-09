@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 @Component
 class GmailReadWriter implements SourceReadWriter {
 
-	private static final String ID_PREFIX = "msg:";
+	private static final String ID_PREFIX = GmailSource.ID_PREFIX;
 
 	private final GmailClient client;
 	private final GmailOAuth oauth;

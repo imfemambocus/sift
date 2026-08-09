@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # drives Gmail end to end over real http against a stand-in Google: the whole authorization, every
 # message becoming a row, what is left out, threads collapsing, the seeded read state, the watermark
-# that bounds every sweep after the first, and a renewal the stub makes compulsory.
+# that bounds every sweep after the first, a renewal the stub makes compulsory, read state travelling
+# back from the mailbox, and a reconnection that reads the whole mailbox again.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -11,6 +12,8 @@ mkdir -p "$WORK"
 LOG="$WORK/gmail-boot.log"
 JAR="$WORK/gmail-cookies.txt"
 MAIL="$WORK/gmail-messages.json"
+HIST="$WORK/gmail-history.json"
+GONE="$WORK/gmail-history-gone"
 BASE=http://localhost:7779
 # 7790, clear of the gitlab stub on 7788 and of everything else this repo binds
 FAKE=http://127.0.0.1:7790
@@ -37,7 +40,7 @@ contains() {
   else printf '  FAIL  %-54s %s does not contain %s\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
 }
 
-rm -f "$JAR"
+rm -f "$JAR" "$HIST" "$GONE"
 KEY="$(openssl rand -base64 32)"
 # one base for the whole run: regenerating the fixture must not move the messages already read,
 # or a message the first sweep saw would look newer than the watermark and be read a second time
@@ -46,7 +49,8 @@ python3 "$HERE/make-mail.py" base "$MAIL" "$NOW_MS"
 
 # expires_in of one second, so every read has to renew first. the stub accepts only the newest
 # access token, so a renewal that was not stored fails on the very next call.
-PORT=7790 MESSAGES_FILE="$MAIL" OAUTH_CLIENT_ID="$CLIENT_ID" OAUTH_CLIENT_SECRET="$CLIENT_SECRET" \
+PORT=7790 MESSAGES_FILE="$MAIL" HISTORY_FILE="$HIST" HISTORY_GONE_FILE="$GONE" \
+OAUTH_CLIENT_ID="$CLIENT_ID" OAUTH_CLIENT_SECRET="$CLIENT_SECRET" \
 OAUTH_EXPIRES_IN=1 python3 "$HERE/fake-google.py" &
 STUB_PID=$!
 for _ in $(seq 1 30); do curl -sf -o /dev/null "$FAKE/oauth/issued" && break; sleep 1; done
@@ -144,6 +148,9 @@ STATUS=$(api "$BASE/api/sources" | python3 -c 'import json,sys; json.dump(json.l
 echo "  $STATUS"
 check "connected as OAuth"        '"OAUTH"' "$(echo "$STATUS" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["credentialType"]))')"
 check "the first read succeeded"  '"OK"'    "$(echo "$STATUS" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["status"]))')"
+# this mailbox is smaller than one sweep, so the walk back reached its beginning straight away and
+# the page has nothing to explain
+check "the mailbox was read whole"    "True"    "$(echo "$STATUS" | field '"historyComplete"')"
 check "connectors says connected" "True" \
   "$(api "$BASE/api/sources/connectors" | python3 -c 'import json,sys; print(next(c["connected"] for c in json.load(sys.stdin) if c["source"]=="gmail"))')"
 
@@ -219,6 +226,50 @@ check "the read still succeeded" '"OK"' \
 check "the feed did not lose anything" 6 "$(rows)"
 
 echo
+echo "--- read state comes back from Gmail, not only out to it ---"
+relabel() { python3 "$HERE/relabel-mail.py" "$MAIL" "$HIST" "$1" "$2" >/dev/null; }
+check "the row is unread here to begin with" "False" "$(titled 'Chart V2 review' read)"
+relabel m1 read
+post "$BASE/api/sources/gmail/sync" >/dev/null
+check "read in Gmail becomes read here"      "True"  "$(titled 'Chart V2 review' read)"
+# only what the mailbox says changed: a sweep that swept every row read would pass the check above
+check "and nothing else was touched"         "False" "$(titled 'Grant report draft' read)"
+
+relabel m1 unread
+post "$BASE/api/sources/gmail/sync" >/dev/null
+check "unread in Gmail becomes unread here"  "False" "$(titled 'Chart V2 review' read)"
+
+# google keeps its history for about a week. an instance off for longer is told to start again, and
+# what is left is the mailbox itself: every message it still calls unread names the rest as read.
+touch "$GONE"
+relabel m4 read
+post "$BASE/api/sources/gmail/sync" >/dev/null
+check "a forgotten history does not fail the sweep" '"OK"' \
+  "$(api "$BASE/api/sources" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)[0]["status"]))')"
+check "the mailbox answers instead"          "True"  "$(titled 'Grant report draft' read)"
+check "and one still unread there stays unread" "False" "$(titled 'Chart V2 review' read)"
+rm -f "$GONE"
+
+echo
+echo "--- a message that leaves the mailbox loses its row, and gets it back ---"
+# sift never reads the bin, so a row for a message in it disagrees with the mailbox only because of
+# when it was thrown away
+relabel m1 trash
+post "$BASE/api/sources/gmail/sync" >/dev/null
+check "the trashed message lost its row"     0 "$(absent 'Chart V2 review')"
+check "and nothing else went with it"        5 "$(rows)"
+
+relabel m1 restore
+post "$BASE/api/sources/gmail/sync" >/dev/null
+# nothing else would bring it back: it is older than the forward edge and under a finished floor
+check "taking it back out restores the row"  1 "$(absent 'Chart V2 review')"
+check "and the feed is whole again"          6 "$(rows)"
+
+relabel m8 delete
+post "$BASE/api/sources/gmail/sync" >/dev/null
+check "a message deleted outright loses its row too" 0 "$(absent 'One more thing')"
+
+echo
 echo "--- disconnecting, and what survives it ---"
 check "nothing was revoked before disconnecting" 0 "$(revoked)"
 check "disconnect" 204 "$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" -X DELETE \
@@ -230,12 +281,15 @@ check "its items went with it" 0 "$(rows)"
 check "connectors offers it again" "False" \
   "$(api "$BASE/api/sources/connectors" | python3 -c 'import json,sys; print(next(c["connected"] for c in json.load(sys.stdin) if c["source"]=="gmail"))')"
 
-# the watermark is keyed on the user and not on the credential, so authorizing again picks up where
-# it stopped rather than announcing the whole window a second time
+# how far a mailbox has been read belongs to the connection. disconnecting deleted every row, so
+# state that outlived it would claim a mailbox had been read whose rows are gone, and reconnecting
+# would read only what had arrived since.
 STATE2=$(python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sys.argv[1]).query)["state"][0])' \
   "$(post "$BASE/api/sources/gmail/oauth/start" | field '"authorizeUrl"')")
 location "$BASE/api/sources/gmail/oauth/callback?code=another-code&state=$STATE2" >/dev/null
-check "reconnecting re-announces nothing" 0 "$(rows)"
+check "reconnecting reads the mailbox again" 6 "$(rows)"
+# including what was under the floor of the connection that has gone, which is the whole mailbox
+check "right back to its beginning"          1 "$(absent 'Ancient history')"
 
 echo
 echo "RESULT: $PASS passed, $FAIL failed"

@@ -2,7 +2,6 @@ package dev.emambocus.sift.sync;
 
 import dev.emambocus.sift.credential.SourceCredential;
 import dev.emambocus.sift.credential.SourceType;
-import java.util.List;
 
 /**
  * A place things needing your attention come from. Adding one is a new implementation of this and a
@@ -16,5 +15,18 @@ public interface NotificationSource {
 
 	SourceType id();
 
-	List<IncomingItem> fetch(SourceCredential credential);
+	/**
+	 * Reads the source. Anything the source has to remember about how far it got belongs in the
+	 * returned {@link SourceFetch}, which the sweep commits only once the rows are stored.
+	 */
+	SourceFetch fetch(SourceCredential credential);
+
+	/**
+	 * False while the source still has older history to read. A source that reads everything it has on
+	 * every sweep is always complete; one that walks a large history backwards is not, and a list that
+	 * is still filling in should be able to say so rather than looking short for no reason.
+	 */
+	default boolean historyComplete(SourceCredential credential) {
+		return true;
+	}
 }

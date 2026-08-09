@@ -12,9 +12,11 @@ public record SourceStatusResponse(
 		Instant lastSyncAt,
 		long itemCount,
 		/** Which account at the source, once a sweep has learned it. Null before that. */
-		String account) {
+		String account,
+		/** False while the source is still reading older history, so the page can say so. */
+		boolean historyComplete) {
 
-	public static SourceStatusResponse of(SourceCredential credential, long itemCount) {
+	public static SourceStatusResponse of(SourceCredential credential, long itemCount, boolean historyComplete) {
 		return new SourceStatusResponse(
 				credential.getSource().slug(),
 				credential.getInstanceUrl(),
@@ -23,6 +25,7 @@ public record SourceStatusResponse(
 				credential.getLastError(),
 				credential.getLastSyncAt(),
 				itemCount,
-				credential.getAccountLabel());
+				credential.getAccountLabel(),
+				historyComplete);
 	}
 }

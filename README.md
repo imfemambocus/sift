@@ -64,8 +64,8 @@ Read and unread behaves like this:
 - If you read a mail row in Sift, Sift marks that message read in Gmail. If you mark the row unread,
   the message becomes unread again in Gmail. **This includes the button that clears every unread item
   at once.** On a large mailbox, that button marks many messages read in Gmail in one action.
-- The other direction is not immediate. If you read a message in Gmail after Sift has the row, the row
-  stays unread in Sift until you read it here.
+- The other direction works too. If you read a message in Gmail, the row becomes read here on the next
+  sweep. If you make it unread there, the row comes back unread here.
 - The counts above the feed are also the filter. All, Unread and Read are one click each.
 - One button clears every unread item at once.
 - The sidebar shows the unread count of each source on its icon. This tells you which source wants
@@ -88,10 +88,13 @@ whole history. It does not search only the tab you are on, and it does not searc
 the list on screen. It forgives a typo. It forgives words in the wrong order. `is:unread`, `is:mr`,
 `project:` and `from:` make a search narrow.
 
-Sift deletes nothing, and nothing drops out of the feed. Somebody completes a to-do, or a merge
-request merges. The row stays in the list. It turns grey and it says "done". The feed is your whole
-history. Read and unread is the only axis you filter it on. Finished work does not count as unread,
-because nothing waits for you there.
+Finished work does not drop out of the feed. Somebody completes a to-do, or a merge request merges.
+The row stays in the list. It turns grey and it says "done". The feed is your whole history. Read and
+unread is the only axis you filter it on. Finished work does not count as unread, because nothing
+waits for you there.
+
+One thing does leave the feed. Sift never reads your spam or your bin, so a message you move to the
+bin in Gmail loses its row here. Take it back out of the bin, and the row comes back.
 
 One source is not built yet. That source is Outlook. It needs a permission that the administrator
 of a company account must give, and that permission is the only obstacle.
@@ -268,7 +271,7 @@ why Gmail is in Sift. A limit on how far back Sift reads is thus a limit on what
 The first read takes the newest messages. Each read after it does two things. It takes the messages
 that arrived since the last read. It also takes one more group of older messages. Sift thus moves
 back through your mailbox until it gets to the first message. A large mailbox needs many reads. You
-can use Sift while this happens.
+can use Sift while this happens, and the Gmail page tells you that older mail is still on its way.
 
 Sift usually shows many more items than Gmail shows you. There are two reasons. Gmail counts a
 conversation as one line, and Sift makes a row for each message in it. Gmail also opens on your
@@ -286,7 +289,9 @@ Sift sends no mail. It writes no other label. It deletes nothing, and it gives y
 anything. The `gmail.modify` scope permits more than this, because Google has nothing narrower that
 can change a label at all. You can withdraw the permission in your Google account at any time.
 
-If you disconnect Gmail in Sift, Sift withdraws the permission for you.
+If you disconnect Gmail in Sift, Sift withdraws the permission for you. It also removes the rows of
+that mailbox. Connect it again, and Sift reads the mailbox from the beginning, which for a large one
+takes as long as it did the first time.
 
 ## Ports
 
@@ -314,7 +319,7 @@ sets are independent. Without a set, Sift tells you how to register that applica
 | `SIFT_GMAIL_CLIENT_ID` | The client ID of your Google OAuth client. |
 | `SIFT_GMAIL_CLIENT_SECRET` | The client secret of your Google OAuth client. |
 | `SIFT_GMAIL_REDIRECT_URI` | The redirect URI of your Google OAuth client. It must agree with Google character for character. |
-| `SIFT_SYNC_INTERVAL` | The time between two reads of each source, as an ISO-8601 duration. The default is `PT5M`. Use a short value such as `PT20S` for a test. You then see a change in 20 seconds. |
+| `SIFT_SYNC_INTERVAL` | The time between two reads of each source, as an ISO-8601 duration. The default is `PT5M`. Use a short value such as `PT20S` for a test. You then see a change in 20 seconds. Use `PT2M` while Sift reads a large mailbox for the first time. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | The database credentials. |
 
 ## Check it works
@@ -339,6 +344,9 @@ verify/verify-participation.sh
 
 Run one suite at a time. Each suite starts its own database and its own backend. Expect about one
 minute before the first check. `verify/README.md` explains what each suite covers.
+
+GitHub Actions runs all of this on each push and on each pull request: the test suite and the
+frontend build in one workflow, and the integration suites and the browser suite in another.
 
 ## Architecture
 

@@ -58,8 +58,6 @@ public class FeedSyncStore {
 	@Transactional
 	public SyncOutcome persist(UUID userId, SourceType source, List<IncomingItem> incoming) {
 		Instant now = clock.instant();
-		Map<String, FeedItem> existing = items.findByUserIdAndSource(userId, source).stream()
-				.collect(Collectors.toMap(FeedItem::getSourceId, Function.identity(), (first, second) -> first));
 
 		/*
 		 * an adapter must not hand over two items with the same id, and one reading several
@@ -71,6 +69,8 @@ public class FeedSyncStore {
 		for (IncomingItem item : incoming) {
 			unique.putIfAbsent(item.sourceId(), item);
 		}
+
+		Map<String, FeedItem> existing = alreadyHeld(userId, source, unique.keySet());
 
 		Set<String> seen = new HashSet<>();
 		List<FeedItem> touched = new ArrayList<>();
@@ -126,6 +126,78 @@ public class FeedSyncStore {
 
 		items.saveAll(touched);
 		return new SyncOutcome(added, updated, resolved, unique.size());
+	}
+
+	/**
+	 * Only the rows a sweep can act on: the ones it is about to write, and the ones its silence could
+	 * resolve. Reading every row of the source instead would load a whole mailbox on every sweep to
+	 * diff it against at most a page of incoming items.
+	 *
+	 * <p>Nothing is lost by narrowing it. A row is only ever resolved by absence, and only a row whose
+	 * {@code resolveWhenAbsent} is true and which is not yet resolved can be.
+	 */
+	private Map<String, FeedItem> alreadyHeld(UUID userId, SourceType source, Set<String> sourceIds) {
+		List<FeedItem> held = new ArrayList<>(items.findResolvable(userId, source));
+		if (!sourceIds.isEmpty()) {
+			held.addAll(items.findByUserIdAndSourceAndSourceIdIn(userId, source, sourceIds));
+		}
+		return held.stream()
+				.collect(Collectors.toMap(FeedItem::getSourceId, Function.identity(), (first, second) -> first));
+	}
+
+	/**
+	 * Drops rows for things the source no longer holds at all.
+	 *
+	 * <p>Not the same as resolving. A resolved row is finished work and stays in the feed as history;
+	 * this is for a thing that has left the source, where there is nothing for the row to be about and
+	 * its link would not open.
+	 *
+	 * @return how many rows went
+	 */
+	@Transactional
+	public int forget(UUID userId, SourceType source, Set<String> sourceIds) {
+		if (sourceIds.isEmpty()) {
+			return 0;
+		}
+		return items.deleteBySourceId(userId, source, sourceIds);
+	}
+
+	/**
+	 * Applies read state the source itself reports, which is the direction {@link SourceReadSync} does
+	 * not cover: a message read in the mailbox rather than here.
+	 *
+	 * <p>Each statement touches only the rows that really change, so a row already read keeps the time
+	 * it was read at and one already unread is not given a time it never had.
+	 *
+	 * @return how many rows changed
+	 */
+	@Transactional
+	public int applyReadState(UUID userId, SourceType source, SourceReadState state) {
+		if (state.isEmpty()) {
+			return 0;
+		}
+
+		Instant now = clock.instant();
+		int changed = readEverythingElse(userId, source, state, now);
+		if (!state.unread().isEmpty()) {
+			changed += items.markUnreadBySourceId(userId, source, state.unread());
+		}
+		return changed;
+	}
+
+	/*
+	 * a source that can name every unread row it holds says so, and then the rest of that source has
+	 * been read. it is the only way to recover after losing the point changes were being read from,
+	 * because the changes themselves are gone.
+	 */
+	private int readEverythingElse(UUID userId, SourceType source, SourceReadState state, Instant now) {
+		if (!state.unreadIsComplete()) {
+			return state.read().isEmpty() ? 0 : items.markReadBySourceId(userId, source, state.read(), now);
+		}
+		if (state.unread().isEmpty()) {
+			return items.markAllRead(userId, source, now);
+		}
+		return items.markReadExceptSourceId(userId, source, state.unread(), now);
 	}
 
 	/** Which account the credential turned out to belong to, learned on every sweep and written once. */

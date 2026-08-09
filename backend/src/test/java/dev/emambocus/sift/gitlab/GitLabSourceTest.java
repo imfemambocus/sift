@@ -7,6 +7,7 @@ import dev.emambocus.sift.credential.SourceCredential;
 import dev.emambocus.sift.credential.SourceCredentialRepository;
 import dev.emambocus.sift.credential.SourceType;
 import dev.emambocus.sift.sync.IncomingItem;
+import dev.emambocus.sift.sync.SourceFetch;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -200,7 +201,9 @@ class GitLabSourceTest extends SiftIntegrationTest {
 		SourceCredential credential = credentials.save(SourceCredential.oauth(userId, SourceType.GITLAB,
 				gitlab.baseUrl(), "good-token", "a-refresh-token", Instant.now().plusSeconds(7200), Instant.now()));
 
-		return source.fetch(credential).stream()
+		SourceFetch fetched = source.fetch(credential);
+		fetched.commit().run();
+		return fetched.items().stream()
 				.collect(Collectors.toMap(IncomingItem::sourceId, Function.identity()));
 	}
 }

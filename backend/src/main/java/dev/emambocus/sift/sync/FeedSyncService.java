@@ -27,6 +27,12 @@ public class FeedSyncService {
 		this.store = store;
 	}
 
+	/** Whether this source has read everything it holds, which only a source with a history answers. */
+	public boolean historyComplete(SourceCredential credential) {
+		NotificationSource source = sources.get(credential.getSource());
+		return source == null || source.historyComplete(credential);
+	}
+
 	public SyncOutcome sync(SourceCredential credential) {
 		NotificationSource source = sources.get(credential.getSource());
 		if (source == null) {
@@ -41,8 +47,15 @@ public class FeedSyncService {
 						"Sift cannot read the stored token for this source. Reconnect it. "
 								+ "This happens when sift.encryption-key changes.");
 			}
-			List<IncomingItem> incoming = source.fetch(credential);
-			SyncOutcome outcome = store.persist(credential.getUserId(), credential.getSource(), incoming);
+			SourceFetch fetched = source.fetch(credential);
+			SyncOutcome outcome = store.persist(credential.getUserId(), credential.getSource(), fetched.items());
+			store.applyReadState(credential.getUserId(), credential.getSource(), fetched.readState());
+			store.forget(credential.getUserId(), credential.getSource(), fetched.gone());
+			/*
+			 * last, and only once every row of this read is stored. a source that wrote down how far it
+			 * got before that would step over the rows a failure here lost.
+			 */
+			fetched.commit().run();
 			store.markSuccess(credential.getId());
 			return outcome;
 		}

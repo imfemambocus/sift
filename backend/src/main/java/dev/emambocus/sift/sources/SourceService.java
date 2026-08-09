@@ -53,13 +53,15 @@ public class SourceService {
 		syncService.sync(credential.get());
 
 		SourceCredential synced = store.forUser(userId, source).orElse(credential.get());
-		return Optional.of(SourceStatusResponse.of(synced, store.itemCount(userId, source)));
+		return Optional.of(SourceStatusResponse.of(synced, store.itemCount(userId, source),
+				syncService.historyComplete(synced)));
 	}
 
 	public List<SourceStatusResponse> statuses(UUID userId) {
 		return store.forUser(userId).stream()
 				.map(credential -> SourceStatusResponse.of(
-						credential, store.itemCount(userId, credential.getSource())))
+						credential, store.itemCount(userId, credential.getSource()),
+						syncService.historyComplete(credential)))
 				.toList();
 	}
 

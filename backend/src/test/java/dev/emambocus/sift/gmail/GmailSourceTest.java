@@ -7,6 +7,7 @@ import dev.emambocus.sift.SiftIntegrationTest;
 import dev.emambocus.sift.credential.SourceCredential;
 import dev.emambocus.sift.credential.SourceCredentialRepository;
 import dev.emambocus.sift.credential.SourceType;
+import dev.emambocus.sift.credential.SyncStatus;
 import dev.emambocus.sift.feed.FeedItem;
 import dev.emambocus.sift.feed.FeedItemRepository;
 import dev.emambocus.sift.feed.FeedService;
@@ -14,6 +15,8 @@ import dev.emambocus.sift.gmail.FakeGmail.Msg;
 import dev.emambocus.sift.sync.FeedSyncService;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.SourceAuthException;
+import dev.emambocus.sift.sync.SourceFetch;
+import dev.emambocus.sift.sources.SourceService;
 import dev.emambocus.sift.sync.SourceReadSync;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -53,6 +56,9 @@ class GmailSourceTest extends SiftIntegrationTest {
 	@Autowired
 	private SourceReadSync readSync;
 
+	@Autowired
+	private SourceService sources;
+
 	@BeforeEach
 	void emptyMailbox() {
 		GMAIL.reset();
@@ -65,7 +71,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 				Msg.unread("m1", "t1", minutesAgo(10), ADA, "Chart V2 review"),
 				Msg.unread("m2", "t2", minutesAgo(20), "grete@uni.lu", "Seminar on Thursday"));
 
-		List<IncomingItem> fetched = source.fetch(credential("all@uni.lu"));
+		List<IncomingItem> fetched = read(credential("all@uni.lu"));
 
 		assertThat(fetched).extracting(IncomingItem::sourceId).containsExactlyInAnyOrder("msg:m1", "msg:m2");
 		IncomingItem first = fetched.stream().filter(item -> item.sourceId().equals("msg:m1")).findFirst().orElseThrow();
@@ -83,7 +89,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 	void bareAddressIsStillAName() {
 		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(5), "grete@uni.lu", "No display name"));
 
-		IncomingItem item = source.fetch(credential("bare@uni.lu")).getFirst();
+		IncomingItem item = read(credential("bare@uni.lu")).getFirst();
 
 		assertThat(item.actorName()).isEqualTo("grete@uni.lu");
 		assertThat(item.contextLabel()).isEqualTo("grete@uni.lu");
@@ -95,10 +101,10 @@ class GmailSourceTest extends SiftIntegrationTest {
 		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(30), ADA, "The first one"));
 		SourceCredential credential = credential("watermark@uni.lu");
 
-		assertThat(source.fetch(credential)).hasSize(1);
+		assertThat(read(credential)).hasSize(1);
 
 		GMAIL.deliver(Msg.unread("m2", "t2", minutesAgo(1), ADA, "The second one"));
-		List<IncomingItem> second = source.fetch(credential);
+		List<IncomingItem> second = read(credential);
 
 		/*
 		 * only the new one. every message costs a request of its own, so a sweep that re-read the
@@ -144,7 +150,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 				Msg.unread("m3", "t3", minutesAgo(8), "me@uni.lu", "Half written").labelled("DRAFT"),
 				Msg.unread("m4", "t4", minutesAgo(7), "me@uni.lu", "A chat line").labelled("CHAT"));
 
-		List<IncomingItem> fetched = source.fetch(credential("kept@uni.lu"));
+		List<IncomingItem> fetched = read(credential("kept@uni.lu"));
 
 		// mail you wrote is part of an archive you search, so only the two that are not mail go
 		assertThat(fetched).extracting(IncomingItem::sourceId).containsExactlyInAnyOrder("msg:m1", "msg:m2");
@@ -156,7 +162,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 		GMAIL.deliver(Msg.sent("m1", "t1", minutesAgo(10),
 				"\"Grete Hermann\" <grete@uni.lu>", "The figures you asked for"));
 
-		IncomingItem item = source.fetch(credential("sent@uni.lu")).getFirst();
+		IncomingItem item = read(credential("sent@uni.lu")).getFirst();
 
 		assertThat(item.kind()).isEqualTo(GmailSource.KIND_SENT);
 		assertThat(item.actorName()).isEqualTo("Grete Hermann");
@@ -169,7 +175,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 		GMAIL.deliver(Msg.sent("m1", "t1", minutesAgo(5),
 				"\"Hermann, Grete\" <grete@uni.lu>, ada@uni.lu", "To both of you"));
 
-		IncomingItem item = source.fetch(credential("many@uni.lu")).getFirst();
+		IncomingItem item = read(credential("many@uni.lu")).getFirst();
 
 		assertThat(item.actorName()).isEqualTo("Hermann, Grete");
 		assertThat(item.contextLabel()).isEqualTo("grete@uni.lu");
@@ -184,7 +190,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 		}
 		GMAIL.deliver(mailbox);
 
-		List<IncomingItem> fetched = source.fetch(credential("whole@uni.lu"));
+		List<IncomingItem> fetched = read(credential("whole@uni.lu"));
 
 		/*
 		 * all of them, past the 200 one sweep reads at the top. gmail lists newest first, so a source
@@ -198,7 +204,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 	void aBurstLargerThanOneSweepIsReadOldestFirst() {
 		GMAIL.deliver(Msg.unread("seed", "t0", minutesAgo(400), ADA, "The one already read"));
 		SourceCredential credential = credential("burst@uni.lu");
-		assertThat(source.fetch(credential)).hasSize(1);
+		assertThat(read(credential)).hasSize(1);
 
 		Msg[] burst = new Msg[250];
 		for (int i = 0; i < burst.length; i++) {
@@ -206,12 +212,34 @@ class GmailSourceTest extends SiftIntegrationTest {
 		}
 		GMAIL.deliver(burst);
 
-		List<IncomingItem> second = source.fetch(credential);
-		List<IncomingItem> third = source.fetch(credential);
+		List<IncomingItem> second = read(credential);
+		List<IncomingItem> third = read(credential);
 
 		assertThat(second).hasSize(200);
 		// the 50 the ceiling left behind, which only arrive because the edge moved to the oldest 200
 		assertThat(third).hasSize(50);
+	}
+
+	@Test
+	@DisplayName("a mailbox still being walked back says so, and stops saying it once it is whole")
+	void theWalkBackIsVisibleWhileItRuns() {
+		Msg[] mailbox = new Msg[250];
+		for (int i = 0; i < mailbox.length; i++) {
+			mailbox[i] = Msg.unread("m" + i, "t" + i, minutesAgo(i + 1), ADA, "Message " + i);
+		}
+		GMAIL.deliver(mailbox);
+		SourceCredential credential = credential("walking@uni.lu");
+
+		// nothing of it has been read yet, which is honest rather than a special case
+		assertThat(source.historyComplete(credential)).isFalse();
+
+		read(credential);
+		assertThat(source.historyComplete(credential))
+				.as("a chunk below the floor was still to be asked for")
+				.isFalse();
+
+		read(credential);
+		assertThat(source.historyComplete(credential)).isTrue();
 	}
 
 	@Test
@@ -222,10 +250,10 @@ class GmailSourceTest extends SiftIntegrationTest {
 				Msg.unread("m2", "t2", minutesAgo(10), ADA, "The newer one"));
 		SourceCredential credential = credential("complete@uni.lu");
 
-		source.fetch(credential);
+		read(credential);
 		int listedByThen = GMAIL.hits(LIST_PATH);
 
-		source.fetch(credential);
+		read(credential);
 
 		// one list call, the forward one: nothing asks for what is below the floor a second time
 		assertThat(GMAIL.hits(LIST_PATH) - listedByThen).isEqualTo(1);
@@ -262,7 +290,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(5), ADA, "After the renewal"));
 
 		SourceCredential credential = credential("renew@uni.lu", "stale-access", justExpired());
-		List<IncomingItem> fetched = source.fetch(credential);
+		List<IncomingItem> fetched = read(credential);
 
 		assertThat(GMAIL.hits("/token")).isEqualTo(1);
 		// the read only succeeded because the new token was used, which the stub is strict about
@@ -277,7 +305,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 	void aRejectedTokenIsAnAuthFailure() {
 		GMAIL.failingList(401);
 
-		assertThatThrownBy(() -> source.fetch(credential("rejected@uni.lu")))
+		assertThatThrownBy(() -> read(credential("rejected@uni.lu")))
 				.isInstanceOf(SourceAuthException.class)
 				.hasMessageContaining("Connect Gmail again");
 	}
@@ -311,6 +339,166 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("a message read in Gmail becomes a read row here on the next sweep")
+	void readingInGmailReachesTheRow() {
+		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "Read this one in Gmail"));
+		SourceCredential credential = credential("inbound@uni.lu");
+		syncService.sync(credential);
+		assertThat(readFlag(credential.getUserId(), "msg:m1")).isFalse();
+
+		GMAIL.readInGmail("m1");
+		syncService.sync(credential);
+
+		assertThat(readFlag(credential.getUserId(), "msg:m1")).isTrue();
+	}
+
+	@Test
+	@DisplayName("a message put back to unread in Gmail comes back unread here")
+	void unreadingInGmailReachesTheRow() {
+		GMAIL.deliver(Msg.read("m1", "t1", minutesAgo(10), ADA, "Already read in Gmail"));
+		SourceCredential credential = credential("returned@uni.lu");
+		syncService.sync(credential);
+		assertThat(readFlag(credential.getUserId(), "msg:m1")).isTrue();
+
+		GMAIL.unreadInGmail("m1");
+		syncService.sync(credential);
+
+		assertThat(readFlag(credential.getUserId(), "msg:m1")).isFalse();
+	}
+
+	@Test
+	@DisplayName("read state read back from Gmail leaves every other row alone")
+	void onlyWhatChangedInGmailChangesHere() {
+		GMAIL.deliver(
+				Msg.unread("m1", "t1", minutesAgo(10), ADA, "The one that changes"),
+				Msg.unread("m2", "t2", minutesAgo(9), ADA, "The one that does not"));
+		SourceCredential credential = credential("untouched@uni.lu");
+		syncService.sync(credential);
+
+		GMAIL.readInGmail("m1");
+		syncService.sync(credential);
+
+		assertThat(readFlag(credential.getUserId(), "msg:m2")).isFalse();
+	}
+
+	@Test
+	@DisplayName("when the history is gone, the mailbox itself says what has been read")
+	void forgottenHistoryFallsBackToTheMailbox() {
+		GMAIL.deliver(
+				Msg.unread("m1", "t1", minutesAgo(10), ADA, "Read during the gap"),
+				Msg.unread("m2", "t2", minutesAgo(9), ADA, "Still unread"));
+		SourceCredential credential = credential("gap@uni.lu");
+		syncService.sync(credential);
+
+		GMAIL.readInGmail("m1").forgettingHistory();
+		syncService.sync(credential);
+
+		// every message still unread names the rest as read, which is the whole answer in one request
+		assertThat(readFlag(credential.getUserId(), "msg:m1")).isTrue();
+		assertThat(readFlag(credential.getUserId(), "msg:m2")).isFalse();
+		assertThat(credentials.findById(credential.getId()).orElseThrow().getLastSyncStatus())
+				.isEqualTo(SyncStatus.OK);
+	}
+
+	@Test
+	@DisplayName("too much unread mail to list leaves read state alone rather than guessing at it")
+	void anIncompleteAnswerAboutUnreadMailIsRefused() {
+		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "Left alone"));
+		SourceCredential credential = credential("flood@uni.lu");
+		syncService.sync(credential);
+		assertThat(readFlag(credential.getUserId(), "msg:m1")).isFalse();
+
+		GMAIL.forgettingHistory().floodingUnread();
+		syncService.sync(credential);
+
+		// the part that came back does not hold this one, so a partial answer would have called it read
+		assertThat(readFlag(credential.getUserId(), "msg:m1")).isFalse();
+	}
+
+	@Test
+	@DisplayName("a message thrown away in Gmail loses its row, since Sift never reads the bin")
+	void trashedMailLosesItsRow() {
+		GMAIL.deliver(
+				Msg.unread("m1", "t1", minutesAgo(10), ADA, "Thrown away"),
+				Msg.unread("m2", "t2", minutesAgo(9), ADA, "Kept"));
+		SourceCredential credential = credential("bin@uni.lu");
+		syncService.sync(credential);
+
+		GMAIL.trashInGmail("m1");
+		syncService.sync(credential);
+
+		assertThat(items.findByUserIdAndSource(credential.getUserId(), SourceType.GMAIL))
+				.extracting(FeedItem::getSourceId)
+				.containsExactly("msg:m2");
+	}
+
+	@Test
+	@DisplayName("a message deleted outright loses its row too")
+	void deletedMailLosesItsRow() {
+		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "Deleted for good"));
+		SourceCredential credential = credential("deleted@uni.lu");
+		syncService.sync(credential);
+
+		GMAIL.deleteInGmail("m1");
+		syncService.sync(credential);
+
+		assertThat(items.findByUserIdAndSource(credential.getUserId(), SourceType.GMAIL)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("a message taken back out of the bin becomes a row again")
+	void restoredMailComesBack() {
+		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "Out and back"));
+		SourceCredential credential = credential("restored@uni.lu");
+		syncService.sync(credential);
+
+		GMAIL.trashInGmail("m1");
+		syncService.sync(credential);
+		GMAIL.restoreInGmail("m1");
+		syncService.sync(credential);
+
+		/*
+		 * nothing else would bring it back: it is older than the forward edge and under a floor the
+		 * walk back has already finished with.
+		 */
+		assertThat(items.findByUserIdAndSource(credential.getUserId(), SourceType.GMAIL))
+				.extracting(FeedItem::getSourceId)
+				.containsExactly("msg:m1");
+	}
+
+	@Test
+	@DisplayName("disconnecting forgets how far the mailbox was read, so reconnecting reads it again")
+	void reconnectingReadsTheMailboxAgain() {
+		GMAIL.deliver(
+				Msg.unread("m1", "t1", minutesAgo(30), ADA, "The older one"),
+				Msg.unread("m2", "t2", minutesAgo(10), ADA, "The newer one"));
+		SourceCredential credential = credential("rejoin@uni.lu");
+		UUID userId = credential.getUserId();
+		syncService.sync(credential);
+
+		sources.disconnect(userId, SourceType.GMAIL);
+		syncService.sync(connect(userId));
+
+		/*
+		 * the whole mailbox. disconnecting deleted every row, so state saying it had been read would
+		 * leave the next connection reading only what arrived after it, and the rest never again.
+		 */
+		assertThat(items.findByUserIdAndSource(userId, SourceType.GMAIL)).hasSize(2);
+	}
+
+	@Test
+	@DisplayName("a read whose rows were never stored is read again, so nothing falls between the two")
+	void theEdgesMoveOnlyOnceTheRowsAreStored() {
+		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "The one that must not be lost"));
+		SourceCredential credential = credential("uncommitted@uni.lu");
+
+		// fetched and never committed, which is what a failure between the two looks like
+		assertThat(source.fetch(credential).items()).hasSize(1);
+
+		assertThat(read(credential)).extracting(IncomingItem::sourceId).containsExactly("msg:m1");
+	}
+
+	@Test
 	@DisplayName("a row of another source is not offered to Gmail")
 	void anotherSourceIsNotGmailsBusiness() {
 		SourceCredential credential = credential("other@uni.lu");
@@ -327,6 +515,16 @@ class GmailSourceTest extends SiftIntegrationTest {
 		assertThat(GMAIL.modifications()).isEmpty();
 	}
 
+	/**
+	 * One whole read: what it produced, and then the edges it moves. They are two steps on purpose, so
+	 * the rows are stored first, and a test that wants only the first half calls {@code fetch} itself.
+	 */
+	private List<IncomingItem> read(SourceCredential credential) {
+		SourceFetch fetched = source.fetch(credential);
+		fetched.commit().run();
+		return fetched.items();
+	}
+
 	private static long minutesAgo(int minutes) {
 		return Instant.now().minus(minutes, ChronoUnit.MINUTES).toEpochMilli();
 	}
@@ -340,7 +538,15 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	private SourceCredential credential(String email, String accessToken, Instant expiresAt) {
-		return credentials.save(SourceCredential.oauth(newUser(email), SourceType.GMAIL,
+		return connect(newUser(email), accessToken, expiresAt);
+	}
+
+	private SourceCredential connect(UUID userId) {
+		return connect(userId, "live-access", Instant.now().plus(1, ChronoUnit.HOURS));
+	}
+
+	private SourceCredential connect(UUID userId, String accessToken, Instant expiresAt) {
+		return credentials.save(SourceCredential.oauth(userId, SourceType.GMAIL,
 				"https://mail.google.com", accessToken, "old-refresh", expiresAt, Instant.now()));
 	}
 

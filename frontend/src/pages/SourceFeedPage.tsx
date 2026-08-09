@@ -22,6 +22,8 @@ type SourceFeedPageProps = {
 	readonly allClear: ReactNode;
 	/** What this source is for, shown when it is not connected yet. */
 	readonly offer: string;
+	/** What to say while the source is still reading its older history. Omitted where it has none. */
+	readonly stillReading?: string;
 };
 
 /**
@@ -31,7 +33,13 @@ type SourceFeedPageProps = {
  * <p>One copy rather than one per source. Three sentences of wording is the whole difference, and a
  * second copy of a hundred lines is how two tabs come to disagree about when a skeleton shows.
  */
-export function SourceFeedPage({ source: slug, description, allClear, offer }: SourceFeedPageProps) {
+export function SourceFeedPage({
+	source: slug,
+	description,
+	allClear,
+	offer,
+	stillReading,
+}: SourceFeedPageProps) {
 	const [filter, setFilter] = useState<FeedFilter>("all");
 	const [order, setOrder] = useState<FeedOrder>("latest");
 	const feed = useFeedPages({ source: slug, filter, order });
@@ -79,6 +87,14 @@ export function SourceFeedPage({ source: slug, description, allClear, offer }: S
 					{source !== undefined && <LastSynced source={source} />}
 				</div>
 			</div>
+
+			{/*
+			  * a source that walks a large history backwards spends its first hours with only part of
+			  * it here, and a short list with no explanation reads as a broken one
+			  */}
+			{stillReading !== undefined && source?.historyComplete === false && (
+				<p className="text-[12px] text-fg-muted">{stillReading}</p>
+			)}
 
 			{loading ? <FeedSkeleton /> : (
 				<FeedList

@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -50,16 +51,43 @@ public final class FakeGmail implements AutoCloseable {
 		}
 	}
 
+	/**
+	 * One thing the mailbox recorded happening to a message, which is what the history endpoint
+	 * answers with. {@code field} is Gmail's own name for the kind of change, and {@code label} is null
+	 * for a message that was deleted outright.
+	 */
+	private record Change(long historyId, String messageId, String field, String label) {
+	}
+
+	private static final String UNREAD = "UNREAD";
+
+	private static final String TRASH = "TRASH";
+
+	private static final String ADDED = "labelsAdded";
+
+	private static final String REMOVED = "labelsRemoved";
+
+	private static final String DELETED = "messagesDeleted";
+
+	/** What the list endpoint leaves out, because the real one does unless it is asked otherwise. */
+	private static final Set<String> OUT_OF_THE_MAILBOX = Set.of(TRASH, "SPAM");
+
+	private static final long FIRST_HISTORY_ID = 1000;
+
 	private final HttpServer server;
 	private final Map<String, Msg> messages = new LinkedHashMap<>();
 	private final Map<String, AtomicInteger> hits = new LinkedHashMap<>();
 	private final List<String> modified = new ArrayList<>();
+	private final List<Change> changes = new ArrayList<>();
 
 	private String accessToken = "live-access";
 	private String tokenResponse = """
 			{"access_token": "live-access", "expires_in": 3600}
 			""";
 	private int listStatus = 200;
+	private long historyId = FIRST_HISTORY_ID;
+	private boolean historyForgotten;
+	private boolean unreadFloods;
 
 	public FakeGmail() {
 		try {
@@ -81,11 +109,15 @@ public final class FakeGmail implements AutoCloseable {
 		messages.clear();
 		hits.clear();
 		modified.clear();
+		changes.clear();
 		accessToken = "live-access";
 		tokenResponse = """
 				{"access_token": "live-access", "expires_in": 3600}
 				""";
 		listStatus = 200;
+		historyId = FIRST_HISTORY_ID;
+		historyForgotten = false;
+		unreadFloods = false;
 	}
 
 	public FakeGmail deliver(Msg... incoming) {
@@ -108,6 +140,61 @@ public final class FakeGmail implements AutoCloseable {
 
 	public FakeGmail failingList(int status) {
 		this.listStatus = status;
+		return this;
+	}
+
+	/** Somebody reading the message in Gmail itself, which is the direction a push from Sift cannot see. */
+	public FakeGmail readInGmail(String id) {
+		return relabel(id, UNREAD, false);
+	}
+
+	public FakeGmail unreadInGmail(String id) {
+		return relabel(id, UNREAD, true);
+	}
+
+	public FakeGmail trashInGmail(String id) {
+		return relabel(id, TRASH, true);
+	}
+
+	public FakeGmail restoreInGmail(String id) {
+		return relabel(id, TRASH, false);
+	}
+
+	/** Emptying the bin, which takes the message out of the mailbox altogether. */
+	public FakeGmail deleteInGmail(String id) {
+		if (messages.remove(id) == null) {
+			throw new IllegalArgumentException("no message " + id + " to delete");
+		}
+		historyId++;
+		changes.add(new Change(historyId, id, DELETED, null));
+		return this;
+	}
+
+	/** Gmail keeps its history for about a week, so an instance off for longer is told to start again. */
+	public FakeGmail forgettingHistory() {
+		this.historyForgotten = true;
+		return this;
+	}
+
+	/** More unread mail than any sweep may page through, so no complete answer about it exists. */
+	public FakeGmail floodingUnread() {
+		this.unreadFloods = true;
+		return this;
+	}
+
+	private FakeGmail relabel(String id, String label, boolean add) {
+		Msg message = messages.get(id);
+		if (message == null) {
+			throw new IllegalArgumentException("no message " + id + " to relabel");
+		}
+		List<String> labels = new ArrayList<>(message.labels());
+		labels.remove(label);
+		if (add) {
+			labels.add(label);
+		}
+		messages.put(id, message.labelled(labels.toArray(String[]::new)));
+		historyId++;
+		changes.add(new Change(historyId, id, add ? ADDED : REMOVED, label));
 		return this;
 	}
 
@@ -135,7 +222,15 @@ public final class FakeGmail implements AutoCloseable {
 			return;
 		}
 		if (path.equals("/gmail/v1/users/me/profile")) {
-			send(exchange, 200, "{\"emailAddress\": \"isfaaq@uni.lu\"}");
+			send(exchange, 200, "{\"emailAddress\": \"isfaaq@uni.lu\", \"historyId\": \"" + historyId + "\"}");
+			return;
+		}
+		if (path.equals("/gmail/v1/users/me/history")) {
+			if (historyForgotten) {
+				send(exchange, 404, "{\"error\":\"startHistoryId is too old\"}");
+				return;
+			}
+			send(exchange, 200, historyAfter(numberIn(exchange.getRequestURI().getQuery(), "startHistoryId")));
 			return;
 		}
 		if (path.equals("/gmail/v1/users/me/messages")) {
@@ -168,15 +263,27 @@ public final class FakeGmail implements AutoCloseable {
 		return ("Bearer " + accessToken).equals(header);
 	}
 
-	/** Newest first, like Gmail, and honouring both bounds in the query. */
+	/** Newest first, like Gmail, honouring both bounds and `is:unread`, and leaving the bin out. */
 	private String listFor(String query) {
 		long after = secondsIn(query, "after");
 		long before = secondsIn(query, "before");
+		// whether the colon arrived encoded or not, exactly as the date operators are read below
+		boolean onlyUnread = query != null && (query.contains("is%3Aunread") || query.contains("is:unread"));
 		List<Msg> matching = new ArrayList<>(messages.values().stream()
+				.filter(message -> message.labels().stream().noneMatch(OUT_OF_THE_MAILBOX::contains))
+				.filter(message -> !onlyUnread || message.labels().contains(UNREAD))
 				.filter(message -> message.arrivedAtMillis() / 1000 > after)
 				.filter(message -> before == 0 || message.arrivedAtMillis() / 1000 < before)
 				.sorted(Comparator.comparingLong(Msg::arrivedAtMillis).reversed())
 				.toList());
+
+		/*
+		 * a page token that never runs out, so a caller paging for a complete answer never gets one.
+		 * it is the only way to stand in for a mailbox with more unread mail than a sweep may list.
+		 */
+		if (onlyUnread && unreadFloods) {
+			return "{\"messages\":[{\"id\":\"flood\",\"threadId\":\"flood\"}],\"nextPageToken\":\"more\"}";
+		}
 
 		StringBuilder json = new StringBuilder("{\"messages\":[");
 		for (int i = 0; i < matching.size(); i++) {
@@ -188,6 +295,40 @@ public final class FakeGmail implements AutoCloseable {
 					.append("\",\"threadId\":\"").append(message.threadId()).append("\"}");
 		}
 		return json.append("]}").toString();
+	}
+
+	/** Every label change after a point, oldest first, as Gmail answers them. */
+	private String historyAfter(long start) {
+		StringBuilder json = new StringBuilder("{\"history\":[");
+		boolean first = true;
+		for (Change change : changes) {
+			if (change.historyId() <= start) {
+				continue;
+			}
+			if (!first) {
+				json.append(',');
+			}
+			first = false;
+			json.append("{\"id\":\"").append(change.historyId()).append("\",\"").append(change.field())
+					.append("\":[{\"message\":{\"id\":\"").append(change.messageId()).append("\"}");
+			if (change.label() != null) {
+				json.append(",\"labelIds\":[\"").append(change.label()).append("\"]");
+			}
+			json.append("}]}");
+		}
+		return json.append("],\"historyId\":\"").append(historyId).append("\"}").toString();
+	}
+
+	private static long numberIn(String query, String parameter) {
+		if (query == null) {
+			return 0;
+		}
+		for (String part : query.split("&")) {
+			if (part.startsWith(parameter + "=")) {
+				return Long.parseLong(part.substring(parameter.length() + 1));
+			}
+		}
+		return 0;
 	}
 
 	/** The seconds against one Gmail search operator, whether the colon arrived encoded or not. */

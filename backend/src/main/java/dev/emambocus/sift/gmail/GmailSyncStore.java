@@ -24,25 +24,26 @@ class GmailSyncStore {
 	}
 
 	@Transactional(readOnly = true)
-	Optional<GmailCursor> cursorFor(UUID userId) {
-		return states.findByUserId(userId).map(state -> new GmailCursor(
-				state.getNewestMessageAt(), state.getOldestMessageAt(), state.isBackfillDone()));
+	Optional<GmailCursor> cursorFor(UUID credentialId) {
+		return states.findByCredentialId(credentialId).map(state -> new GmailCursor(
+				state.getNewestMessageAt(), state.getOldestMessageAt(), state.isBackfillDone(),
+				state.getHistoryId()));
 	}
 
 	/**
 	 * Widens the stored run and never narrows it: the forward edge only moves forward, the floor only
-	 * moves back, and the completed flag only latches on. Two sweeps that overlap therefore cannot make
-	 * Sift forget a stretch of mailbox it has already read.
+	 * moves back, the completed flag only latches on, and the history point only advances. Two sweeps
+	 * that overlap therefore cannot make Sift forget a stretch of mailbox it has already read.
 	 */
 	@Transactional
-	void advance(UUID userId, GmailCursor cursor) {
+	void advance(UUID credentialId, GmailCursor cursor) {
 		if (!cursor.started()) {
 			return;
 		}
 
-		GmailSyncState state = states.findByUserId(userId).orElseGet(() -> {
+		GmailSyncState state = states.findByCredentialId(credentialId).orElseGet(() -> {
 			GmailSyncState fresh = new GmailSyncState();
-			fresh.setUserId(userId);
+			fresh.setCredentialId(credentialId);
 			return fresh;
 		});
 
@@ -55,6 +56,9 @@ class GmailSyncStore {
 		if (cursor.backfillDone()) {
 			state.setBackfillDone(true);
 		}
+		if (isLater(cursor.historyId(), state.getHistoryId())) {
+			state.setHistoryId(cursor.historyId());
+		}
 		state.setUpdatedAt(clock.instant());
 		states.save(state);
 	}
@@ -65,5 +69,9 @@ class GmailSyncStore {
 
 	private static boolean isFurtherBack(Instant candidate, Instant stored) {
 		return candidate != null && (stored == null || candidate.isBefore(stored));
+	}
+
+	private static boolean isLater(Long candidate, Long stored) {
+		return candidate != null && (stored == null || candidate > stored);
 	}
 }

@@ -31,6 +31,12 @@ MESSAGES_FILE = os.environ["MESSAGES_FILE"]
 MAILBOX = os.environ.get("MAILBOX", "isfaaq@uni.lu")
 # touching this file makes Google reject every token, standing in for a withdrawn approval
 REVOKE_FILE = os.environ.get("REVOKE_FILE", "/nonexistent")
+# what the mailbox has recorded happening to it, written by relabel-mail.py
+HISTORY_FILE = os.environ.get("HISTORY_FILE", "/nonexistent")
+# touching this file makes the history endpoint answer 404, which is Google forgetting a start point
+HISTORY_GONE_FILE = os.environ.get("HISTORY_GONE_FILE", "/nonexistent")
+
+FIRST_HISTORY_ID = 1000
 
 OAUTH_CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "sift-gmail-verify")
 OAUTH_CLIENT_SECRET = os.environ.get("OAUTH_CLIENT_SECRET", "sift-gmail-verify-secret")
@@ -44,6 +50,8 @@ OAUTH = {
     "revoked": 0,       # how many times the grant was withdrawn, which only a disconnect does
 }
 OAUTH_LOCK = threading.Lock()
+# the mailbox and its history are written together, so one modification cannot land inside another
+HISTORY_LOCK = threading.Lock()
 
 
 def _issue(mint_refresh):
@@ -67,6 +75,19 @@ def load():
         return []
     with open(MESSAGES_FILE) as handle:
         return json.load(handle)
+
+
+def history():
+    """Every label change the mailbox has recorded, oldest first. Re-read on every request."""
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    with open(HISTORY_FILE) as handle:
+        return json.load(handle)
+
+
+def history_now(records):
+    """Where the mailbox's record stands. It moves only when something is labelled."""
+    return records[-1]["id"] if records else FIRST_HISTORY_ID
 
 
 def visible(messages):
@@ -99,6 +120,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+
+        # Sift telling the mailbox what has been read here. it really changes the labels and it
+        # really records the change, so the next sweep reads its own write back and agrees with it.
+        if path == "/gmail/v1/users/me/messages/batchModify":
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length) or "{}")
+            if not self._authorized():
+                self._send(401, {"error": {"code": 401, "message": "Invalid Credentials"}})
+                return
+            self._modify(body)
+            self._send(204, {})
+            return
 
         # withdrawing the grant. google answers 200 for a token it has already forgotten, so this
         # records the call and says yes either way.
@@ -187,7 +220,16 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/gmail/v1/users/me/profile":
-            self._send(200, {"emailAddress": MAILBOX, "messagesTotal": len(load())})
+            self._send(200, {"emailAddress": MAILBOX, "messagesTotal": len(load()),
+                             "historyId": str(history_now(history()))})
+            return
+
+        if parsed.path == "/gmail/v1/users/me/history":
+            # google keeps history for about a week, and answers 404 for a point older than that
+            if os.path.exists(HISTORY_GONE_FILE):
+                self._send(404, {"error": {"code": 404, "message": "Requested entity was not found."}})
+                return
+            self._send(200, self._history(query))
             return
 
         if parsed.path == "/gmail/v1/users/me/messages":
@@ -205,18 +247,71 @@ class Handler(BaseHTTPRequestHandler):
 
         self._send(404, {"error": {"code": 404, "message": "Not Found"}})
 
+    def _modify(self, body):
+        """Applies one batchModify to the mailbox, and records it as the mailbox would."""
+        adding = "UNREAD" in body.get("addLabelIds", [])
+        removing = "UNREAD" in body.get("removeLabelIds", [])
+        if not adding and not removing:
+            return
+
+        with HISTORY_LOCK:
+            messages = load()
+            records = history()
+            for message in messages:
+                if message["id"] not in body.get("ids", []):
+                    continue
+                labels = [name for name in message.get("labelIds", []) if name != "UNREAD"]
+                if adding:
+                    labels.append("UNREAD")
+                message["labelIds"] = labels
+                records.append({
+                    "id": history_now(records) + 1,
+                    "messageId": message["id"],
+                    "field": "labelsAdded" if adding else "labelsRemoved",
+                    "label": "UNREAD",
+                })
+
+            with open(MESSAGES_FILE, "w") as handle:
+                json.dump(messages, handle)
+            with open(HISTORY_FILE, "w") as handle:
+                json.dump(records, handle)
+
+    def _history(self, query):
+        """Every change after the caller's start point, oldest first, as Gmail records them.
+
+        Adding UNREAD is a message put back to unread and removing it is one that was read. Adding
+        TRASH is a message thrown away and removing it is one taken back out. A record with no label
+        is a message deleted outright. Sift reads exactly these and ignores every other change.
+        """
+        records = history()
+        start = int(query.get("startHistoryId", ["0"])[0])
+        changes = []
+        for record in records:
+            if record["id"] <= start:
+                continue
+            message = {"message": {"id": record["messageId"]}}
+            if record["label"]:
+                message["labelIds"] = [record["label"]]
+            changes.append({"id": str(record["id"]), record["field"]: [message]})
+        return {"history": changes, "historyId": str(history_now(records))}
+
     def _list(self, query):
-        """Newest first, honouring `after:`, `before:` and the page size, with a real page token."""
+        """Newest first, honouring `after:`, `before:`, `is:unread` and the page size."""
         after = 0
         before = 0
+        only_unread = False
         for term in query.get("q", [""])[0].split():
             if term.startswith("after:"):
                 after = int(term[len("after:"):])
             elif term.startswith("before:"):
                 before = int(term[len("before:"):])
+            elif term == "is:unread":
+                only_unread = True
 
         def within(message):
             seconds = int(message["internalDate"]) // 1000
+            if only_unread and "UNREAD" not in message.get("labelIds", []):
+                return False
             return seconds > after and (before == 0 or seconds < before)
 
         matching = sorted(

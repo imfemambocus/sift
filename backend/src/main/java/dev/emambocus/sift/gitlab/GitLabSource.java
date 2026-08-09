@@ -6,6 +6,7 @@ import dev.emambocus.sift.credential.SourceType;
 import dev.emambocus.sift.sync.FeedSyncStore;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.NotificationSource;
+import dev.emambocus.sift.sync.SourceFetch;
 import dev.emambocus.sift.sync.SourceUnavailableException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -65,7 +66,7 @@ public class GitLabSource implements NotificationSource {
 	 * carries who asked and when.
 	 */
 	@Override
-	public List<IncomingItem> fetch(SourceCredential credential) {
+	public SourceFetch fetch(SourceCredential credential) {
 		// an OAuth token lives about two hours, so every sweep starts by renewing one that is due
 		GitLabAccess access = oauth.accessFor(credential);
 
@@ -119,11 +120,14 @@ public class GitLabSource implements NotificationSource {
 		addWatched(watched, commented.mergeRequests(), GitLabWatchReason.COMMENTED);
 		addWatchedIssues(watched, commented.issues(), GitLabWatchReason.COMMENTED);
 
-		for (IncomingItem item : participation.collect(credential, access, me.id(), watched, maxPages)) {
+		GitLabParticipation.Collected collected =
+				participation.collect(credential, access, me.id(), watched, maxPages);
+		for (IncomingItem item : collected.items()) {
 			items.putIfAbsent(item.sourceId(), item);
 		}
 
-		return List.copyOf(items.values());
+		// the watch state is written down only once these rows are stored: see SourceFetch
+		return SourceFetch.of(List.copyOf(items.values()), () -> participation.commit(collected));
 	}
 
 	private static Set<String> keys(List<GitLabParticipation.Watched> watched) {

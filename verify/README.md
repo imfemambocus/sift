@@ -19,7 +19,9 @@ GitLab, and each GitLab suite sources it.
                               a spent state replayed, and a renewal the stand-in instance compels
 ./verify-gmail.sh             Gmail end to end: the authorize URL, every message becoming a row, what
                               is left out, threads collapsing, the seeded read state, the watermark,
-                              and a renewal that carries no refresh token
+                              a renewal that carries no refresh token, read state coming back from
+                              the mailbox, a message thrown away and taken back out of the bin,
+                              and a reconnection that reads the mailbox again
 ./verify-unreadable-token.sh  a token that will not decrypt, and "check now"
 ./verify-feed-ui.sh           the same flow in a browser, plus search, grouping, the tab badge, and
                               an item completed upstream that stays in the feed as history
@@ -92,9 +94,19 @@ flipping a record to `merged` or `closed` is how a suite makes something depart.
 ## The stand-in Google
 
 `fake-google.py` answers all three of Google's hosts from one server, because `sift.gmail.base-url`
-overrides all three at once: `/token`, and `/gmail/v1/users/me/{profile,messages}`. `make-mail.py`
-writes the mailbox, which the stub re-reads on every request so a suite can deliver mail between
-sweeps.
+overrides all three at once: `/token`, and `/gmail/v1/users/me/{profile,messages,history}`.
+`make-mail.py` writes the mailbox, which the stub re-reads on every request so a suite can deliver
+mail between sweeps.
+
+`relabel-mail.py` does to one message what Gmail itself would, in five decisions: `read`, `unread`,
+`trash`, `restore` and `delete`. It changes the labels and records the change in the history file
+together. A fixture that changed only the labels would prove nothing, because nothing re-reads a
+message Sift already holds. Touching the file named by `HISTORY_GONE_FILE` makes `/history` answer
+404, which is Google forgetting a start point.
+
+`batchModify` really changes the mailbox and records the change, so a push from Sift comes back on
+the next sweep and the two agree. A stub that took the call and did nothing would make a correct
+client look wrong the moment anything compared its state against the mailbox.
 
 It is strict in the ways that catch a real mistake. It demands the client id and secret. It refuses
 an `authorization_code` grant with no `code_verifier`. It accepts only its newest access token, so a

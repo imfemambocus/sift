@@ -7,6 +7,7 @@ export function GmailPage() {
 			source="gmail"
 			description="Every message, in one list, with a search that forgives a typo."
 			offer="Sift brings your mail into the same list as everything else, so one search covers all of it."
+			stillReading="Still reading your older mail. It arrives a few hundred messages at a time, so a large mailbox takes a while to fill in."
 			allClear={
 				<EmptyState
 					title="No mail yet"

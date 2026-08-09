@@ -57,6 +57,14 @@ class GitLabParticipation {
 		}
 	}
 
+	/** What one sweep found, and the watch state it must write down once those rows are stored. */
+	record Collected(
+			List<IncomingItem> items,
+			List<GitLabWatchedResource> resources,
+			List<GitLabWatchedDiscussion> discussions,
+			List<GitLabWatchedResource> finished) {
+	}
+
 	private final GitLabClient client;
 	private final GitLabWatchStore store;
 	private final Clock clock;
@@ -67,7 +75,16 @@ class GitLabParticipation {
 		this.clock = clock;
 	}
 
-	List<IncomingItem> collect(SourceCredential credential, GitLabAccess access, Long selfId,
+	/**
+	 * Writes down what a sweep learned. Held back until its rows are stored: a watermark written first
+	 * turns a failed sweep into replies nobody is ever told about.
+	 */
+	void commit(Collected collected) {
+		store.save(collected.resources(), collected.discussions());
+		store.forget(collected.finished());
+	}
+
+	Collected collect(SourceCredential credential, GitLabAccess access, Long selfId,
 			List<Watched> watched, int maxPages) {
 		UUID userId = credential.getUserId();
 		Instant now = clock.instant();
@@ -113,9 +130,7 @@ class GitLabParticipation {
 			settle(access, known, items, finished, now);
 		}
 
-		store.save(resourceUpdates, threadUpdates);
-		store.forget(finished);
-		return items;
+		return new Collected(items, resourceUpdates, threadUpdates, finished);
 	}
 
 	/*

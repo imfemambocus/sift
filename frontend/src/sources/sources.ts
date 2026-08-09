@@ -15,6 +15,8 @@ const sourceStatusSchema = z.object({
 	itemCount: z.number(),
 	/** Which account at the source. Null until a sweep has learned it. */
 	account: z.string().nullable(),
+	/** False while the source is still reading its older history, which can take hours. */
+	historyComplete: z.boolean(),
 });
 
 const sourcesSchema = z.array(sourceStatusSchema);

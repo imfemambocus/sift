@@ -2,6 +2,7 @@ package dev.emambocus.sift.feed;
 
 import dev.emambocus.sift.credential.SourceType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +21,21 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 	<S extends FeedItem> List<S> saveAll(Iterable<S> items);
 
 	List<FeedItem> findByUserIdAndSource(UUID userId, SourceType source);
+
+	List<FeedItem> findByUserIdAndSourceAndSourceIdIn(UUID userId, SourceType source,
+			Collection<String> sourceIds);
+
+	/*
+	 * the only rows a sweep's silence can resolve, which with the incoming ids is everything it needs
+	 * to hold. a partial index carries the same predicate, so a mailbox of thousands answers this
+	 * without being read.
+	 */
+	@Query("""
+			select item from FeedItem item
+			 where item.userId = :userId and item.source = :source
+			   and item.resolveWhenAbsent = true and item.resolvedAt is null
+			""")
+	List<FeedItem> findResolvable(@Param("userId") UUID userId, @Param("source") SourceType source);
 
 	long countByUserIdAndSourceAndResolvedAtIsNull(UUID userId, SourceType source);
 
@@ -75,6 +91,54 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 			+ "from FeedItem i where i.userId = :userId and i.readAt is null "
 			+ "and (:source is null or i.source = :source)")
 	List<SourceRow> findUnreadSourceRows(@Param("userId") UUID userId, @Param("source") SourceType source);
+
+	/*
+	 * read state the source itself reports, which is the direction a push from here cannot cover. the
+	 * ids are a source's own, so the source is in the where clause as well as the user: two sources
+	 * are free to use the same id for different things.
+	 */
+	@Modifying
+	@Query("""
+			update FeedItem item set item.readAt = :readAt
+			 where item.userId = :userId and item.source = :source
+			   and item.sourceId in :sourceIds and item.readAt is null
+			""")
+	int markReadBySourceId(@Param("userId") UUID userId, @Param("source") SourceType source,
+			@Param("sourceIds") Collection<String> sourceIds, @Param("readAt") Instant readAt);
+
+	@Modifying
+	@Query("""
+			update FeedItem item set item.readAt = null
+			 where item.userId = :userId and item.source = :source
+			   and item.sourceId in :sourceIds and item.readAt is not null
+			""")
+	int markUnreadBySourceId(@Param("userId") UUID userId, @Param("source") SourceType source,
+			@Param("sourceIds") Collection<String> sourceIds);
+
+	/*
+	 * for a source that can name every unread row it holds: everything else of it has been read. the
+	 * caller must pass a non-empty set, since `not in ()` is not valid.
+	 */
+	@Modifying
+	@Query("""
+			update FeedItem item set item.readAt = :readAt
+			 where item.userId = :userId and item.source = :source
+			   and item.sourceId not in :sourceIds and item.readAt is null
+			""")
+	int markReadExceptSourceId(@Param("userId") UUID userId, @Param("source") SourceType source,
+			@Param("sourceIds") Collection<String> sourceIds, @Param("readAt") Instant readAt);
+
+	/*
+	 * for a thing the source no longer holds at all, where a resolved row would be wrong: resolving
+	 * means finished, and the feed keeps it as history. this is a row with nothing left to be about.
+	 */
+	@Modifying
+	@Query("""
+			delete from FeedItem item
+			 where item.userId = :userId and item.source = :source and item.sourceId in :sourceIds
+			""")
+	int deleteBySourceId(@Param("userId") UUID userId, @Param("source") SourceType source,
+			@Param("sourceIds") Collection<String> sourceIds);
 
 	/*
 	 * one statement rather than the client patching every id, which for a full feed would be hundreds
