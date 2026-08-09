@@ -4,6 +4,8 @@
   <img src="docs/banner-dark.png" alt="Sift: the few things that actually need you, in one place." width="100%">
 </picture>
 
+## About
+
 Sift is a notification hub. It puts what concerns you in one feed. You can read that feed and you
 can search it properly. If a source sends many notifications and most of them do not concern you,
 Sift also finds the ones that do. GitLab and Gmail are the two sources.
