@@ -11,7 +11,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A stand-in Google on an ephemeral port, serving the token endpoint and the three Gmail calls Sift
@@ -79,6 +81,7 @@ public final class FakeGmail implements AutoCloseable {
 	private final Map<String, AtomicInteger> hits = new LinkedHashMap<>();
 	private final List<String> modified = new ArrayList<>();
 	private final List<Change> changes = new ArrayList<>();
+	private final AtomicReference<CountDownLatch> gate = new AtomicReference<>();
 
 	private String accessToken = "live-access";
 	private String tokenResponse = """
@@ -118,6 +121,23 @@ public final class FakeGmail implements AutoCloseable {
 		historyId = FIRST_HISTORY_ID;
 		historyForgotten = false;
 		unreadFloods = false;
+		release();
+	}
+
+	/**
+	 * Answers nothing until {@link #release()}, so a test can hold a read open and look at what the
+	 * app says while one is running. The token endpoint is left answering: a test that holds the whole
+	 * server holds the authorization as well, and the wait would prove nothing about reading.
+	 */
+	public void hold() {
+		gate.set(new CountDownLatch(1));
+	}
+
+	public void release() {
+		CountDownLatch held = gate.getAndSet(null);
+		if (held != null) {
+			held.countDown();
+		}
 	}
 
 	public FakeGmail deliver(Msg... incoming) {
@@ -217,6 +237,7 @@ public final class FakeGmail implements AutoCloseable {
 			send(exchange, 200, tokenResponse);
 			return;
 		}
+		waitIfHeld();
 		if (!authorized(exchange)) {
 			send(exchange, 401, "{\"error\":\"invalid_token\"}");
 			return;
@@ -256,6 +277,19 @@ public final class FakeGmail implements AutoCloseable {
 			return;
 		}
 		send(exchange, 404, "{\"error\":\"no such path\"}");
+	}
+
+	private void waitIfHeld() {
+		CountDownLatch held = gate.get();
+		if (held == null) {
+			return;
+		}
+		try {
+			held.await();
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	private boolean authorized(HttpExchange exchange) {

@@ -14,9 +14,12 @@ public record SourceStatusResponse(
 		/** Which account at the source, once a sweep has learned it. Null before that. */
 		String account,
 		/** False while the source is still reading older history, so the page can say so. */
-		boolean historyComplete) {
+		boolean historyComplete,
+		/** True while a read of this source is running, which is what the page shows as "syncing now". */
+		boolean syncing) {
 
-	public static SourceStatusResponse of(SourceCredential credential, long itemCount, boolean historyComplete) {
+	public static SourceStatusResponse of(SourceCredential credential, long itemCount, boolean historyComplete,
+			boolean syncing) {
 		return new SourceStatusResponse(
 				credential.getSource().slug(),
 				credential.getInstanceUrl(),
@@ -26,6 +29,7 @@ public record SourceStatusResponse(
 				credential.getLastSyncAt(),
 				itemCount,
 				credential.getAccountLabel(),
-				historyComplete);
+				historyComplete,
+				syncing);
 	}
 }

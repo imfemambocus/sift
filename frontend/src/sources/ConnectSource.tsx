@@ -34,6 +34,10 @@ function statusLine(source: SourceStatus): { tone: Tone; text: string } {
 	if (source.status === "AUTH_FAILED") {
 		return { tone: "error", text: `${name} rejected the connection. Connect it again below.` };
 	}
+	// before the two below it: a read that is running is more current than how the last one ended
+	if (source.syncing) {
+		return { tone: "ok", text: "Connected. Reading it now." };
+	}
 	if (source.status === "ERROR") {
 		return { tone: "warn", text: "The last read failed. Sift will try again on its own." };
 	}
@@ -83,7 +87,7 @@ function SourceCard({ source, canReconnect, onReconnect, onDisconnect, disconnec
 			  * detour, and disconnecting throws this source's items away
 			  */}
 			<div className="flex flex-wrap items-center gap-2">
-				<CheckNowButton source={source.source} />
+				<CheckNowButton source={source} />
 				{canReconnect && (
 					<Button variant="subtle" onClick={onReconnect}>
 						Connect again

@@ -70,8 +70,9 @@ await shot("f02-connect-authorize-dark");
 
 /*
  * the whole authorization, in a real browser: the app hands it to the stand-in instance, which
- * approves at once and sends it back to the callback, which stores the credential, syncs inline and
- * redirects to home. the token never touches this page, which is the point of the flow.
+ * approves at once and sends it back to the callback, which stores the credential, starts the first
+ * read and redirects to home without waiting for it. the token never touches this page, which is the
+ * point of the flow.
  */
 await Promise.all([
   page.waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 }),

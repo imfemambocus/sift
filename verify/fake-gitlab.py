@@ -8,6 +8,7 @@ between phases without restarting anything.
 import json
 import os
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, quote
 
@@ -19,6 +20,9 @@ DISCUSSIONS_FILE = os.environ.get("DISCUSSIONS_FILE")
 EVENTS_FILE = os.environ.get("EVENTS_FILE")
 # touching this file makes the instance reject every token, standing in for an approval withdrawn
 REVOKE_FILE = os.environ.get("REVOKE_FILE", "/nonexistent")
+# and touching this one makes it slow to answer, which is how a suite sees a read while it runs
+SLOW_FILE = os.environ.get("SLOW_FILE", "/nonexistent")
+SLOW_SECONDS = float(os.environ.get("SLOW_SECONDS", "3"))
 
 OAUTH_CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "sift-verify")
 OAUTH_CLIENT_SECRET = os.environ.get("OAUTH_CLIENT_SECRET", "sift-verify-secret")
@@ -177,6 +181,9 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v4/user":
+            # the first call of every read, so delaying it holds the whole read open
+            if os.path.exists(SLOW_FILE):
+                time.sleep(SLOW_SECONDS)
             self._send(200, USER)
             return
 

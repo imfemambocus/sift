@@ -2,8 +2,7 @@ import { Link } from "react-router";
 import type { FeedSummary } from "../feed/feed";
 import type { EventFamily } from "../feed/events";
 import { eventFamily, FAMILY_FILL, FAMILY_LABEL, FAMILY_ORDER } from "../feed/events";
-import { agoPhrase } from "../lib/time";
-import { sourceName, sourcePath } from "../sources/labels";
+import { sourceName, sourcePath, syncPhrase } from "../sources/labels";
 import type { SourceStatus } from "../sources/sources";
 
 /*
@@ -91,7 +90,7 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 			<div className="flex flex-wrap items-baseline gap-x-2 text-[12px] text-fg-muted">
 				<span>{waiting === 1 ? "1 waiting" : `${waiting} waiting`}</span>
 				<span aria-hidden className="text-fg-muted/45">&middot;</span>
-				<span>{source.lastSyncAt === null ? "Not synced yet" : `Synced ${agoPhrase(source.lastSyncAt)}`}</span>
+				<span>{syncPhrase(source)}</span>
 			</div>
 		</Link>
 	);

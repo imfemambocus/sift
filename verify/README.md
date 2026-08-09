@@ -8,6 +8,10 @@ Each script starts everything it needs and tears it down again. Every one connec
 the real OAuth flow, since an approval is the only way in. `oauth-connect.sh` holds that helper for
 GitLab, and each GitLab suite sources it.
 
+The callback hands the browser back before the read it starts has stored anything, so a suite has to
+wait for that read before it asserts. `sift_await_sync <slug>` does it, and both connect helpers call
+it already. A suite that drives the callback itself calls it by hand.
+
 ```
 ./verify-sync.sh              connect, every action arriving, resolve, disconnect, a revoked token, and
                               everything the server does to the feed: the filters, the two

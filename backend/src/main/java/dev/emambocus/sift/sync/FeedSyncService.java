@@ -4,10 +4,20 @@ import dev.emambocus.sift.credential.SourceCredential;
 import dev.emambocus.sift.credential.SourceType;
 import dev.emambocus.sift.credential.SyncStatus;
 import dev.emambocus.sift.sync.FeedSyncStore.SyncOutcome;
+import jakarta.annotation.PreDestroy;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -17,8 +27,27 @@ import org.springframework.stereotype.Service;
 @Service
 public class FeedSyncService {
 
+	private static final Logger log = LoggerFactory.getLogger(FeedSyncService.class);
+
 	private final Map<SourceType, NotificationSource> sources;
 	private final FeedSyncStore store;
+
+	/*
+	 * one read of a credential at a time. the sweep, "check now" and the read that follows an approval
+	 * all reach the same credential, and two of them at once insert the same source_id twice, which
+	 * violates the unique key and fails one of the two.
+	 */
+	private final Set<UUID> inFlight = ConcurrentHashMap.newKeySet();
+
+	/*
+	 * one thread, for the reason the sweep is serial: a burst of parallel calls to the same instance
+	 * is the one thing likeliest to get Sift rate limited.
+	 */
+	private final ExecutorService background = Executors.newSingleThreadExecutor(runnable -> {
+		Thread thread = new Thread(runnable, "sift-source-read");
+		thread.setDaemon(true);
+		return thread;
+	});
 
 	FeedSyncService(List<NotificationSource> sources, FeedSyncStore store) {
 		// every implementation on the classpath registers itself, so adding a source needs no edit here
@@ -27,13 +56,72 @@ public class FeedSyncService {
 		this.store = store;
 	}
 
+	@PreDestroy
+	void stopBackgroundReads() {
+		background.shutdownNow();
+	}
+
 	/** Whether this source has read everything it holds, which only a source with a history answers. */
 	public boolean historyComplete(SourceCredential credential) {
 		NotificationSource source = sources.get(credential.getSource());
 		return source == null || source.historyComplete(credential);
 	}
 
-	public SyncOutcome sync(SourceCredential credential) {
+	/** Whether a read of this credential is running, which is what a page says as "syncing now". */
+	public boolean isSyncing(UUID credentialId) {
+		return inFlight.contains(credentialId);
+	}
+
+	/**
+	 * Reads one credential now. Empty when a read of it is already running, which is an answer rather
+	 * than a failure: the rows that read is about to store are the same ones a second read would fetch.
+	 */
+	public Optional<SyncOutcome> sync(SourceCredential credential) {
+		if (!inFlight.add(credential.getId())) {
+			log.debug("a {} read is already running for user {}", credential.getSource(), credential.getUserId());
+			return Optional.empty();
+		}
+		try {
+			return Optional.of(read(credential));
+		}
+		finally {
+			inFlight.remove(credential.getId());
+		}
+	}
+
+	/**
+	 * Reads without holding the caller, for the approval that has just landed. A first read of a large
+	 * mailbox is minutes of sequential requests, and nobody should watch a blank page for it.
+	 *
+	 * <p>The credential is claimed on the calling thread rather than inside the task, so the source
+	 * reports itself as syncing from the moment this returns instead of once a thread picks the task up.
+	 */
+	public void syncInBackground(SourceCredential credential) {
+		UUID id = credential.getId();
+		if (!inFlight.add(id)) {
+			return;
+		}
+		try {
+			background.execute(() -> {
+				try {
+					read(credential);
+				}
+				catch (RuntimeException ex) {
+					// the reason is already on the credential, and there is no caller left to tell
+					log.warn("the first {} read failed: {}", credential.getSource(), ex.getMessage());
+				}
+				finally {
+					inFlight.remove(id);
+				}
+			});
+		}
+		catch (RejectedExecutionException ex) {
+			inFlight.remove(id);
+			log.warn("could not start a {} read in the background: {}", credential.getSource(), ex.getMessage());
+		}
+	}
+
+	private SyncOutcome read(SourceCredential credential) {
 		NotificationSource source = sources.get(credential.getSource());
 		if (source == null) {
 			throw new IllegalStateException("no adapter registered for source " + credential.getSource());

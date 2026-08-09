@@ -45,7 +45,6 @@ class GmailOAuth implements SourceOAuthFlow {
 
 	private static final Logger log = LoggerFactory.getLogger(GmailOAuth.class);
 
-	/** Read-only, and the narrowest Gmail scope there is. Sift never sends, labels or deletes. */
 	/*
 	 * modify, not readonly: Sift tells the mailbox what you have read, so a message you clear here is
 	 * cleared there. It is the narrowest scope that can write a label. It can also delete a message,

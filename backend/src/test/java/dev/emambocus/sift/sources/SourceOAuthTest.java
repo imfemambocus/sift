@@ -3,7 +3,11 @@ package dev.emambocus.sift.sources;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.emambocus.sift.SiftIntegrationTest;
+import dev.emambocus.sift.gmail.FakeGmail.Msg;
+import dev.emambocus.sift.security.SiftUserDetails;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +67,51 @@ class SourceOAuthTest extends SiftIntegrationTest {
 		controller.callback("gmail", null, null, "access_denied by <script>", new MockHttpSession(), response, null);
 
 		assertThat(response.getRedirectedUrl()).isEqualTo("/settings?gmail=denied");
+	}
+
+	@Test
+	@DisplayName("connecting hands the browser back while the first read is still running")
+	void theFirstReadDoesNotHoldTheBrowser() throws Exception {
+		GMAIL.reset();
+		GMAIL.deliver(Msg.unread("m1", "t1", System.currentTimeMillis(), "ada@uni.lu", "Not read yet"));
+		UUID userId = newUser("landing@uni.lu");
+		MockHttpSession session = new MockHttpSession();
+		session.setAttribute("gmail.oauth.state", "the-state");
+		session.setAttribute("gmail.oauth.verifier", "the-verifier");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		// the authorization still completes; it is only the reading that is held open
+		GMAIL.hold();
+
+		try {
+			controller.callback("gmail", "a-code", "the-state", null, session, response,
+					new SiftUserDetails(userId, "landing@uni.lu", "Isfaaq", "{noop}unused"));
+
+			/*
+			 * the redirect is the assertion. a mailbox is minutes of sequential requests, so a callback
+			 * that read before redirecting would still be here, and the browser would be on a blank page.
+			 */
+			assertThat(response.getRedirectedUrl()).isEqualTo("/");
+			SourceStatusResponse status = sources.statuses(userId).getFirst();
+			assertThat(status.syncing()).isTrue();
+			// and it says nothing has been read, rather than an empty feed with no explanation
+			assertThat(status.lastSyncAt()).isNull();
+		}
+		finally {
+			GMAIL.release();
+		}
+
+		awaitReadFinished(userId);
+		assertThat(sources.statuses(userId).getFirst().lastSyncAt()).isNotNull();
+	}
+
+	private void awaitReadFinished(UUID userId) throws InterruptedException {
+		Instant deadline = Instant.now().plusSeconds(10);
+		while (sources.statuses(userId).getFirst().syncing()) {
+			if (Instant.now().isAfter(deadline)) {
+				throw new AssertionError("the first read never finished");
+			}
+			Thread.sleep(20);
+		}
 	}
 
 	@Test

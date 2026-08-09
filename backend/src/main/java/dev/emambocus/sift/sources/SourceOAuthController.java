@@ -149,16 +149,13 @@ class SourceOAuthController {
 				tokens.accessToken(), tokens.refreshToken(), tokens.expiresAt());
 
 		/*
-		 * read once now so the feed is already populated when the browser lands. a failure here is
-		 * recorded on the credential itself, so the settings page shows the real reason: reporting it
-		 * twice would mean inventing a second wording for the same thing.
+		 * the first read starts here and the browser does not wait for it. a mailbox is minutes of
+		 * sequential requests, so reading before the redirect means a blank page for as long as it
+		 * takes. what the app needs to say meanwhile is already built: the source reports itself as
+		 * syncing, and its counts fill in as the rows land. a failure is recorded on the credential
+		 * itself, so the settings page shows the real reason.
 		 */
-		try {
-			syncService.sync(credential);
-		}
-		catch (RuntimeException ex) {
-			log.warn("connected {} but the first read failed: {}", slug, ex.getMessage());
-		}
+		syncService.syncInBackground(credential);
 
 		response.sendRedirect(HOME);
 	}

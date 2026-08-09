@@ -55,7 +55,7 @@ public class SourceCredentialStore {
 
 	@Transactional(readOnly = true)
 	public List<SourceCredential> forUser(UUID userId) {
-		return credentials.findByUserId(userId);
+		return credentials.findByUserIdOrderBySourceAsc(userId);
 	}
 
 	@Transactional(readOnly = true)

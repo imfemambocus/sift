@@ -1,4 +1,5 @@
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { z } from "zod";
 import { invalidateFeed } from "../feed/feed";
 import { request } from "../lib/api";
@@ -17,6 +18,8 @@ const sourceStatusSchema = z.object({
 	account: z.string().nullable(),
 	/** False while the source is still reading its older history, which can take hours. */
 	historyComplete: z.boolean(),
+	/** True while a read of this source is running on the server, whoever asked for it. */
+	syncing: z.boolean(),
 });
 
 const sourcesSchema = z.array(sourceStatusSchema);
@@ -78,7 +81,36 @@ export function useSources() {
 	return useQuery({
 		queryKey: SOURCES_KEY,
 		queryFn: async () => sourcesSchema.parse(await request<unknown>("/api/sources")),
+		/*
+		 * a read runs on the server and nobody here started it, so polling is the only way anything on
+		 * this side learns that one is running or that it has finished. faster while one is, so the
+		 * indicator clears about when the reading really stops rather than up to a quarter of a minute
+		 * later. it stops when the window does, unlike the unread count: nobody reads a status they are
+		 * not looking at.
+		 */
+		refetchInterval: (query) => (query.state.data?.some((entry) => entry.syncing) ? 2_000 : 15_000),
 	});
+}
+
+/**
+ * Refreshes the feed when a read that was running on the server finishes.
+ *
+ * <p>The rows land in the database with nothing on this side knowing, and a connection that has just
+ * read a mailbox would otherwise sit empty until the list's own poll came round. Mounted once, in the
+ * frame, so it covers whichever page is open.
+ */
+export function useRefreshWhenSynced() {
+	const { data } = useSources();
+	const queryClient = useQueryClient();
+	const syncing = data?.some((entry) => entry.syncing) ?? false;
+	const wasSyncing = useRef(syncing);
+
+	useEffect(() => {
+		if (wasSyncing.current && !syncing) {
+			invalidateFeed(queryClient);
+		}
+		wasSyncing.current = syncing;
+	}, [syncing, queryClient]);
 }
 
 export function useSource(source: string) {

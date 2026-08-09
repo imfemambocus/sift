@@ -1,5 +1,7 @@
 import { GitBranch, Mail } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { agoPhrase } from "../lib/time";
+import type { SourceStatus } from "./sources";
 
 const NAMES: Record<string, string> = {
 	gitlab: "GitLab",
@@ -42,4 +44,20 @@ export function sourceIcon(source: string): LucideIcon {
 
 export function sourceOffer(source: string): string {
 	return OFFERS[source] ?? `Bring ${sourceName(source)} into the same list.`;
+}
+
+/**
+ * Where a source's reading is up to, in one phrase. One copy, because the feed page, the Home card
+ * and the settings card all answer it and three wordings for one fact is how they come to disagree.
+ *
+ * <p>"Synced" rather than "read": an item is read or unread, and one word cannot mean both.
+ */
+export function syncPhrase(source: SourceStatus): string {
+	if (source.syncing) {
+		return "Syncing now";
+	}
+	if (source.lastSyncAt === null) {
+		return "Not synced yet";
+	}
+	return `Synced ${agoPhrase(source.lastSyncAt)}`;
 }

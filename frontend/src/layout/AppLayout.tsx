@@ -4,6 +4,7 @@ import { useUnreadBadge } from "../feed/unreadBadge";
 import { isSearching } from "../search/search";
 import { SearchField } from "../search/SearchField";
 import { SearchResults } from "../search/SearchResults";
+import { useRefreshWhenSynced } from "../sources/sources";
 import { SidebarRail } from "./SidebarRail";
 
 /*
@@ -21,6 +22,8 @@ export function AppLayout() {
 	const [query, setQuery] = useState("");
 	const { pathname } = useLocation();
 	useUnreadBadge();
+	// the frame, because a read that finishes has to reach whichever page is open
+	useRefreshWhenSynced();
 
 	const searchable = !WITHOUT_SEARCH.includes(pathname);
 

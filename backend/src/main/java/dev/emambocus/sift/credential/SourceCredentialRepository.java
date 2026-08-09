@@ -20,7 +20,12 @@ public interface SourceCredentialRepository extends Repository<SourceCredential,
 
 	Optional<SourceCredential> findByUserIdAndSource(UUID userId, SourceType source);
 
-	List<SourceCredential> findByUserId(UUID userId);
+	/*
+	 * ordered, because this is what the rail and the Home cards are drawn in. postgres has no order
+	 * without one, and every sweep updates these rows, so an unordered query hands them back in a
+	 * different order once a sweep has rewritten them.
+	 */
+	List<SourceCredential> findByUserIdOrderBySourceAsc(UUID userId);
 
 	/**
 	 * For the scheduled sweep, which legitimately has no user context. Anything serving a request

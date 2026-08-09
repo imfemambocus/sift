@@ -22,6 +22,9 @@ CLIENT_SECRET=sift-gmail-verify-secret
 REDIRECT="$BASE/api/sources/gmail/oauth/callback"
 PASS=0
 FAIL=0
+# for sift_await_sync: the first read after an approval runs in the background
+# shellcheck source=oauth-connect.sh
+source "$HERE/oauth-connect.sh"
 
 cleanup() {
   [ -n "${BOOT_PID:-}" ] && kill "$BOOT_PID" 2>/dev/null
@@ -144,6 +147,8 @@ STATE=$(python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sy
 # home, not settings: home is where the source has a card, and where the offer to connect sits
 check "the callback sends the browser to home" "$BASE/" \
   "$(location "$BASE/api/sources/gmail/oauth/callback?code=a-real-code&state=$STATE")"
+# the browser was handed back before any of this existed, so the mailbox has to be read first
+sift_await_sync gmail
 STATUS=$(api "$BASE/api/sources" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)[0], sys.stdout)')
 echo "  $STATUS"
 check "connected as OAuth"        '"OAUTH"' "$(echo "$STATUS" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["credentialType"]))')"
@@ -287,6 +292,7 @@ check "connectors offers it again" "False" \
 STATE2=$(python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sys.argv[1]).query)["state"][0])' \
   "$(post "$BASE/api/sources/gmail/oauth/start" | field '"authorizeUrl"')")
 location "$BASE/api/sources/gmail/oauth/callback?code=another-code&state=$STATE2" >/dev/null
+sift_await_sync gmail
 check "reconnecting reads the mailbox again" 6 "$(rows)"
 # including what was under the floor of the connection that has gone, which is the whole mailbox
 check "right back to its beginning"          1 "$(absent 'Ancient history')"

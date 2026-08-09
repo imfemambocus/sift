@@ -56,6 +56,7 @@ These parts are built:
 - a Home page with one card for each source. A source you have not connected gets a card too, and
   that card connects it. The sidebar shows a source only after you connect it.
 - a warning when a connection no longer works. An empty list then never looks like good news.
+- a source that says **Syncing now** while Sift reads it, so a short list explains itself
 
 Read and unread behaves like this:
 
@@ -156,9 +157,9 @@ SIFT_GITLAB_REDIRECT_URI=http://localhost:7777/api/sources/gitlab/oauth/callback
 ```
 
 Run `make up` again. The GitLab card on **Home** offers **Connect GitLab**. Press it. GitLab asks
-you to approve. Sift then reads the source immediately and sends you back to Home, where the card
-gives you its counts. Your feed is full straight away. After that, Sift reads the source every five
-minutes. **Settings** offers the same button.
+you to approve. Sift sends you back to Home immediately and starts the first read behind you. The
+card says **Syncing now** while it happens, and it then gives you the counts. After that, Sift reads
+the source every five minutes. **Settings** offers the same button.
 
 An administrator can prevent a person from making an application. If your instance does this, ask the
 administrator for an application. Sift has no other way to connect a source.
@@ -251,8 +252,9 @@ SIFT_GMAIL_REDIRECT_URI=http://localhost:7777/api/sources/gmail/oauth/callback
 
 Run `make up` again. The Gmail card on **Home** offers **Connect Gmail**. Google shows the message
 "Google has not verified this app". Select **Advanced**, then **Go to Sift (unsafe)**. That message
-is correct. Nobody verified this app, because the app is yours. Sift reads your mail immediately and
-sends you back to Home.
+is correct. Nobody verified this app, because the app is yours. Sift sends you back to Home
+immediately and starts to read your mail behind you. A large mailbox takes a long time, and the card
+says **Syncing now** while it happens.
 
 ### The seven-day rule
 

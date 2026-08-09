@@ -10,6 +10,9 @@ mkdir -p "$WORK"
 LOG="$WORK/oauth-boot.log"
 JAR="$WORK/oauth-cookies.txt"
 TODOS="$WORK/oauth-todos.json"
+# touch it and the stand-in instance answers slowly, which is how the callback and the read it
+# starts can be told apart in time
+SLOW="$WORK/oauth-slow"
 BASE=http://localhost:7779
 FAKE=http://127.0.0.1:7788
 CLIENT_ID=sift-verify
@@ -17,11 +20,14 @@ CLIENT_SECRET=sift-verify-secret
 REDIRECT="$BASE/api/sources/gitlab/oauth/callback"
 PASS=0
 FAIL=0
+# shellcheck source=oauth-connect.sh
+source "$HERE/oauth-connect.sh"
 
 cleanup() {
   [ -n "${BOOT_PID:-}" ] && kill "$BOOT_PID" 2>/dev/null
   [ -n "${STUB_PID:-}" ] && kill "$STUB_PID" 2>/dev/null
   docker rm -f sift-oauth-db >/dev/null 2>&1
+  rm -f "$SLOW"
 }
 trap cleanup EXIT
 
@@ -35,14 +41,14 @@ contains() {
   else printf '  FAIL  %-52s %s does not contain %s\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
 }
 
-rm -f "$JAR"
+rm -f "$JAR" "$SLOW"
 KEY="$(openssl rand -base64 32)"
 python3 "$HERE/make-todos.py" full "$TODOS" >/dev/null
 
 # expires_in of one second, so the very next read has to renew: that is the rule worth proving,
 # and a two-hour token would let a broken refresh pass unnoticed
 PORT=7788 TODOS_FILE="$TODOS" OAUTH_CLIENT_ID="$CLIENT_ID" OAUTH_CLIENT_SECRET="$CLIENT_SECRET" \
-OAUTH_EXPIRES_IN=1 python3 "$HERE/fake-gitlab.py" &
+OAUTH_EXPIRES_IN=1 SLOW_FILE="$SLOW" python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
 for _ in $(seq 1 30); do curl -sf -o /dev/null "$FAKE/oauth/issued" && break; sleep 1; done
 echo "stub gitlab up"
@@ -134,11 +140,23 @@ echo
 echo "--- the real thing ---"
 STATE3=$(python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sys.argv[1]).query)["state"][0])' \
   "$(post "$BASE/api/sources/gitlab/oauth/start" | field '"authorizeUrl"')")
+# from here the stand-in instance takes three seconds to answer the first call of a read, so the
+# next two checks are about the order of the two rather than about which of them was quicker
+touch "$SLOW"
+CALLBACK=$(curl -s -o /dev/null -w '%{redirect_url} %{time_total}' -c "$JAR" -b "$JAR" \
+  "$BASE/api/sources/gitlab/oauth/callback?code=a-real-code&state=$STATE3")
 # home, not settings: home is where the source has a card, and where the offer to connect sits
-check "the callback sends the browser to home" "$BASE/" \
-  "$(location "$BASE/api/sources/gitlab/oauth/callback?code=a-real-code&state=$STATE3")"
-# two grants, not one: the exchange, then the inline first read renewing a token the stub issued
-# with one second of life. with a real two-hour token that second grant would not happen.
+check "the callback sends the browser to home" "$BASE/" "${CALLBACK% *}"
+# the browser is handed back while the reading goes on. a mailbox is minutes of requests, so a
+# callback that read first would leave somebody watching a blank page for all of it.
+check "and hands it back before the read finishes" "True" \
+  "$(python3 -c 'import sys; print(float(sys.argv[1]) < 2)' "${CALLBACK##* }")"
+check "the source says it is syncing"  "True" "$(api "$BASE/api/sources" | field '0]["syncing"')"
+rm -f "$SLOW"
+sift_await_sync gitlab
+check "and stops saying so when it ends" "False" "$(api "$BASE/api/sources" | field '0]["syncing"')"
+# two grants, not one: the exchange, then the first read renewing a token the stub issued with one
+# second of life. with a real two-hour token that second grant would not happen.
 check "the code was exchanged and then renewed" "2" "$(issued)"
 
 SOURCE=$(api "$BASE/api/sources" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)[0], sys.stdout)')

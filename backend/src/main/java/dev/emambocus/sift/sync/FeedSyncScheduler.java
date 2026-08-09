@@ -1,7 +1,6 @@
 package dev.emambocus.sift.sync;
 
 import dev.emambocus.sift.credential.SourceCredential;
-import dev.emambocus.sift.sync.FeedSyncStore.SyncOutcome;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,10 +43,11 @@ public class FeedSyncScheduler {
 	 */
 	private void syncOne(SourceCredential credential) {
 		try {
-			SyncOutcome outcome = syncService.sync(credential);
-			log.debug("{} sync for user {}: {} new, {} updated, {} resolved, {} fetched",
+			// empty when a read of this credential is already running, which needs no second one
+			syncService.sync(credential).ifPresent(outcome -> log.debug(
+					"{} sync for user {}: {} new, {} updated, {} resolved, {} fetched",
 					credential.getSource(), credential.getUserId(),
-					outcome.added(), outcome.updated(), outcome.resolved(), outcome.fetched());
+					outcome.added(), outcome.updated(), outcome.resolved(), outcome.fetched()));
 		}
 		catch (RuntimeException ex) {
 			log.warn("{} sync failed for user {}: {}",

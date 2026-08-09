@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.emambocus.sift.SiftIntegrationTest;
 import dev.emambocus.sift.sync.FeedSyncStore;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The sync outcome, which is written by a targeted update rather than by saving the entity. The bug
@@ -26,6 +28,9 @@ class SourceCredentialStoreTest extends SiftIntegrationTest {
 
 	@Autowired
 	private FeedSyncStore store;
+
+	@Autowired
+	private EntityManager entityManager;
 
 	@Test
 	@DisplayName("recording a failure leaves the token exactly where it was")
@@ -86,6 +91,31 @@ class SourceCredentialStoreTest extends SiftIntegrationTest {
 		assertThat(stored).as("the converter decrypts on read").isEqualTo(TOKEN);
 		// and what actually sits in the column is not the token, which only raw SQL can show
 		assertThat(rawToken(saved.getId())).isNotEqualTo(TOKEN).isNotEmpty();
+	}
+
+	@Test
+	@Transactional
+	@DisplayName("the sources come back in one order, whatever the last sweep wrote to them")
+	void sourcesAreOrdered() {
+		UUID userId = newUser("ordered@uni.lu");
+		// connected the other way round, so insertion order alone cannot produce the answer
+		credentials.save(SourceCredential.oauth(userId, SourceType.GMAIL, "https://mail.google.com",
+				TOKEN, "a-refresh-token", Instant.now().plusSeconds(7200), Instant.now()));
+		SourceCredential gitlab = connect(userId);
+		// every sweep writes an outcome, and an update puts that row further down the page it lives on
+		store.markSuccess(gitlab.getId());
+
+		/*
+		 * a sequential scan, which is what postgres picks for a table this small once it has statistics
+		 * for it, and which hands rows back in the order the heap holds them. the rail and the Home
+		 * cards are drawn in this order, so without an order by they swap places on their own: after a
+		 * GitLab sweep the heap says gmail, gitlab, and after a Gmail sweep it says the reverse.
+		 */
+		entityManager.createNativeQuery("set local enable_indexscan = off").executeUpdate();
+		entityManager.createNativeQuery("set local enable_bitmapscan = off").executeUpdate();
+
+		assertThat(credentials.findByUserIdOrderBySourceAsc(userId)).extracting(SourceCredential::getSource)
+				.containsExactly(SourceType.GITLAB, SourceType.GMAIL);
 	}
 
 	private SourceCredential connect(UUID userId) {

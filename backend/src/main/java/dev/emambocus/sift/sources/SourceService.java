@@ -43,6 +43,9 @@ public class SourceService {
 	/**
 	 * Reads a source right now instead of waiting for the sweep. Any source failure propagates, so a
 	 * manual check reports the real reason rather than quietly doing nothing.
+	 *
+	 * <p>A read that is already running is left to finish rather than joined by a second one. It is
+	 * fetching the same rows, and the answer says the source is syncing.
 	 */
 	public Optional<SourceStatusResponse> syncNow(UUID userId, SourceType source) {
 		Optional<SourceCredential> credential = store.forUser(userId, source);
@@ -53,16 +56,20 @@ public class SourceService {
 		syncService.sync(credential.get());
 
 		SourceCredential synced = store.forUser(userId, source).orElse(credential.get());
-		return Optional.of(SourceStatusResponse.of(synced, store.itemCount(userId, source),
-				syncService.historyComplete(synced)));
+		return Optional.of(status(userId, synced));
 	}
 
 	public List<SourceStatusResponse> statuses(UUID userId) {
 		return store.forUser(userId).stream()
-				.map(credential -> SourceStatusResponse.of(
-						credential, store.itemCount(userId, credential.getSource()),
-						syncService.historyComplete(credential)))
+				.map(credential -> status(userId, credential))
 				.toList();
+	}
+
+	private SourceStatusResponse status(UUID userId, SourceCredential credential) {
+		return SourceStatusResponse.of(credential,
+				store.itemCount(userId, credential.getSource()),
+				syncService.historyComplete(credential),
+				syncService.isSyncing(credential.getId()));
 	}
 
 	/**
