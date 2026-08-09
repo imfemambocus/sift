@@ -85,6 +85,12 @@ jobs:
         working-directory: frontend
         run: npm install --no-save puppeteer
 
+      # the runner image restricts unprivileged user namespaces with AppArmor, and Chromium's own
+      # sandbox needs them. relaxing it here keeps that sandbox on, where passing --no-sandbox to
+      # the harness would turn it off for every local run as well.
+      - name: Allow the browser sandbox
+        run: echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+
       - name: Warm the build
         working-directory: backend
         run: ./gradlew classes
