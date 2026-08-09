@@ -161,6 +161,32 @@ class GitLabOAuth implements SourceOAuthFlow {
 	 * credential that will never work again from an instance that might answer next time. a refused
 	 * grant is the first, since only re-authorizing fixes it. no message here may carry the secret.
 	 */
+	/**
+	 * GitLab wants the application's own credentials with the token, and it answers 200 for a token it
+	 * has already forgotten. The credential's own instance, never the configured one: a token belongs
+	 * to whoever issued it.
+	 */
+	@Override
+	public void revoke(SourceCredential credential) {
+		if (credential.getAccessToken() == null) {
+			return;
+		}
+
+		MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+		form.add("client_id", config.clientId());
+		form.add("client_secret", config.clientSecret());
+		form.add("token", credential.getAccessToken());
+		http.builder()
+				.baseUrl(credential.getInstanceUrl())
+				.build()
+				.post()
+				.uri("/oauth/revoke")
+				.contentType(MediaType.APPLICATION_FORM_URLENCODED)
+				.body(form)
+				.retrieve()
+				.toBodilessEntity();
+	}
+
 	private GitLabResponses.OAuthToken post(String instanceUrl, MultiValueMap<String, String> form, String what) {
 		try {
 			GitLabResponses.OAuthToken token = http.builder()

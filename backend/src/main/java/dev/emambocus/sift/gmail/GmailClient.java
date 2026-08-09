@@ -5,6 +5,7 @@ import dev.emambocus.sift.sync.SourceAuthException;
 import dev.emambocus.sift.sync.SourceUnavailableException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,11 @@ class GmailClient {
 
 	private static final int PER_PAGE = 100;
 
+	/** How many ids one batchModify call takes. */
+	static final int BATCH_LIMIT = 1000;
+
+	private static final String UNREAD_LABEL = "UNREAD";
+
 	/** Everything the row shows. Asking for the body would multiply the payload for no gain. */
 	private static final String[] HEADERS = {"Subject", "From", "To", "Date"};
 
@@ -51,16 +57,14 @@ class GmailClient {
 	}
 
 	/**
-	 * Message ids matching a Gmail search, newest first.
+	 * Every id matching a Gmail search, newest first, bounded only by the page cap.
 	 *
 	 * <p>Spam and trash are excluded, because the API leaves them out unless asked for them. That is
 	 * the one narrowing Sift does to a mailbox, and it is the mailbox's own answer rather than a rule
 	 * of ours.
-	 */
-	/**
-	 * Every id matching the search, bounded only by the page cap. Listing is the cheap half of this
-	 * API, so a caller that has to know the oldest of a set can afford to list all of it and read only
-	 * the end.
+	 *
+	 * <p>Listing is the cheap half of this API, so a caller that has to know the oldest of a set can
+	 * afford to list all of it and read only the end.
 	 */
 	List<GmailResponses.MessageRef> listMessages(String accessToken, String query, int maxPages) {
 		return listMessages(accessToken, query, maxPages, Integer.MAX_VALUE);
@@ -119,6 +123,25 @@ class GmailClient {
 				})
 				.retrieve()
 				.body(GmailResponses.Message.class), "a message");
+	}
+
+	/*
+	 * one call for many messages, which is what makes "mark all read" affordable: a mailbox can hold
+	 * thousands, and one request each would be thousands of requests. google takes 1000 ids at a time,
+	 * so the caller chunks.
+	 */
+	void setUnread(String accessToken, List<String> messageIds, boolean unread) {
+		Map<String, Object> body = Map.of(
+				"ids", messageIds,
+				unread ? "addLabelIds" : "removeLabelIds", List.of(UNREAD_LABEL));
+
+		execute(() -> client(accessToken)
+				.post()
+				.uri("/gmail/v1/users/me/messages/batchModify")
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(body)
+				.retrieve()
+				.toBodilessEntity(), "the read state of your messages");
 	}
 
 	private RestClient client(String accessToken) {

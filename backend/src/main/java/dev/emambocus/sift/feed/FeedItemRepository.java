@@ -3,6 +3,7 @@ package dev.emambocus.sift.feed;
 import dev.emambocus.sift.credential.SourceType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -60,6 +61,20 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 	@Modifying
 	@Query("update FeedItem item set item.readAt = :readAt where item.id = :id and item.userId = :userId")
 	int updateReadAt(@Param("id") UUID id, @Param("userId") UUID userId, @Param("readAt") Instant readAt);
+
+	/** One row's identity at its source, for telling that source what was just decided here. */
+	@Query("select new dev.emambocus.sift.feed.SourceRow(i.source, i.sourceId) "
+			+ "from FeedItem i where i.id = :id and i.userId = :userId")
+	Optional<SourceRow> findSourceRow(@Param("id") UUID id, @Param("userId") UUID userId);
+
+	/**
+	 * Every unread row, before it stops being unread. Read inside the same transaction as the update
+	 * that follows it, so what is reported upstream is exactly what changed here.
+	 */
+	@Query("select new dev.emambocus.sift.feed.SourceRow(i.source, i.sourceId) "
+			+ "from FeedItem i where i.userId = :userId and i.readAt is null "
+			+ "and (:source is null or i.source = :source)")
+	List<SourceRow> findUnreadSourceRows(@Param("userId") UUID userId, @Param("source") SourceType source);
 
 	/*
 	 * one statement rather than the client patching every id, which for a full feed would be hundreds

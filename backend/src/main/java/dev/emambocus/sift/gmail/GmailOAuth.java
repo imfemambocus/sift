@@ -46,7 +46,12 @@ class GmailOAuth implements SourceOAuthFlow {
 	private static final Logger log = LoggerFactory.getLogger(GmailOAuth.class);
 
 	/** Read-only, and the narrowest Gmail scope there is. Sift never sends, labels or deletes. */
-	static final String SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+	/*
+	 * modify, not readonly: Sift tells the mailbox what you have read, so a message you clear here is
+	 * cleared there. It is the narrowest scope that can write a label. It can also delete a message,
+	 * which Sift never does and offers no way to do.
+	 */
+	static final String SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 
 	/** Where a person reads the mail this connects, and what the settings card names. */
 	static final String MAILBOX_URL = "https://mail.google.com";
@@ -161,6 +166,31 @@ class GmailOAuth implements SourceOAuthFlow {
 	 * re-authorizing fixes it and that is exactly what AUTH_FAILED records. google answers 400 for a
 	 * revoked or expired refresh token. no message here may carry the secret.
 	 */
+	/**
+	 * Google takes either token at one endpoint and withdraws the whole grant. The refresh token is
+	 * the one worth sending: the access token dies on its own within the hour, and the refresh token
+	 * is what would otherwise keep working.
+	 */
+	@Override
+	public void revoke(SourceCredential credential) {
+		String token = credential.getRefreshToken() == null ? credential.getAccessToken() : credential.getRefreshToken();
+		if (token == null) {
+			return;
+		}
+
+		MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+		form.add("token", token);
+		http.builder()
+				.baseUrl(config.tokenBaseUrl())
+				.build()
+				.post()
+				.uri("/revoke")
+				.contentType(MediaType.APPLICATION_FORM_URLENCODED)
+				.body(form)
+				.retrieve()
+				.toBodilessEntity();
+	}
+
 	private GmailResponses.OAuthToken post(MultiValueMap<String, String> form, String what) {
 		try {
 			GmailResponses.OAuthToken token = http.builder()

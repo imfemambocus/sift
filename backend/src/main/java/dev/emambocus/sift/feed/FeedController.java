@@ -3,9 +3,11 @@ package dev.emambocus.sift.feed;
 import dev.emambocus.sift.credential.SourceType;
 import dev.emambocus.sift.credential.UnknownSourceException;
 import dev.emambocus.sift.security.SiftUserDetails;
+import dev.emambocus.sift.sync.SourceReadSync;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,9 +28,11 @@ public class FeedController {
 	private static final int MAX_GROUPS = 500;
 
 	private final FeedService feed;
+	private final SourceReadSync readSync;
 
-	public FeedController(FeedService feed) {
+	public FeedController(FeedService feed, SourceReadSync readSync) {
 		this.feed = feed;
+		this.readSync = readSync;
 	}
 
 	/**
@@ -87,7 +91,8 @@ public class FeedController {
 	public void readAll(@RequestParam(required = false) String source,
 			@AuthenticationPrincipal SiftUserDetails principal) {
 
-		feed.markAllRead(principal.id(), parse(source));
+		List<SourceRow> cleared = feed.markAllRead(principal.id(), parse(source));
+		pushRead(principal.id(), cleared, true);
 	}
 
 	/**
@@ -99,6 +104,18 @@ public class FeedController {
 	public void update(@PathVariable UUID id, @Valid @RequestBody UpdateFeedItemRequest body,
 			@AuthenticationPrincipal SiftUserDetails principal) {
 
-		feed.setRead(principal.id(), id, body.read());
+		SourceRow row = feed.setRead(principal.id(), id, body.read());
+		pushRead(principal.id(), List.of(row), body.read());
+	}
+
+	/*
+	 * outside the service on purpose. the decision is already written, and this is a network call,
+	 * which must never be made with a transaction open.
+	 */
+	private void pushRead(UUID userId, List<SourceRow> rows, boolean read) {
+		rows.stream()
+				.collect(Collectors.groupingBy(SourceRow::source,
+						Collectors.mapping(SourceRow::sourceId, Collectors.toList())))
+				.forEach((source, sourceIds) -> readSync.push(userId, source, sourceIds, read));
 	}
 }

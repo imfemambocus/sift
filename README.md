@@ -60,8 +60,12 @@ Read and unread behaves like this:
 - If you open a row, Sift marks it read.
 - Each row has a control. Use it to skip an item. Use it again to bring the item back.
 - If an item moves again after you read it, it becomes unread again.
-- A message you already read in Gmail arrives read. Sift owns the state after that. If you mark a
-  message unread in Sift, a later read of your mailbox does not change it back.
+- A message you already read in Gmail arrives read.
+- If you read a mail row in Sift, Sift marks that message read in Gmail. If you mark the row unread,
+  the message becomes unread again in Gmail. **This includes the button that clears every unread item
+  at once.** On a large mailbox, that button marks many messages read in Gmail in one action.
+- The other direction is not immediate. If you read a message in Gmail after Sift has the row, the row
+  stays unread in Sift until you read it here.
 - The counts above the feed are also the filter. All, Unread and Read are one click each.
 - One button clears every unread item at once.
 - The sidebar shows the unread count of each source on its icon. This tells you which source wants
@@ -156,7 +160,11 @@ administrator for an application. Sift has no other way to connect a source.
 
 The access token expires after approximately two hours, and Sift renews it without your help. If the
 permission stops working, Sift says so on the feed itself. Settings then offers to connect again. You
-can withdraw the permission on GitLab at any time.
+can withdraw the permission on GitLab at any time. If you disconnect the source in Sift, Sift
+withdraws it for you.
+
+Settings names the account that each connection belongs to, so you can see which GitLab user or which
+mailbox Sift reads.
 
 You always know how current the list is. Each source tab gives the time of the last read, and a
 refresh control sits next to it. Settings has the same function as a **Check now** button. Both read
@@ -199,11 +207,13 @@ for **APIs and Services**, then **OAuth consent screen**. Both open the same pag
 
 1. Open **Data access**, or **Scopes** on the older screen.
 2. Select **Add or remove scopes**.
-3. Filter for `gmail.readonly`. Select the row for
-   `https://www.googleapis.com/auth/gmail.readonly`.
+3. Filter for `gmail.modify`. Select the row for
+   `https://www.googleapis.com/auth/gmail.modify`.
 4. Select **Update**, then **Save**.
 
-Google calls this a restricted scope. That is correct. It reads mail and it does nothing else.
+Google calls this a restricted scope. Sift needs it to mark a message read in Gmail when you read the
+row in Sift. It is the narrowest scope that can change a label. Sift writes one label and nothing
+else. See "What Sift reads and writes" below.
 
 **5. Add yourself as a test user.**
 
@@ -250,7 +260,7 @@ and the renewal token then does not expire on a timer. You still see the message
 and a limit of 100 users applies. Neither one matters for your own instance. Verification is
 necessary only to remove that message for other people.
 
-### What Sift reads
+### What Sift reads and writes
 
 Sift reads all of your mailbox. The search finds only the messages that Sift read, and the search is
 why Gmail is in Sift. A limit on how far back Sift reads is thus a limit on what you can find.
@@ -269,9 +279,14 @@ Each message costs one request to Google. If you make `SIFT_SYNC_INTERVAL` very 
 refuse the requests while Sift reads a large mailbox. Use a longer value until your mailbox is
 complete.
 
-The `gmail.readonly` scope is read-only. Sift sends no mail. It applies no label. It deletes nothing.
-It cannot mark a message read in Gmail. You can withdraw the permission in your Google account at any
-time.
+Sift writes one thing to your mailbox: the `UNREAD` label, which is what makes a message read or
+unread. It does this only when you read a row or mark one unread in Sift.
+
+Sift sends no mail. It writes no other label. It deletes nothing, and it gives you no way to delete
+anything. The `gmail.modify` scope permits more than this, because Google has nothing narrower that
+can change a label at all. You can withdraw the permission in your Google account at any time.
+
+If you disconnect Gmail in Sift, Sift withdraws the permission for you.
 
 ## Ports
 

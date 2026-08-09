@@ -53,6 +53,7 @@ public final class FakeGmail implements AutoCloseable {
 	private final HttpServer server;
 	private final Map<String, Msg> messages = new LinkedHashMap<>();
 	private final Map<String, AtomicInteger> hits = new LinkedHashMap<>();
+	private final List<String> modified = new ArrayList<>();
 
 	private String accessToken = "live-access";
 	private String tokenResponse = """
@@ -79,6 +80,7 @@ public final class FakeGmail implements AutoCloseable {
 	public void reset() {
 		messages.clear();
 		hits.clear();
+		modified.clear();
 		accessToken = "live-access";
 		tokenResponse = """
 				{"access_token": "live-access", "expires_in": 3600}
@@ -109,6 +111,11 @@ public final class FakeGmail implements AutoCloseable {
 		return this;
 	}
 
+	/** The raw body of each batchModify, so a test can see which ids went and in which direction. */
+	public List<String> modifications() {
+		return List.copyOf(modified);
+	}
+
 	public int hits(String path) {
 		AtomicInteger count = hits.get(path);
 		return count == null ? 0 : count.get();
@@ -117,7 +124,7 @@ public final class FakeGmail implements AutoCloseable {
 	private void handle(HttpExchange exchange) throws IOException {
 		String path = exchange.getRequestURI().getPath();
 		hits.computeIfAbsent(path, key -> new AtomicInteger()).incrementAndGet();
-		exchange.getRequestBody().readAllBytes();
+		String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
 
 		if ("/token".equals(path)) {
 			send(exchange, 200, tokenResponse);
@@ -137,6 +144,11 @@ public final class FakeGmail implements AutoCloseable {
 				return;
 			}
 			send(exchange, 200, listFor(exchange.getRequestURI().getQuery()));
+			return;
+		}
+		if (path.equals("/gmail/v1/users/me/messages/batchModify")) {
+			modified.add(body);
+			send(exchange, 204, "");
 			return;
 		}
 		if (path.startsWith("/gmail/v1/users/me/messages/")) {

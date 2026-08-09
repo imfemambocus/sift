@@ -1,5 +1,6 @@
 package dev.emambocus.sift.sources;
 
+import dev.emambocus.sift.credential.SourceCredential;
 import dev.emambocus.sift.credential.SourceType;
 
 /**
@@ -28,4 +29,13 @@ public interface SourceOAuthFlow {
 	String authorizeUrl(String state, String codeVerifier);
 
 	OAuthTokens exchange(String code, String codeVerifier);
+
+	/**
+	 * Withdraws the grant at the source, so disconnecting here ends the access there too rather than
+	 * leaving a live token until it expires on its own.
+	 *
+	 * <p>Best effort by contract: the caller is deleting the credential either way, and a provider
+	 * that will not take the request must not stop somebody disconnecting.
+	 */
+	void revoke(SourceCredential credential);
 }

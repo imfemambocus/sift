@@ -30,6 +30,7 @@ OAUTH_EXPIRES_IN = int(os.environ.get("OAUTH_EXPIRES_IN", "7200"))
 # token must stop working, and one user authorizing must not sign another user out.
 OAUTH = {
     "issued": 0,
+    "revoked": 0,   # how many grants were withdrawn, which only a disconnect does
     "valid_access": set(),      # every access token still usable, across all chains
     "refresh_chain": {},        # refresh token -> the chain it belongs to
     "chain_access": {},         # chain -> the access token currently issued on it
@@ -94,6 +95,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+
+        # withdrawing the grant, which only a disconnect does. gitlab answers 200 either way.
+        if parsed.path == "/oauth/revoke":
+            length = int(self.headers.get("Content-Length", "0"))
+            self.rfile.read(length)
+            with OAUTH_LOCK:
+                OAUTH["revoked"] += 1
+            self._send(200, {})
+            return
+
         if parsed.path != "/oauth/token":
             self._send(404, {"message": "404 Not Found"})
             return
@@ -145,7 +156,7 @@ class Handler(BaseHTTPRequestHandler):
         # suite can see that a renewal actually happened rather than assuming it did
         if parsed.path == "/oauth/issued":
             with OAUTH_LOCK:
-                self._send(200, {"issued": OAUTH["issued"]})
+                self._send(200, {"issued": OAUTH["issued"], "revoked": OAUTH["revoked"]})
             return
 
         # the approval page, which approves at once and sends the browser straight back. it is what

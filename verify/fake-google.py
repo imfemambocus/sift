@@ -41,6 +41,7 @@ OAUTH = {
     "issued": 0,
     "access": None,     # only the newest is accepted, so a stale token fails loudly
     "refresh": None,    # long-lived: a renewal does not rotate it, which is Google's behaviour
+    "revoked": 0,       # how many times the grant was withdrawn, which only a disconnect does
 }
 OAUTH_LOCK = threading.Lock()
 
@@ -97,7 +98,19 @@ class Handler(BaseHTTPRequestHandler):
             return header[len("Bearer "):] == OAUTH["access"]
 
     def do_POST(self):
-        if urlparse(self.path).path != "/token":
+        path = urlparse(self.path).path
+
+        # withdrawing the grant. google answers 200 for a token it has already forgotten, so this
+        # records the call and says yes either way.
+        if path == "/revoke":
+            length = int(self.headers.get("Content-Length", "0"))
+            self.rfile.read(length)
+            with OAUTH_LOCK:
+                OAUTH["revoked"] += 1
+            self._send(200, {})
+            return
+
+        if path != "/token":
             self._send(404, {"error": "not_found"})
             return
 
@@ -155,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
         # suite can see that a renewal actually happened rather than assuming it did
         if parsed.path == "/oauth/issued":
             with OAUTH_LOCK:
-                self._send(200, {"issued": OAUTH["issued"]})
+                self._send(200, {"issued": OAUTH["issued"], "revoked": OAUTH["revoked"]})
             return
 
         # the consent screen, which a browser reaches by a top-level navigation. no approval page:

@@ -80,6 +80,7 @@ post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json'
 location() { curl -s -o /dev/null -w '%{redirect_url}' -c "$JAR" -b "$JAR" "$@"; }
 field() { python3 -c 'import json,sys; print(json.load(sys.stdin)['"$1"'])'; }
 issued() { curl -s "$FAKE/oauth/issued" | python3 -c 'import json,sys; print(json.load(sys.stdin)["issued"])'; }
+revoked() { curl -s "$FAKE/oauth/issued" | python3 -c 'import json,sys; print(json.load(sys.stdin)["revoked"])'; }
 # the feed answers one page of groups, so ask for one big enough to hold every fixture and unwrap it
 feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 rows() { feed | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
@@ -112,7 +113,8 @@ AUTHORIZE=$(post "$BASE/api/sources/gmail/oauth/start" | field '"authorizeUrl"')
 echo "  $AUTHORIZE"
 contains "points at Google"            "$AUTHORIZE" "$FAKE/o/oauth2/v2/auth"
 contains "carries the client id"       "$AUTHORIZE" "client_id=$CLIENT_ID"
-contains "asks for gmail.readonly"     "$AUTHORIZE" "gmail.readonly"
+# modify, not readonly: Sift writes the unread label back when you read a row here
+contains "asks for gmail.modify"       "$AUTHORIZE" "gmail.modify"
 contains "carries the S256 challenge"  "$AUTHORIZE" "code_challenge_method=S256"
 # without both of these Google issues an access token and no way ever to renew it
 contains "asks for offline access"     "$AUTHORIZE" "access_type=offline"
@@ -218,8 +220,12 @@ check "the feed did not lose anything" 6 "$(rows)"
 
 echo
 echo "--- disconnecting, and what survives it ---"
+check "nothing was revoked before disconnecting" 0 "$(revoked)"
 check "disconnect" 204 "$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" -X DELETE \
   -H "X-XSRF-TOKEN: $(csrf)" "$BASE/api/sources/gmail")"
+# withdrawing the grant is the point: a deleted credential with a live token upstream is not
+# disconnected, it is only forgotten
+check "the grant was withdrawn at Google" 1 "$(revoked)"
 check "its items went with it" 0 "$(rows)"
 check "connectors offers it again" "False" \
   "$(api "$BASE/api/sources/connectors" | python3 -c 'import json,sys; print(next(c["connected"] for c in json.load(sys.stdin) if c["source"]=="gmail"))')"

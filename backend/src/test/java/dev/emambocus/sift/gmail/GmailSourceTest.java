@@ -14,6 +14,7 @@ import dev.emambocus.sift.gmail.FakeGmail.Msg;
 import dev.emambocus.sift.sync.FeedSyncService;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.SourceAuthException;
+import dev.emambocus.sift.sync.SourceReadSync;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -48,6 +49,9 @@ class GmailSourceTest extends SiftIntegrationTest {
 
 	@Autowired
 	private SourceCredentialRepository credentials;
+
+	@Autowired
+	private SourceReadSync readSync;
 
 	@BeforeEach
 	void emptyMailbox() {
@@ -276,6 +280,51 @@ class GmailSourceTest extends SiftIntegrationTest {
 		assertThatThrownBy(() -> source.fetch(credential("rejected@uni.lu")))
 				.isInstanceOf(SourceAuthException.class)
 				.hasMessageContaining("Connect Gmail again");
+	}
+
+	@Test
+	@DisplayName("reading a row here takes the unread label off the message in Gmail")
+	void readingHereClearsTheLabelInGmail() {
+		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "Chart V2 review"));
+		SourceCredential credential = credential("twoway@uni.lu");
+		syncService.sync(credential);
+
+		readSync.push(credential.getUserId(), SourceType.GMAIL, List.of("msg:m1"), true);
+
+		assertThat(GMAIL.modifications()).hasSize(1);
+		String sent = GMAIL.modifications().getFirst();
+		assertThat(sent).contains("\"m1\"").contains("removeLabelIds").contains("UNREAD");
+		// never the other direction on a read: adding the label back would put it in front of you again
+		assertThat(sent).doesNotContain("addLabelIds");
+	}
+
+	@Test
+	@DisplayName("marking a row unread here puts the label back, so the two stay in step")
+	void unreadingHerePutsTheLabelBack() {
+		GMAIL.deliver(Msg.read("m1", "t1", minutesAgo(10), ADA, "Already read in Gmail"));
+		SourceCredential credential = credential("back@uni.lu");
+		syncService.sync(credential);
+
+		readSync.push(credential.getUserId(), SourceType.GMAIL, List.of("msg:m1"), false);
+
+		assertThat(GMAIL.modifications().getFirst()).contains("addLabelIds").contains("UNREAD");
+	}
+
+	@Test
+	@DisplayName("a row of another source is not offered to Gmail")
+	void anotherSourceIsNotGmailsBusiness() {
+		SourceCredential credential = credential("other@uni.lu");
+		syncService.sync(credential);
+		// the same user really does have a GitLab credential, so what is under test is the routing
+		// and not the absence of anything to route to
+		credentials.save(SourceCredential.oauth(credential.getUserId(), SourceType.GITLAB,
+				// the token the stand-in Google accepts, so nothing but the routing can stop the call
+				"https://gitlab.example.org", "live-access", "gl-refresh",
+				Instant.now().plus(1, ChronoUnit.HOURS), Instant.now()));
+
+		readSync.push(credential.getUserId(), SourceType.GITLAB, List.of("todo:1"), true);
+
+		assertThat(GMAIL.modifications()).isEmpty();
 	}
 
 	private static long minutesAgo(int minutes) {

@@ -10,6 +10,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -21,6 +23,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class SourceService {
+
+	private static final Logger log = LoggerFactory.getLogger(SourceService.class);
 
 	private final SourceCredentialStore store;
 	private final FeedSyncService syncService;
@@ -78,7 +82,29 @@ public class SourceService {
 				.toList();
 	}
 
+	/**
+	 * Withdraws the grant at the source first, then deletes what Sift holds.
+	 *
+	 * <p>The revoke is best effort and deliberately cannot fail the disconnect. If the provider is
+	 * unreachable, the token still expires on its own and the approval can be withdrawn there by hand,
+	 * which is a far better outcome than refusing to let somebody disconnect.
+	 */
 	public boolean disconnect(UUID userId, SourceType source) {
+		store.forUser(userId, source).ifPresent(credential -> flows.stream()
+				.filter(flow -> flow.source() == source)
+				.findFirst()
+				.ifPresent(flow -> revokeQuietly(flow, credential)));
+
 		return store.disconnect(userId, source);
+	}
+
+	private static void revokeQuietly(SourceOAuthFlow flow, SourceCredential credential) {
+		try {
+			flow.revoke(credential);
+		}
+		catch (RuntimeException ex) {
+			log.warn("could not withdraw the {} grant while disconnecting: {}",
+					credential.getSource(), ex.getMessage());
+		}
 	}
 }

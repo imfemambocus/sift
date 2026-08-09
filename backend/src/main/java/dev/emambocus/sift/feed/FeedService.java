@@ -83,11 +83,13 @@ public class FeedService {
 	 * can put an item back to unread by clearing it.
 	 */
 	@Transactional
-	public void setRead(UUID userId, UUID itemId, boolean read) {
+	public SourceRow setRead(UUID userId, UUID itemId, boolean read) {
+		SourceRow row = items.findSourceRow(itemId, userId).orElseThrow(() -> new FeedItemNotFoundException(itemId));
 		int changed = items.updateReadAt(itemId, userId, read ? clock.instant() : null);
 		if (changed == 0) {
 			throw new FeedItemNotFoundException(itemId);
 		}
+		return row;
 	}
 
 	/**
@@ -100,9 +102,17 @@ public class FeedService {
 	 * @return how many rows it touched, which is zero when there was nothing unread
 	 */
 	@Transactional
-	public int markAllRead(UUID userId, SourceType source) {
+	public List<SourceRow> markAllRead(UUID userId, SourceType source) {
+		// read before the update, so what goes upstream is exactly the set that stopped being unread
+		List<SourceRow> cleared = items.findUnreadSourceRows(userId, source);
 		Instant now = clock.instant();
-		return source == null ? items.markAllRead(userId, now) : items.markAllRead(userId, source, now);
+		if (source == null) {
+			items.markAllRead(userId, now);
+		}
+		else {
+			items.markAllRead(userId, source, now);
+		}
+		return cleared;
 	}
 
 	/*

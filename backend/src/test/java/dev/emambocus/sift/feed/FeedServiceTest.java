@@ -127,7 +127,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 		store.persist(user, SourceType.GITLAB, List.of(
 				item("todo:1", MONDAY, MONDAY), item("todo:2", MONDAY, MONDAY), item("todo:3", MONDAY, MONDAY)));
 
-		assertThat(feed.markAllRead(user, null)).isEqualTo(3);
+		assertThat(feed.markAllRead(user, null)).hasSize(3);
 		assertThat(items(user)).allMatch(FeedItemResponse::read);
 	}
 
@@ -139,7 +139,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 		feed.setRead(user, items(user).get(0).id(), true);
 
 		// only the one that was still unread is touched, which is what the row count says
-		assertThat(feed.markAllRead(user, null)).isEqualTo(1);
+		assertThat(feed.markAllRead(user, null)).hasSize(1);
 	}
 
 	@Test
@@ -150,7 +150,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 		store.persist(mine, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY)));
 		store.persist(theirs, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY)));
 
-		assertThat(feed.markAllRead(mine, SourceType.GITLAB)).isEqualTo(1);
+		assertThat(feed.markAllRead(mine, SourceType.GITLAB)).hasSize(1);
 		assertThat(items(theirs).get(0).read()).isFalse();
 	}
 
@@ -159,7 +159,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 	void markAllReadWithNothingToDo() {
 		UUID user = newUser("nothing@uni.lu");
 
-		assertThat(feed.markAllRead(user, null)).isZero();
+		assertThat(feed.markAllRead(user, null)).isEmpty();
 	}
 
 	@Test
@@ -169,7 +169,7 @@ class FeedServiceTest extends SiftIntegrationTest {
 		store.persist(user, SourceType.GITLAB, List.of(item("todo:1", MONDAY, MONDAY)));
 		store.persist(user, SourceType.GITLAB, List.of());
 
-		assertThat(feed.markAllRead(user, null)).isZero();
+		assertThat(feed.markAllRead(user, null)).isEmpty();
 		assertThat(items(user).get(0).read()).isTrue();
 	}
 
