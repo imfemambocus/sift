@@ -3,6 +3,7 @@ import type { FeedSummary } from "../feed/feed";
 import type { EventFamily } from "../feed/events";
 import { eventFamily, FAMILY_FILL, FAMILY_LABEL, FAMILY_ORDER } from "../feed/events";
 import { sourceName, sourcePath, syncPhrase } from "../sources/labels";
+import { SyncButton } from "../sources/SyncButton";
 import type { SourceStatus } from "../sources/sources";
 
 /*
@@ -40,12 +41,21 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 	const rejected = source.status === "AUTH_FAILED";
 
 	return (
-		<Link
-			to={sourcePath(source.source)}
-			className="flex flex-col gap-4 rounded-panel border border-border bg-surface px-5 py-4 transition-colors hover:border-fg-muted/40"
-		>
+		<article className="relative flex flex-col gap-4 rounded-panel border border-border bg-surface px-5 py-4 transition-colors hover:border-fg-muted/40">
 			<div className="flex items-baseline justify-between gap-3">
-				<h2 className="text-[14px] font-semibold tracking-[-0.01em] text-fg">{sourceName(source.source)}</h2>
+				<h2 className="text-[14px] font-semibold tracking-[-0.01em] text-fg">
+					{/*
+					  * the whole card leads to the source, but the refresh button has to be a sibling of the
+					  * link rather than inside it, so the link stretches over the card from here instead of
+					  * wrapping it. the name is then the whole of what a screen reader announces for it.
+					  */}
+					<Link
+						to={sourcePath(source.source)}
+						className="after:absolute after:inset-0 after:content-['']"
+					>
+						{sourceName(source.source)}
+					</Link>
+				</h2>
 				{/* quiet unless something is actually wrong, so the card is not a wall of status */}
 				{rejected && <span className="text-[11px] text-danger">Token rejected</span>}
 			</div>
@@ -87,11 +97,15 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 			)}
 
 			{/* waiting keeps its place as context, since it is what the breakdown above is counting */}
-			<div className="flex flex-wrap items-baseline gap-x-2 text-[12px] text-fg-muted">
-				<span>{waiting === 1 ? "1 waiting" : `${waiting} waiting`}</span>
-				<span aria-hidden className="text-fg-muted/45">&middot;</span>
-				<span>{syncPhrase(source)}</span>
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex flex-wrap items-baseline gap-x-2 text-[12px] text-fg-muted">
+					<span>{waiting === 1 ? "1 waiting" : `${waiting} waiting`}</span>
+					<span aria-hidden className="text-fg-muted/45">&middot;</span>
+					<span>{syncPhrase(source)}</span>
+				</div>
+				{/* beside the line it refreshes, as on a feed page, and clear of the rest of the card */}
+				<SyncButton source={source} />
 			</div>
-		</Link>
+		</article>
 	);
 }

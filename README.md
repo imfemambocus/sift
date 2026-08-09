@@ -173,9 +173,9 @@ Settings names the account that each connection belongs to, so you can see which
 mailbox Sift reads.
 
 You always know how current the list is. Each source tab gives the time of the last read, and a
-refresh control sits next to it. Settings has the same function as a **Check now** button. Both read
-the source immediately. Neither one waits for the next pass. If a read fails, Sift gives you the
-reason.
+refresh control sits next to it. Each card on **Home** has the same control, next to the same time.
+Settings has the same function as a **Check now** button. All of them read the source immediately.
+None of them waits for the next pass. If a read fails, Sift gives you the reason.
 
 The `read_api` scope is read-only, on purpose. Sift changes nothing on your GitLab. To mark a to-do
 done through the API, Sift needs the full `api` scope. That scope permits reads and writes across
@@ -276,6 +276,8 @@ The first read takes the newest messages. Each read after it does two things. It
 that arrived since the last read. It also takes one more group of older messages. Sift thus moves
 back through your mailbox until it gets to the first message. A large mailbox needs many reads. You
 can use Sift while this happens, and the Gmail page tells you that older mail is still on its way.
+The card keeps **Syncing now** for the whole of it, and gives you a time only when Sift has read your
+mailbox back to its first message.
 
 Sift usually shows many more items than Gmail shows you. There are two reasons. Gmail counts a
 conversation as one line, and Sift makes a row for each message in it. Gmail also opens on your

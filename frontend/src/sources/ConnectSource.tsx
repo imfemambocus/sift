@@ -8,7 +8,7 @@ import { Spinner } from "../components/Spinner";
 import { errorMessage } from "../lib/api";
 import { agoPhrase } from "../lib/time";
 import { CheckNowButton } from "./CheckNowButton";
-import { sourceName } from "./labels";
+import { isReading, sourceName } from "./labels";
 import type { SourceStatus } from "./sources";
 import { useConnector, useDisconnectSource, useSource, useStartOAuth } from "./sources";
 
@@ -35,7 +35,7 @@ function statusLine(source: SourceStatus): { tone: Tone; text: string } {
 		return { tone: "error", text: `${name} rejected the connection. Connect it again below.` };
 	}
 	// before the two below it: a read that is running is more current than how the last one ended
-	if (source.syncing) {
+	if (isReading(source)) {
 		return { tone: "ok", text: "Connected. Reading it now." };
 	}
 	if (source.status === "ERROR") {

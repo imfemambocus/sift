@@ -3,6 +3,7 @@ import { Button } from "../components/Button";
 import { FormError } from "../components/FormError";
 import { Spinner } from "../components/Spinner";
 import { errorMessage } from "../lib/api";
+import { isReading } from "./labels";
 import type { SourceStatus } from "./sources";
 import { useSyncSource } from "./sources";
 
@@ -14,14 +15,17 @@ import { useSyncSource } from "./sources";
 export function CheckNowButton({ source }: { readonly source: SourceStatus }) {
 	const sync = useSyncSource(source.source);
 	const message = errorMessage(sync.error);
-	// a read the server started says "Checking" too, and only this button's own request disables it
-	const checking = sync.isPending || source.syncing;
+	/*
+	 * the spinner follows the source and the word follows this button, so a read the server started
+	 * turns it without taking the name of the action away from somebody who wants to ask for another.
+	 */
+	const spinning = sync.isPending || isReading(source);
 
 	return (
 		<div className="flex flex-col items-start gap-2">
 			<Button variant="ghost" onClick={() => sync.mutate()} disabled={sync.isPending}>
-				{checking ? <Spinner /> : <RefreshCw size={14} strokeWidth={1.75} aria-hidden />}
-				{checking ? "Checking" : "Check now"}
+				{spinning ? <Spinner /> : <RefreshCw size={14} strokeWidth={1.75} aria-hidden />}
+				{sync.isPending ? "Checking" : "Check now"}
 			</Button>
 			{message !== null && <FormError>{message}</FormError>}
 		</div>

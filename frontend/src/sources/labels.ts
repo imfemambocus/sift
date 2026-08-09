@@ -47,13 +47,27 @@ export function sourceOffer(source: string): string {
 }
 
 /**
+ * Whether Sift is still filling this source in. A read in flight is one way; a history it has not
+ * reached the beginning of is the other, and a mailbox takes many sweeps to walk back through. In
+ * between those sweeps nothing is in flight, but the source is no nearer finished than it is
+ * mid-read, so both count as one state.
+ */
+export function isReading(source: SourceStatus): boolean {
+	if (source.syncing) {
+		return true;
+	}
+	// a source whose last read failed is not mid-anything: it waits for somebody, and says so
+	return source.status === "OK" && !source.historyComplete;
+}
+
+/**
  * Where a source's reading is up to, in one phrase. One copy, because the feed page, the Home card
  * and the settings card all answer it and three wordings for one fact is how they come to disagree.
  *
  * <p>"Synced" rather than "read": an item is read or unread, and one word cannot mean both.
  */
 export function syncPhrase(source: SourceStatus): string {
-	if (source.syncing) {
+	if (isReading(source)) {
 		return "Syncing now";
 	}
 	if (source.lastSyncAt === null) {

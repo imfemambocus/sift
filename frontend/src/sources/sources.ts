@@ -1,4 +1,4 @@
-import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { z } from "zod";
 import { invalidateFeed } from "../feed/feed";
@@ -147,6 +147,20 @@ export function useSyncSource(source: string) {
 export function useIsSyncing(source?: string): boolean {
 	const mutationKey = source === undefined ? [SYNC_KEY] : [SYNC_KEY, source];
 	return useIsMutating({ mutationKey }) > 0;
+}
+
+/**
+ * Why the last refresh of this source failed, for whoever wants to say so. Off the mutation cache
+ * for the same reason: the button owns the request, and the message belongs on its own line under
+ * whatever the button sits in.
+ */
+export function useSyncError(source: string): unknown {
+	const errors = useMutationState({
+		filters: { mutationKey: [SYNC_KEY, source] },
+		select: (mutation) => mutation.state.error,
+	});
+	// the newest, since a press while a failed one is still cached would otherwise show the old reason
+	return errors.at(-1) ?? null;
 }
 
 export function useDisconnectSource(source: string) {

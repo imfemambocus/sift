@@ -284,11 +284,15 @@ await shot("f06e-resolved-history-dark");
  */
 async function homeCounts() {
   await page.click('a[aria-label="Home"]');
-  // the rail links to /gitlab as well, so the card is the one that talks about waiting
-  await page.waitForFunction(() => [...document.querySelectorAll('a[href="/gitlab"]')]
+  /*
+   * the card is an article, and its link covers it from the heading rather than wrapping it, so the
+   * refresh button can be a sibling of that link. the rail links to /gitlab too, so the href never
+   * identified the card on its own.
+   */
+  await page.waitForFunction(() => [...document.querySelectorAll("article")]
     .some((el) => el.textContent.includes("waiting")), { timeout: 15000 });
   return page.evaluate(() => {
-    const card = [...document.querySelectorAll('a[href="/gitlab"]')]
+    const card = [...document.querySelectorAll("article")]
       .find((el) => el.textContent.includes("waiting"));
     const spans = [...card.querySelectorAll("span")].map((el) => ({ el, text: el.textContent.trim() }));
     const label = spans.find((s) => s.text === "unread" || s.text === "unread item");
@@ -304,6 +308,21 @@ const home = await homeCounts();
 console.log(`  home says ${home.unread} unread and ${home.waiting} waiting, out of 12 in the feed`);
 if (home.waiting !== "11") problems.push(`Home counts history as waiting: ${JSON.stringify(home)}`);
 if (home.unread !== "11") problems.push(`Home leads with the wrong number: ${JSON.stringify(home)}`);
+
+/*
+ * the card refreshes its own source. the button is a sibling of the card's link rather than inside it,
+ * which is what this checks: nested, the browser would follow the link on every press.
+ */
+const cardRefresh = await page.$('article button[aria-label^="Check GitLab"]');
+if (cardRefresh === null) {
+  problems.push("the Home card offers no way to check the source again");
+} else {
+  await cardRefresh.click();
+  await settle(1500);
+  const landed = new URL(page.url()).pathname;
+  console.log(`  the Home card's refresh left the browser on ${landed}`);
+  if (landed !== "/") problems.push(`the Home card's refresh navigated to ${landed} instead of refreshing`);
+}
 
 // and reading everything must take the headline to zero while waiting stays exactly where it was
 await page.click('a[href="/gitlab"]');
