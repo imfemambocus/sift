@@ -38,11 +38,12 @@ export function unreadSuffix(count: number): string {
 	return count > 0 ? `, ${count} unread` : "";
 }
 
+/** Beside the rail, so it has nowhere to go while the rail is a bar along the bottom edge. */
 export function RailTooltip({ children }: { readonly children: ReactNode }) {
 	return (
 		<span
 			aria-hidden
-			className="pointer-events-none absolute left-full z-20 ml-3 whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-fg opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+			className="pointer-events-none absolute left-full z-20 ml-3 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-fg opacity-0 shadow-lg transition-opacity group-hover:opacity-100 sm:block"
 		>
 			{children}
 		</span>

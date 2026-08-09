@@ -38,11 +38,15 @@ export function AppLayout() {
 	return (
 		<div className="flex min-h-dvh">
 			<SidebarRail />
-			<div className="min-w-0 flex-1">
+			{/*
+			  * on a narrow screen the rail is a bar along the bottom and leaves the flow, so the room
+			  * it takes is put back here rather than by every page
+			  */}
+			<div className="min-w-0 flex-1 pb-14 sm:pb-0">
 				{/* sticky, because the point of it is being the one place you go from anywhere */}
 				{searchable ? (
 					<div className="sticky top-0 z-10 bg-bg">
-						<div className="mx-auto w-full max-w-3xl px-8 pt-6 pb-3">
+						<div className="mx-auto w-full max-w-3xl px-4 pt-6 pb-3 sm:px-8">
 							<SearchField value={query} onChange={setQuery} />
 						</div>
 					</div>

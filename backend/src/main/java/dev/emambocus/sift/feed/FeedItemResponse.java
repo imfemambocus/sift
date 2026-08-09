@@ -1,6 +1,7 @@
 package dev.emambocus.sift.feed;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -18,6 +19,8 @@ public record FeedItemResponse(
 		String contextLabel,
 		String contextUrl,
 		String url,
+		/** The file names that came with it, and empty where nothing did. */
+		List<String> attachments,
 		/** What this row is about. See {@link GroupKeys}. Opaque: only equality means anything. */
 		String groupKey,
 		/** When the thing was created, for context. */
@@ -44,10 +47,19 @@ public record FeedItemResponse(
 				item.getContextLabel(),
 				item.getContextUrl(),
 				item.getUrl(),
+				namesOf(item.getAttachments()),
 				item.getGroupKey(),
 				item.getSourceCreatedAt(),
 				item.getActivityAt(),
 				item.getReadAt() != null,
 				item.getResolvedAt() != null);
+	}
+
+	// stored as one name per line, since a file name may contain a space
+	private static List<String> namesOf(String attachments) {
+		if (attachments == null || attachments.isBlank()) {
+			return List.of();
+		}
+		return List.of(attachments.split("\n"));
 	}
 }

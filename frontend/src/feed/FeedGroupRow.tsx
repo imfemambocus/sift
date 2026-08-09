@@ -7,7 +7,7 @@ import { FAMILY_TEXT, FAMILY_TEXT_SOFT, rowFamily } from "./events";
 import type { FeedGroup } from "./grouping";
 import { groupUnread } from "./grouping";
 import { kindLabel, namesItsKind } from "./kinds";
-import { DoneTag, edgeClass, MetaLine, ReadToggle, ROW_MOTION, UnreadDot } from "./row";
+import { Attachments, DoneTag, edgeClass, MetaLine, ReadToggle, ROW_MOTION, UnreadDot } from "./row";
 import { fullTimestamp, shortAgo } from "../lib/time";
 
 /*
@@ -175,6 +175,9 @@ function GroupedEvent({ item }: { readonly item: FeedItem }) {
 						{item.actorName !== null && (
 							<span className={namesItsKind(item.kind) ? "" : FAMILY_TEXT_SOFT[family]}>{item.actorName}</span>
 						)}
+
+						{/* a mail thread is a group whose events are messages, so the files are per event */}
+						<Attachments names={item.attachments} />
 
 						<time
 							dateTime={item.activityAt}

@@ -3,7 +3,7 @@ import type { FeedItem } from "./feed";
 import { useSetRead } from "./feed";
 import { FAMILY_TEXT, FAMILY_TEXT_SOFT, rowFamily } from "./events";
 import { kindLabel, namesItsKind } from "./kinds";
-import { DoneTag, edgeClass, MetaLine, ReadToggle, ROW_MOTION } from "./row";
+import { Attachments, DoneTag, edgeClass, MetaLine, ReadToggle, ROW_MOTION } from "./row";
 import { fullTimestamp, shortAgo } from "../lib/time";
 
 /*
@@ -59,6 +59,8 @@ export function FeedRow({ item }: { readonly item: FeedItem }) {
 					{namesItsKind(item.kind) && (
 						<span className={`font-medium ${FAMILY_TEXT[family]}`}>{kindLabel(item.kind)}</span>
 					)}
+
+					<Attachments names={item.attachments} />
 
 					{item.resolved && <DoneTag />}
 

@@ -20,6 +20,8 @@ const feedItemSchema = z.object({
 	contextLabel: z.string().nullable(),
 	contextUrl: z.string().nullable(),
 	url: z.string(),
+	/** The file names that came with it, and empty where nothing did. */
+	attachments: z.array(z.string()),
 	/** Opaque: rows sharing one are about the same thing. See grouping.ts. */
 	groupKey: z.string(),
 	createdAt: z.string(),

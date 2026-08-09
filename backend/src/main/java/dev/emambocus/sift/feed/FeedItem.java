@@ -102,6 +102,13 @@ public class FeedItem {
 	@Column(name = "resolve_when_absent", nullable = false)
 	private boolean resolveWhenAbsent = true;
 
+	/**
+	 * The file names that came with it, one per line, and null where nothing did. Text rather than an
+	 * array because the stored search columns are generated from it.
+	 */
+	@Column
+	private String attachments;
+
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "raw_payload")
 	private String rawPayload;

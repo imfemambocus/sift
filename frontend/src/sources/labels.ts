@@ -65,9 +65,13 @@ export function isReading(source: SourceStatus): boolean {
  * and the settings card all answer it and three wordings for one fact is how they come to disagree.
  *
  * <p>"Synced" rather than "read": an item is read or unread, and one word cannot mean both.
+ *
+ * @param asked a read this page has asked for and is still waiting on. The server is what says a
+ *     source is being read, and it is only asked again every so often, so without this the words
+ *     stay on "Synced 2m ago" for the whole of a read somebody just pressed.
  */
-export function syncPhrase(source: SourceStatus): string {
-	if (isReading(source)) {
+export function syncPhrase(source: SourceStatus, asked = false): string {
+	if (asked || isReading(source)) {
 		return "Syncing now";
 	}
 	if (source.lastSyncAt === null) {

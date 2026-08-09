@@ -31,10 +31,14 @@ function RailLink({ to, label, icon: Icon, unread = 0 }: RailItem) {
 			{({ isActive }) => (
 				<>
 					{isActive && (
-						// one shared layoutId, so the marker slides between sections instead of blinking
+						/*
+						 * one shared layoutId, so the marker slides between sections instead of blinking.
+						 * it runs along the edge the rail is attached to, which is the top of the icon
+						 * while the rail is a bar at the bottom of the screen.
+						 */
 						<motion.span
 							layoutId="rail-active"
-							className="absolute left-0 h-5 w-0.5 rounded-r-full bg-accent"
+							className="absolute inset-x-1.5 top-0 h-0.5 rounded-b-full bg-accent sm:inset-x-auto sm:top-auto sm:left-0 sm:h-5 sm:w-0.5 sm:rounded-b-none sm:rounded-r-full"
 							transition={{ type: "spring", stiffness: 520, damping: 42 }}
 						/>
 					)}
@@ -61,28 +65,40 @@ export function SidebarRail() {
 	 */
 	const { data: summary } = useFeedSummary();
 
+	/*
+	 * a column beside the content on a wide screen, and a bar along the bottom of a narrow one, where
+	 * the reach of a thumb is what decides where navigation goes.
+	 */
 	return (
 		<nav
 			aria-label="Sections"
-			className="sticky top-0 flex h-dvh w-14 flex-none flex-col items-center gap-1 border-r border-border bg-surface py-4"
+			className="fixed inset-x-0 bottom-0 z-20 flex h-14 w-full flex-none flex-row items-center justify-around gap-1 border-t border-border bg-surface px-2 sm:sticky sm:inset-x-auto sm:top-0 sm:bottom-auto sm:h-dvh sm:w-14 sm:flex-col sm:justify-start sm:border-t-0 sm:border-r sm:px-0 sm:py-4"
 		>
-			<span className="mb-3 flex size-10 items-center justify-center text-accent">
+			{/* the wordmark is the one thing worth the room it takes only when there is room */}
+			<span className="hidden size-10 items-center justify-center text-accent sm:mb-3 sm:flex">
 				<SiftMark className="size-4.5" label="Sift" />
 			</span>
 
-			<RailLink {...HOME} />
+			{/*
+			  * where to go, kept together as one cluster so the bar reads as two groups rather than as
+			  * five loose icons. `contents` because the column below wants these as its own children,
+			  * so that the controls can still take the space left over.
+			  */}
+			<div className="flex items-center gap-1 sm:contents">
+				<RailLink {...HOME} />
 
-			{(sources ?? []).map((source) => (
-				<RailLink
-					key={source.source}
-					to={sourcePath(source.source)}
-					label={sourceName(source.source)}
-					icon={sourceIcon(source.source)}
-					unread={summaryFor(summary, source.source).unread}
-				/>
-			))}
+				{(sources ?? []).map((source) => (
+					<RailLink
+						key={source.source}
+						to={sourcePath(source.source)}
+						label={sourceName(source.source)}
+						icon={sourceIcon(source.source)}
+						unread={summaryFor(summary, source.source).unread}
+					/>
+				))}
+			</div>
 
-			<div className="mt-auto flex flex-col items-center gap-1">
+			<div className="flex flex-row items-center gap-1 sm:mt-auto sm:flex-col">
 				<ThemeCycleButton />
 				<RailLink {...SETTINGS} />
 				<button

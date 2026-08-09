@@ -5,6 +5,7 @@ import dev.emambocus.sift.credential.UnknownSourceException;
 import dev.emambocus.sift.security.SiftUserDetails;
 import dev.emambocus.sift.sync.SourceReadSync;
 import jakarta.validation.Valid;
+import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -29,10 +30,13 @@ public class FeedController {
 
 	private final FeedService feed;
 	private final SourceReadSync readSync;
+	// the search takes relative spans, so `after:7d` needs the moment the query arrived
+	private final Clock clock;
 
-	public FeedController(FeedService feed, SourceReadSync readSync) {
+	public FeedController(FeedService feed, SourceReadSync readSync, Clock clock) {
 		this.feed = feed;
 		this.readSync = readSync;
+		this.clock = clock;
 	}
 
 	/**
@@ -51,7 +55,8 @@ public class FeedController {
 			@AuthenticationPrincipal SiftUserDetails principal) {
 
 		return feed.page(new FeedRequest(principal.id(), parse(source), FeedFilter.parse(filter),
-				FeedOrder.parse(order), FeedSearch.parse(q), FeedCursor.decode(cursor), bounded(limit)));
+				FeedOrder.parse(order), FeedSearch.parse(q, clock.instant()), FeedCursor.decode(cursor),
+				bounded(limit)));
 	}
 
 	/** The counts behind every number the app shows without showing the rows it counted. */

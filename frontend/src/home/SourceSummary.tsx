@@ -5,6 +5,7 @@ import { eventFamily, FAMILY_FILL, FAMILY_LABEL, FAMILY_ORDER } from "../feed/ev
 import { sourceName, sourcePath, syncPhrase } from "../sources/labels";
 import { SyncButton } from "../sources/SyncButton";
 import type { SourceStatus } from "../sources/sources";
+import { useIsSyncing } from "../sources/sources";
 
 /*
  * the server counts by kind and this turns those into families, rather than the server counting
@@ -39,6 +40,11 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 	const byFamily = countByFamily(counts.waitingByKind);
 	const present = FAMILY_ORDER.filter((family) => byFamily[family] > 0);
 	const rejected = source.status === "AUTH_FAILED";
+	/*
+	 * a refresh pressed on this card. the card is what changes for it, since Home never skeletons:
+	 * a skeleton here would take away every other card and the offers to answer for one of them.
+	 */
+	const asked = useIsSyncing(source.source);
 
 	return (
 		<article className="relative flex flex-col gap-4 rounded-panel border border-border bg-surface px-5 py-4 transition-colors hover:border-fg-muted/40">
@@ -101,7 +107,7 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 				<div className="flex flex-wrap items-baseline gap-x-2 text-[12px] text-fg-muted">
 					<span>{waiting === 1 ? "1 waiting" : `${waiting} waiting`}</span>
 					<span aria-hidden className="text-fg-muted/45">&middot;</span>
-					<span>{syncPhrase(source)}</span>
+					<span>{syncPhrase(source, asked)}</span>
 				</div>
 				{/* beside the line it refreshes, as on a feed page, and clear of the rest of the card */}
 				<SyncButton source={source} />

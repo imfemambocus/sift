@@ -228,6 +228,7 @@ public class FeedSyncStore {
 		stored.setContextLabel(item.contextLabel());
 		stored.setContextUrl(item.contextUrl());
 		stored.setUrl(item.url());
+		stored.setAttachments(nameLines(item.attachments()));
 		// recomputed rather than set once, since a source may correct the url of a row it already sent
 		stored.setGroupKey(groupKeyOf(stored.getSource(), item));
 		/*
@@ -253,6 +254,14 @@ public class FeedSyncStore {
 		stored.setResolveWhenAbsent(item.resolveWhenAbsent());
 		stored.setLastSeenAt(now);
 		stored.setResolvedAt(null);
+	}
+
+	/*
+	 * one name per line, and null where there are none, which is what the column's `is not null` test
+	 * asks. a newline separates them because a file name may contain a space.
+	 */
+	private static String nameLines(List<String> names) {
+		return names.isEmpty() ? null : String.join("\n", names);
 	}
 
 	private static String groupKeyOf(SourceType source, IncomingItem item) {

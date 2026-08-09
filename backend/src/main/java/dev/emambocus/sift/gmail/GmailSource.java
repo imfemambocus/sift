@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -69,6 +70,11 @@ class GmailSource implements NotificationSource {
 	private static final int MAX_MESSAGES = 200;
 
 	private static final String NO_SUBJECT = "(no subject)";
+
+	private static final String DISPOSITION = "Content-Disposition";
+
+	/** A bound on the column. Nothing is looking for the twenty-first file on one message. */
+	private static final int MAX_ATTACHMENTS = 20;
 
 	private final GmailClient client;
 	private final GmailOAuth oauth;
@@ -356,8 +362,56 @@ class GmailSource implements NotificationSource {
 				// the mailbox's own answer, and only where the row is new: after that Sift owns it
 				!labels(message).contains(UNREAD),
 				null,
+				attachmentsOf(message),
 				// a message happened once. the next sweep not listing it says nothing at all.
 				false);
+	}
+
+	/**
+	 * The files that came with a message, by name, so the search finds it by what was attached as
+	 * well as by what it says.
+	 *
+	 * <p>An inline part is left out. A signature image and a logo in a newsletter are parts with a
+	 * file name too, and naming them on the row would say a message carries a file when nobody
+	 * attached one.
+	 */
+	private static List<String> attachmentsOf(GmailResponses.Message message) {
+		List<String> names = new ArrayList<>();
+		collectFiles(message.payload(), names);
+		return names.size() <= MAX_ATTACHMENTS ? names : names.subList(0, MAX_ATTACHMENTS);
+	}
+
+	private static void collectFiles(GmailResponses.MessagePart part, List<String> names) {
+		if (part == null) {
+			return;
+		}
+		String name = fileName(part);
+		if (name != null && !names.contains(name)) {
+			names.add(name);
+		}
+		if (part.parts() != null) {
+			for (GmailResponses.MessagePart within : part.parts()) {
+				collectFiles(within, names);
+			}
+		}
+	}
+
+	private static String fileName(GmailResponses.MessagePart part) {
+		if (part.filename() == null || part.filename().isBlank() || isInline(part)) {
+			return null;
+		}
+		// the names are stored one per line, so one that carries a line break would become two files
+		return part.filename().replaceAll("\\s+", " ").trim();
+	}
+
+	private static boolean isInline(GmailResponses.MessagePart part) {
+		if (part.headers() == null) {
+			return false;
+		}
+		return part.headers().stream()
+				.filter(header -> DISPOSITION.equalsIgnoreCase(header.name()))
+				.map(GmailResponses.Header::value)
+				.anyMatch(value -> value != null && value.trim().toLowerCase(Locale.ROOT).startsWith("inline"));
 	}
 
 	private static Optional<Instant> arrivalOf(GmailResponses.Message message) {

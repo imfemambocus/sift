@@ -23,7 +23,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 class FeedPageTest extends SiftIntegrationTest {
 
 	private static final Instant MONDAY = Instant.parse("2026-08-03T09:00:00Z");
+	/** What a relative span such as {@code after:7d} is measured back from. */
+	private static final Instant NOW = Instant.parse("2026-08-09T12:00:00Z");
 	private static final String MR = "https://gl.example.org/team/web/-/merge_requests/";
+	private static final String MAIL = "https://mail.example.org/#all/";
 
 	@Autowired
 	private FeedService feed;
@@ -152,6 +155,48 @@ class FeedPageTest extends SiftIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("a date scope narrows to a window, as a calendar date or as a span back from now")
+	void searchNarrowsByDate() {
+		UUID user = newUser("dates@uni.lu");
+		store.persist(user, SourceType.GITLAB, List.of(
+				row("mr:1", "mr_assigned", "Last month", "David", "team/web", MR + "1",
+						Instant.parse("2026-07-01T09:00:00Z")),
+				row("mr:2", "mr_assigned", "This week", "David", "team/web", MR + "2", MONDAY)));
+
+		assertThat(titles(user, "after:2026-08-01")).containsExactly("This week");
+		assertThat(titles(user, "before:2026-08-01")).containsExactly("Last month");
+		// a span back from the moment it was typed, which is how "in the last week" is asked for
+		assertThat(titles(user, "after:7d")).containsExactly("This week");
+		assertThat(titles(user, "before:7d")).containsExactly("Last month");
+		// a month back from the ninth is the ninth, so the row from the first is outside it
+		assertThat(titles(user, "after:1m")).containsExactly("This week");
+		assertThat(titles(user, "after:2m")).hasSize(2);
+		assertThat(titles(user, "after:12h")).isEmpty();
+		// the window is the latest floor and the earliest ceiling, since every token has to match
+		assertThat(titles(user, "after:2026-06-01 before:2026-08-01")).containsExactly("Last month");
+		assertThat(titles(user, "after:2026-08-01 before:2026-07-01")).isEmpty();
+		// a date nobody can read finds nothing, rather than being dropped and finding everything
+		assertThat(titles(user, "after:2026-08")).isEmpty();
+	}
+
+	@Test
+	@DisplayName("a message is found by the name of the file that came with it")
+	void searchFindsAttachedFiles() {
+		UUID user = newUser("files@uni.lu");
+		store.persist(user, SourceType.GMAIL, List.of(
+				mail("msg:1", "The quarterly numbers", MAIL + "1", List.of("Q3 budget.pdf")),
+				mail("msg:2", "Lunch on Thursday", MAIL + "2", List.of())));
+
+		assertThat(titles(user, "has:attachment")).containsExactly("The quarterly numbers");
+		// the names are part of the haystack, so the file finds the message that carried it
+		assertThat(titles(user, "pdf")).containsExactly("The quarterly numbers");
+		assertThat(titles(user, "budget.pdf")).containsExactly("The quarterly numbers");
+		// and a typo in one is forgiven exactly as it is in the subject
+		assertThat(titles(user, "bugdet")).containsExactly("The quarterly numbers");
+		assertThat(found(user, "has:attachment").getFirst().attachments()).containsExactly("Q3 budget.pdf");
+	}
+
+	@Test
 	@DisplayName("asking for read and unread at once finds nothing, since every token has to match")
 	void contradictoryScopes() {
 		UUID user = newUser("both@uni.lu");
@@ -219,9 +264,13 @@ class FeedPageTest extends SiftIntegrationTest {
 	}
 
 	private List<String> titles(UUID user, String query) {
+		return found(user, query).stream().map(FeedItemResponse::title).toList();
+	}
+
+	private List<FeedItemResponse> found(UUID user, String query) {
 		FeedRequest request = new FeedRequest(user, null, FeedFilter.ALL, FeedOrder.LATEST,
-				FeedSearch.parse(query), null, 50);
-		return feed.page(request).items().stream().map(FeedItemResponse::title).toList();
+				FeedSearch.parse(query, NOW), null, 50);
+		return feed.page(request).items();
 	}
 
 	private static FeedRequest page(UUID user, int limit, String cursor) {
@@ -247,5 +296,10 @@ class FeedPageTest extends SiftIntegrationTest {
 
 		return new IncomingItem(sourceId, kind, title, null, actor, null, project,
 				null, url, null, MONDAY, activity, false, null, true);
+	}
+
+	private static IncomingItem mail(String sourceId, String subject, String url, List<String> files) {
+		return new IncomingItem(sourceId, "mail_received", subject, null, "Ada", null, "ada@uni.lu",
+				null, url, null, MONDAY, MONDAY, false, null, files, false);
 	}
 }

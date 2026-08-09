@@ -1,6 +1,7 @@
 package dev.emambocus.sift.feed;
 
 import jakarta.persistence.EntityManager;
+import java.time.Instant;
 import java.util.List;
 import org.hibernate.Session;
 import org.springframework.stereotype.Component;
@@ -63,6 +64,12 @@ public class FeedPageQuery {
 			       and (cast(:searchRead as boolean) is null
 			            or (cast(:searchRead as boolean) and i.read_at is not null)
 			            or (not cast(:searchRead as boolean) and i.read_at is null))
+			       and (cast(:after as timestamptz) is null
+			            or i.activity_at >= cast(:after as timestamptz))
+			       and (cast(:before as timestamptz) is null
+			            or i.activity_at < cast(:before as timestamptz))
+			       and (cast(:hasFiles as boolean) is null
+			            or (i.attachments is not null) = cast(:hasFiles as boolean))
 			       and not exists (
 			           select 1 from unnest(a.projects) as want
 			            where position(want in lower(coalesce(i.context_label, ''))) = 0)
@@ -137,6 +144,10 @@ public class FeedPageQuery {
 				.setParameter("kinds", joined(search.kinds()))
 				.setParameter("urlParts", joined(search.urlParts()))
 				.setParameter("searchRead", search.read())
+				// bound as text for the reason the cursor is: a timestamp reads back the same either way
+				.setParameter("after", moment(search.after()))
+				.setParameter("before", moment(search.before()))
+				.setParameter("hasFiles", search.hasAttachment())
 				.setParameter("cursorAt", cursor == null ? null : cursor.activityAt().toString())
 				.setParameter("cursorKey", cursor == null ? null : cursor.groupKey())
 				.setParameter("groups", groups)
@@ -151,5 +162,9 @@ public class FeedPageQuery {
 	 */
 	private static String joined(List<String> terms) {
 		return String.join(" ", terms);
+	}
+
+	private static String moment(Instant at) {
+		return at == null ? null : at.toString();
 	}
 }

@@ -1,7 +1,7 @@
 import { errorMessage } from "../lib/api";
 import { syncPhrase } from "./labels";
 import type { SourceStatus } from "./sources";
-import { useSyncError } from "./sources";
+import { useIsSyncing, useSyncError } from "./sources";
 import { SyncButton } from "./SyncButton";
 
 /*
@@ -10,11 +10,14 @@ import { SyncButton } from "./SyncButton";
  */
 export function LastSynced({ source }: { readonly source: SourceStatus }) {
 	const message = errorMessage(useSyncError(source.source));
+	// on its own line: inside the call below it would still run, but this is the habit that keeps a
+	// hook out of a position where a later edit could skip it
+	const asked = useIsSyncing(source.source);
 
 	return (
 		<div className="flex flex-col items-end gap-1">
 			<div className="flex items-center gap-1.5">
-				<span className="text-[12px] text-fg-muted">{syncPhrase(source)}</span>
+				<span className="text-[12px] text-fg-muted">{syncPhrase(source, asked)}</span>
 				<SyncButton source={source} />
 			</div>
 

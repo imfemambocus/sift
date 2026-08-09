@@ -95,6 +95,12 @@ def visible(messages):
     return [m for m in messages if not ({"SPAM", "TRASH"} & set(m.get("labelIds", [])))]
 
 
+def without_parts(message):
+    """The metadata format: headers and labels, and no parts at all, so no file name is in it."""
+    payload = {k: v for k, v in message["payload"].items() if k != "parts"}
+    return {**message, "payload": payload}
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -238,9 +244,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if parsed.path.startswith("/gmail/v1/users/me/messages/"):
             wanted = parsed.path.rsplit("/", 1)[-1]
+            wants_parts = query.get("format", ["full"])[0] == "full"
             for message in load():
                 if message["id"] == wanted:
-                    self._send(200, message)
+                    self._send(200, message if wants_parts else without_parts(message))
                     return
             self._send(404, {"error": {"code": 404, "message": "Not Found"}})
             return

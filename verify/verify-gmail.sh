@@ -91,6 +91,7 @@ revoked() { curl -s "$FAKE/oauth/issued" | python3 -c 'import json,sys; print(js
 # the feed answers one page of groups, so ask for one big enough to hold every fixture and unwrap it
 feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 rows() { feed | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
+len() { python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
 # every value of a field, sorted, so an assertion does not depend on the order of the list
 values() { feed | python3 -c "import json,sys; print(' '.join(sorted(str(i['$1']) for i in json.load(sys.stdin))))"; }
 # one field of the row whose title matches
@@ -187,6 +188,29 @@ check "a sender with no name falls back to the address" "grete@uni.lu" "$(titled
 check "the row opens that message"  "https://mail.google.com/mail/u/0/#all/m1" "$(titled 'Chart V2 review' url)"
 # a message happened once, so a later sweep not listing it must never mark it done
 check "nothing is resolved by absence" "False False False False False" "$(values resolved)"
+
+echo
+echo "--- what came with a message, which is half of why a mailbox is searched ---"
+files() { titled "$1" attachments | tr -d "[]'"; }
+check "the file is named on the row"   "grant report.pdf" "$(files 'Grant report draft')"
+# an inline signature image is not something somebody attached, and naming it would say it was
+check "the inline image is not one"    "grant report.pdf" "$(files 'Grant report draft')"
+check "a message with no files has none" ""              "$(files 'Chart V2 review')"
+check "has:attachment narrows to it"   1 "$(feed 'q=has:attachment' | len)"
+# the name is in the haystack, so the file finds the message that carried it
+check "the file name is searchable"    1 "$(feed 'q=pdf' | len)"
+check "and a typo in it is forgiven"   1 "$(feed 'q=graant' | len)"
+
+echo
+echo "--- a date scope narrows on the activity the list already shows ---"
+# spans rather than dates, because the fixture is placed in hours back from the run and a calendar
+# day would say something different depending on the hour the suite is started at
+check "a day back leaves the older one out" 4 "$(feed 'q=after:1d' | len)"
+check "and before: keeps only that one"     1 "$(feed 'q=before:1d' | len)"
+check "a week back holds the whole mailbox" 5 "$(feed 'q=after:7d' | len)"
+check "the two together are one window"     2 "$(feed 'q=after:7d%20before:2h' | len)"
+check "a calendar date is read as well"     5 "$(feed 'q=after:2020-01-01' | len)"
+check "an unreadable date finds nothing"    0 "$(feed 'q=after:2026-13-40' | len)"
 
 echo
 echo "--- a conversation is one entry, not one per message ---"

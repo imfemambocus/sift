@@ -85,6 +85,24 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("a file that came with a message is named on the row, and an inline image is not")
+	void filesOnAMessageAreNamed() {
+		GMAIL.deliver(
+				Msg.unread("m1", "t1", minutesAgo(10), ADA, "The quarterly numbers")
+						.carrying(FakeGmail.File.attached("Q3 budget.pdf"),
+								FakeGmail.File.forwarded("minutes.docx"),
+								FakeGmail.File.embedded("logo.png")),
+				Msg.unread("m2", "t2", minutesAgo(20), ADA, "Lunch on Thursday"));
+
+		List<IncomingItem> fetched = read(credential("files@uni.lu"));
+
+		// a part of a part counts too, or nothing that came with a forwarded message would be found
+		assertThat(itemOf(fetched, "msg:m1").attachments())
+				.containsExactlyInAnyOrder("Q3 budget.pdf", "minutes.docx");
+		assertThat(itemOf(fetched, "msg:m2").attachments()).isEmpty();
+	}
+
+	@Test
 	@DisplayName("a sender with no display name falls back to the address rather than to nothing")
 	void bareAddressIsStillAName() {
 		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(5), "grete@uni.lu", "No display name"));
@@ -523,6 +541,13 @@ class GmailSourceTest extends SiftIntegrationTest {
 		SourceFetch fetched = source.fetch(credential);
 		fetched.commit().run();
 		return fetched.items();
+	}
+
+	private static IncomingItem itemOf(List<IncomingItem> fetched, String sourceId) {
+		return fetched.stream()
+				.filter(item -> item.sourceId().equals(sourceId))
+				.findFirst()
+				.orElseThrow();
 	}
 
 	private static long minutesAgo(int minutes) {

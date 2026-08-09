@@ -101,7 +101,9 @@ export function WindowScrollbar() {
 			aria-hidden
 			onPointerDown={handlePointerDown}
 			style={{ height: metrics.height, top: metrics.top, right: EDGE_INSET }}
-			className={`fixed z-50 w-1.5 cursor-grab rounded-full bg-fg/25 transition-opacity duration-200 hover:bg-fg/40 ${
+			// hidden on a touch-sized screen, where the browser draws nothing to replace and a thumb
+			// this narrow is a target nobody can hit
+			className={`fixed z-50 hidden w-1.5 cursor-grab rounded-full bg-fg/25 transition-opacity duration-200 hover:bg-fg/40 sm:block ${
 				visible || dragging ? "opacity-100" : "opacity-0"
 			}`}
 		/>

@@ -66,7 +66,15 @@ final class GmailResponses {
 			MessagePart payload) {
 	}
 
-	record MessagePart(List<Header> headers) {
+	/**
+	 * @param filename the name of the file this part is, and empty for a part that is not one
+	 * @param parts the parts within this one. A message with a file in it nests: the text and the
+	 *     file are parts of a multipart payload, and a forwarded message nests again.
+	 */
+	record MessagePart(
+			String filename,
+			List<Header> headers,
+			List<MessagePart> parts) {
 	}
 
 	record Header(String name, String value) {

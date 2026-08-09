@@ -57,6 +57,7 @@ These parts are built:
   that card connects it. The sidebar shows a source only after you connect it.
 - a warning when a connection no longer works. An empty list then never looks like good news.
 - a source that says **Syncing now** while Sift reads it, so a short list explains itself
+- a layout for a small screen. On a phone the sidebar becomes a bar along the bottom of the screen.
 
 Read and unread behaves like this:
 
@@ -91,6 +92,18 @@ whole history. It does not search only the tab you are on, and it does not searc
 the list on screen. It forgives a typo. It forgives words in the wrong order. `is:unread`, `is:mr`,
 `project:` and `from:` make a search narrow.
 
+The icon at the right of the field lists every prefix, with one line each on what it does. Hold the
+pointer over it, or reach it with the keyboard.
+
+You can also narrow a search by date and by attachment. Write `after:2026-08-01` for a date, or
+`after:7d` for the last seven days. The units are `h`, `d`, `w`, `m` and `y`. `before:` works the same
+way, so `after:7d before:1d` is one window. `has:attachment` keeps only the rows that carry a file.
+
+Sift reads the name of every file that came with a message. It shows the first name on the row, and
+it searches all of them. Search for `pdf`, or for part of a file name, and you find the message that
+carried it. Sift ignores an image that a message draws inside itself, such as a signature, because
+nobody attached it.
+
 Finished work does not drop out of the feed. Somebody completes a to-do, or a merge request merges.
 The row stays in the list. It turns grey and it says "done". The feed is your whole history. Read and
 unread is the only axis you filter it on. Finished work does not count as unread, because nothing
@@ -103,7 +116,8 @@ One source is not built yet. That source is Outlook. It needs a permission that 
 of a company account must give, and that permission is the only obstacle.
 
 Your Sift account is an email address and a password. A source gives Sift permission to read that
-source. A source never becomes your way in to Sift.
+source. A source never becomes your way in to Sift. Sift holds one account for each source, so one
+GitLab and one mailbox.
 
 ## Run it
 
@@ -278,6 +292,10 @@ back through your mailbox until it gets to the first message. A large mailbox ne
 can use Sift while this happens, and the Gmail page tells you that older mail is still on its way.
 The card keeps **Syncing now** for the whole of it, and gives you a time only when Sift has read your
 mailbox back to its first message.
+
+Sift reads the file names of a message at the moment it reads that message, and it never goes back over
+a message it has already read. If `has:attachment` finds fewer messages than you expect, disconnect
+Gmail and connect it again. That reads your mailbox from the beginning.
 
 Sift usually shows many more items than Gmail shows you. There are two reasons. Gmail counts a
 conversation as one line, and Sift makes a row for each message in it. Gmail also opens on your

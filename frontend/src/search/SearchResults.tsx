@@ -46,7 +46,7 @@ function Nothing({ query }: { readonly query: string }) {
 	return (
 		<EmptyState
 			title={`Nothing matches "${query}"`}
-			description="Typos are forgiven and words can be in any order, so this is most likely a word that is not there at all. is:unread, is:mr, is:issue, project: and from: narrow rather than widen. Escape clears the field."
+			description="Typos are forgiven and words can be in any order, so this is most likely a word that is not there at all. is:unread, is:mr, is:issue, project:, from:, has:attachment and a date such as after:2026-08-01 or after:7d narrow rather than widen. Escape clears the field."
 		/>
 	);
 }

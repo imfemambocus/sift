@@ -1,6 +1,7 @@
 package dev.emambocus.sift.sync;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * What a source adapter produces. Deliberately not the JPA entity: an adapter should not be able to
@@ -37,9 +38,30 @@ public record IncomingItem(
 		boolean alreadyRead,
 		String rawPayload,
 		/**
+		 * The file names that came with it. Empty for a source that carries no files. They are part of
+		 * the search haystack, so a message is found by what was attached to it as well as by what it
+		 * says.
+		 */
+		List<String> attachments,
+		/**
 		 * True when this is state the source keeps reporting, so its disappearance means it is done.
 		 * False when it is an event: it happened once, and the next sync not mentioning it again
 		 * says nothing at all about whether the user has dealt with it.
 		 */
 		boolean resolveWhenAbsent) {
+
+	public IncomingItem {
+		attachments = attachments == null ? List.of() : List.copyOf(attachments);
+	}
+
+	/** For a source whose items never carry files, which is most of them. */
+	public IncomingItem(String sourceId, String kind, String title, String body, String actorName,
+			String actorAvatarUrl, String contextLabel, String contextUrl, String url,
+			String conversationId, Instant sourceCreatedAt, Instant activityAt, boolean alreadyRead,
+			String rawPayload, boolean resolveWhenAbsent) {
+
+		this(sourceId, kind, title, body, actorName, actorAvatarUrl, contextLabel, contextUrl, url,
+				conversationId, sourceCreatedAt, activityAt, alreadyRead, rawPayload, List.of(),
+				resolveWhenAbsent);
+	}
 }

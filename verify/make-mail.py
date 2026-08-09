@@ -22,7 +22,15 @@ def arrived(hours_ago):
     return str(BASE_MS - int(timedelta(hours=hours_ago).total_seconds() * 1000))
 
 
-def message(ident, thread, hours_ago, sender, subject, snippet, labels, recipient=None):
+def part(name, disposition):
+    return {
+        "mimeType": "application/octet-stream",
+        "filename": name,
+        "headers": [{"name": "Content-Disposition", "value": f'{disposition}; filename="{name}"'}],
+    }
+
+
+def message(ident, thread, hours_ago, sender, subject, snippet, labels, recipient=None, files=()):
     headers = [
         {"name": "Subject", "value": subject},
         {"name": "From", "value": sender},
@@ -31,13 +39,22 @@ def message(ident, thread, hours_ago, sender, subject, snippet, labels, recipien
     if recipient:
         # what a sent row is about: mail you wrote is named after whoever received it
         headers.append({"name": "To", "value": recipient})
+    payload = {"mimeType": "multipart/mixed", "headers": headers}
+    if files:
+        # the shape a real one has: an inline image sits inside the part that draws it, and a part
+        # somebody attached sits beside that part
+        inline = [part(name, "inline") for name, kind in files if kind == "inline"]
+        payload["parts"] = [
+            {"mimeType": "multipart/related", "filename": "",
+             "parts": [{"mimeType": "text/plain", "filename": ""}] + inline},
+        ] + [part(name, "attachment") for name, kind in files if kind == "attachment"]
     return {
         "id": ident,
         "threadId": thread,
         "labelIds": labels,
         "internalDate": arrived(hours_ago),
         "snippet": snippet,
-        "payload": {"headers": headers},
+        "payload": payload,
     }
 
 
@@ -53,7 +70,9 @@ BASE = [
     # same thread as m1: the two must collapse into one entry in the feed
     message("m2", "t1", 0.2, GRETE, "Re: Chart V2 review", "I pushed a fix for it.", INBOX),
     message("m3", "t2", 4, GRETE, "Seminar on Thursday", "Room B on the first floor.", SEEN),
-    message("m4", "t3", 28, ADA, "Grant report draft", "Draft attached for your comments.", INBOX),
+    # the signature image is inline and must never be named as something somebody attached
+    message("m4", "t3", 28, ADA, "Grant report draft", "Draft attached for your comments.", INBOX,
+            files=[("grant report.pdf", "attachment"), ("signature.png", "inline")]),
     # mail you wrote is a row too: an archive you search has to hold it
     message("m5", "t4", 1, ME, "My own reply", "Thanks, looking now.", ["SENT"], ADA),
     # neither of the two below may ever become a row

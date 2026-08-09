@@ -30,26 +30,54 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class FakeGmail implements AutoCloseable {
 
+	/**
+	 * A part of a message that carries a file. Gmail marks the signature image and the logo of a
+	 * newsletter as inline, which is not the same as somebody attaching something.
+	 */
+	public record File(String name, boolean inline, boolean nested) {
+
+		/** Somebody attached it: a part of the message itself. */
+		public static File attached(String name) {
+			return new File(name, false, false);
+		}
+
+		/** An image the message draws, which sits within the part that draws it. */
+		public static File embedded(String name) {
+			return new File(name, true, true);
+		}
+
+		/** Attached to a message that was forwarded, so it is a part of a part. */
+		public static File forwarded(String name) {
+			return new File(name, false, true);
+		}
+	}
+
 	/** One message, as the fixtures describe it. Labels are Gmail's own vocabulary. */
 	public record Msg(String id, String threadId, long arrivedAtMillis, String from, String to, String subject,
-			String snippet, List<String> labels) {
+			String snippet, List<String> labels, List<File> files) {
 
 		public static Msg unread(String id, String threadId, long arrivedAtMillis, String from, String subject) {
 			return new Msg(id, threadId, arrivedAtMillis, from, null, subject, "a snippet",
-					List.of("INBOX", "UNREAD"));
+					List.of("INBOX", "UNREAD"), List.of());
 		}
 
 		public static Msg read(String id, String threadId, long arrivedAtMillis, String from, String subject) {
-			return new Msg(id, threadId, arrivedAtMillis, from, null, subject, "a snippet", List.of("INBOX"));
+			return new Msg(id, threadId, arrivedAtMillis, from, null, subject, "a snippet",
+					List.of("INBOX"), List.of());
 		}
 
 		/** Mail you wrote: Gmail labels it SENT, and the recipient is who it is about. */
 		public static Msg sent(String id, String threadId, long arrivedAtMillis, String to, String subject) {
-			return new Msg(id, threadId, arrivedAtMillis, "me@uni.lu", to, subject, "a snippet", List.of("SENT"));
+			return new Msg(id, threadId, arrivedAtMillis, "me@uni.lu", to, subject, "a snippet",
+					List.of("SENT"), List.of());
 		}
 
 		public Msg labelled(String... labels) {
-			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, List.of(labels));
+			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, List.of(labels), files);
+		}
+
+		public Msg carrying(File... files) {
+			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, labels, List.of(files));
 		}
 	}
 
@@ -394,12 +422,42 @@ public final class FakeGmail implements AutoCloseable {
 		return """
 				{"id": "%s", "threadId": "%s", "labelIds": [%s], "internalDate": "%d",
 				 "snippet": "%s",
-				 "payload": {"headers": [
+				 "payload": {"mimeType": "multipart/mixed", "headers": [
 				   {"name": "Subject", "value": "%s"},
 				   {"name": "From", "value": "%s"}%s
-				 ]}}
+				 ]%s}}
 				""".formatted(message.id(), message.threadId(), labels, message.arrivedAtMillis(),
-				escape(message.snippet()), escape(message.subject()), escape(message.from()), to);
+				escape(message.snippet()), escape(message.subject()), escape(message.from()), to,
+				partsJson(message.files()));
+	}
+
+	/*
+	 * the shape a real message with a file in it has: a part somebody attached sits beside the text,
+	 * and an inline image or anything that came with a forwarded message sits within it. both depths
+	 * are here on purpose, since a reader that looked at only one of them would pass on the other.
+	 */
+	private static String partsJson(List<File> files) {
+		if (files.isEmpty()) {
+			return "";
+		}
+		StringBuilder beside = new StringBuilder();
+		StringBuilder within = new StringBuilder();
+		for (File file : files) {
+			StringBuilder into = file.nested() ? within : beside;
+			into.append(',').append(fileJson(file));
+		}
+		return """
+				, "parts": [
+				  {"mimeType": "multipart/related", "filename": "",
+				   "parts": [{"mimeType": "text/plain", "filename": ""}%s]}%s]"""
+				.formatted(within, beside);
+	}
+
+	private static String fileJson(File file) {
+		return """
+				{"mimeType": "application/octet-stream", "filename": "%s",
+				 "headers": [{"name": "Content-Disposition", "value": "%s; filename=\\"%s\\""}]}"""
+				.formatted(escape(file.name()), file.inline() ? "inline" : "attachment", escape(file.name()));
 	}
 
 	// a From header legitimately contains quotes, and an unescaped one makes the whole body unreadable

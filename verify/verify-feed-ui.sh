@@ -24,11 +24,11 @@ cleanup() {
   [ -n "${STUB_PID:-}" ] && kill "$STUB_PID" 2>/dev/null
   [ -n "${GOOGLE_PID:-}" ] && kill "$GOOGLE_PID" 2>/dev/null
   docker rm -f sift-ui2-db >/dev/null 2>&1
-  rm -f "$WORK/revoked"
+  rm -f "$WORK/revoked" "$WORK/feed-slow"
 }
 trap cleanup EXIT
 
-rm -f "$WORK/revoked"
+rm -f "$WORK/revoked" "$WORK/feed-slow"
 python3 "$HERE/make-todos.py" full "$TODOS" >/dev/null
 python3 "$HERE/make-mrs.py" "$WORK/feed-mrs.json" >/dev/null
 # a thread the user is already in, so a later reply produces a real participation row
@@ -37,7 +37,8 @@ cat > "$WORK/feed-disc.json" <<'JSON'
   {"id": 5001, "body": "Can we avoid the extra round trip here?", "system": false,
    "created_at": "2026-08-03T08:00:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}}]}]}
 JSON
-PORT=7788 TODOS_FILE="$TODOS" MRS_FILE="$WORK/feed-mrs.json" DISCUSSIONS_FILE="$WORK/feed-disc.json" REVOKE_FILE="$WORK/revoked" python3 "$HERE/fake-gitlab.py" &
+# SLOW_FILE holds a read open long enough to photograph a card while it is being read
+PORT=7788 TODOS_FILE="$TODOS" MRS_FILE="$WORK/feed-mrs.json" DISCUSSIONS_FILE="$WORK/feed-disc.json" REVOKE_FILE="$WORK/revoked" SLOW_FILE="$WORK/feed-slow" SLOW_SECONDS=4 python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
 for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:7788/oauth/issued && break; sleep 1; done
 echo "stub gitlab up"

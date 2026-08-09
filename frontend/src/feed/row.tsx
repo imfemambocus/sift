@@ -1,4 +1,4 @@
-import { Check, Circle } from "lucide-react";
+import { Check, Circle, Paperclip } from "lucide-react";
 import type { ReactNode } from "react";
 
 /*
@@ -66,6 +66,30 @@ export function ReadToggle({ read, label, onToggle, tight = false }: ReadToggleP
  */
 export function DoneTag() {
 	return <span className="font-mono text-[11px] text-fg-muted/70">done</span>;
+}
+
+/*
+ * what came with the message, which is half of why a mailbox is searched at all. the first name is
+ * worth the room because it says why a row matched a search for it; the rest are a count and a
+ * tooltip.
+ *
+ * an inline element rather than a flex box, because MetaLine draws its separator as a ::before on
+ * this element, and inside a flex box that dot becomes a flex item with its own spacing.
+ */
+export function Attachments({ names }: { readonly names: readonly string[] }) {
+	const first = names[0];
+	if (first === undefined) {
+		return null;
+	}
+
+	return (
+		<span title={names.join("\n")} className="font-mono text-[11px] whitespace-nowrap">
+			<Paperclip aria-hidden size={11} strokeWidth={1.75} className="mr-1 inline align-[-1px]" />
+			<span className="sr-only">Attached: </span>
+			<span className="inline-block max-w-44 truncate align-bottom">{first}</span>
+			{names.length > 1 && <span className="text-fg-muted/70"> +{names.length - 1}</span>}
+		</span>
+	);
 }
 
 /*

@@ -182,6 +182,27 @@ console.log(`  scoped "project:frontend is:unread": ${scoped.rows} rows`);
 if (scoped.rows === 0) problems.push("the scope prefixes matched nothing");
 await shot("f06c-search-scoped-dark");
 
+/*
+ * what the prefixes are is on a panel behind an icon in the field, since a placeholder cannot hold
+ * eight of them. clicking into the field must not open it: the field is focusable too, and a panel
+ * that opened on every click would cover the results it was narrowing.
+ */
+const helpVisible = () => page.$eval('[role="tooltip"]', (panel) => getComputedStyle(panel).visibility === "visible");
+await page.click(SEARCH);
+await settle(300);
+if (await helpVisible()) problems.push("the search help opened just from clicking into the field");
+await page.hover('button[aria-label="What you can search for"]');
+await settle(400);
+const helpOpen = await helpVisible();
+const helpSays = await page.$eval('[role="tooltip"]', (panel) => panel.textContent ?? "");
+console.log(`  search help on hover: ${helpOpen}, naming ${["is:unread", "has:attachment", "after:7d", "from:"].filter((t) => helpSays.includes(t)).length} of 4 prefixes`);
+if (!helpOpen) problems.push("hovering the search help icon showed nothing");
+if (!helpSays.includes("has:attachment")) problems.push("the search help does not name every prefix");
+await shot("f06h-search-help-dark");
+// off the icon, or the panel stays open over the controls the next checks press
+await page.mouse.move(0, 0);
+await settle(300);
+
 await page.keyboard.press("Escape");
 await settle(500);
 const handedBack = await heading();
@@ -317,8 +338,44 @@ const cardRefresh = await page.$('article button[aria-label^="Check GitLab"]');
 if (cardRefresh === null) {
   problems.push("the Home card offers no way to check the source again");
 } else {
+  // hold the read open, so the picture below is of a card being read rather than one that has been
+  writeFileSync(`${WORK}/feed-slow`, "");
   await cardRefresh.click();
-  await settle(1500);
+  /*
+   * Home must not skeleton for a refresh somebody pressed. the card already turns its own icon and
+   * says so in words, and a skeleton would take away the card that was asked about, every other
+   * card, and the offers to connect. so the cards stay, and only the card's own words change.
+   */
+  /*
+   * waited for rather than read once, since the read itself has to still be running. it settles on
+   * whichever happens first, a skeleton or a card saying so, so each way of getting this wrong is
+   * reported as itself rather than as "nothing appeared".
+   */
+  const duringRefresh = await page.waitForFunction(() => {
+    const skeleton = document.querySelector("div.animate-pulse") !== null;
+    const card = document.querySelector("article");
+    const icon = document.querySelector('article button[aria-label^="Check"] svg');
+    const saying = card?.textContent?.includes("Syncing now") === true;
+    const turning = icon?.classList.contains("animate-spin") === true;
+    // the turning icon is the earliest of the three, so waiting on it reports the other two as
+    // themselves rather than as the read having finished before anything was looked at
+    if (!skeleton && !turning) return false;
+    return { skeleton, saying, turning, cards: document.querySelectorAll("article").length };
+  }, { timeout: 5000 }).then((handle) => handle.jsonValue()).catch(() => null);
+
+  if (duringRefresh === null) {
+    problems.push("Home showed nothing at all while it read a source");
+  } else {
+    console.log(`  Home during a pressed refresh: ${duringRefresh.cards} card(s) kept, skeleton ${duringRefresh.skeleton}, saying ${duringRefresh.saying}, turning ${duringRefresh.turning}`);
+    if (duringRefresh.skeleton) problems.push("pressing refresh on Home replaced the cards with a skeleton");
+    if (duringRefresh.cards === 0) problems.push("pressing refresh on Home took the cards away");
+    if (!duringRefresh.saying) problems.push("the Home card does not say it is syncing while it syncs");
+    if (!duringRefresh.turning) problems.push("the Home card's refresh icon does not turn while it syncs");
+  }
+  await shot("f06g-home-refresh-in-flight-dark");
+  try { unlinkSync(`${WORK}/feed-slow`); } catch { /* already gone */ }
+
+  await settle(5000);
   const landed = new URL(page.url()).pathname;
   console.log(`  the Home card's refresh left the browser on ${landed}`);
   if (landed !== "/") problems.push(`the Home card's refresh navigated to ${landed} instead of refreshing`);
@@ -336,10 +393,42 @@ if (afterReading.waiting !== "11") problems.push(`reading everything moved waiti
 await shot("f06f-home-all-read-dark");
 
 // mobile
+const railBox = async () => page.$eval('nav[aria-label="Sections"]', (nav) => {
+  const box = nav.getBoundingClientRect();
+  return { left: box.left, top: box.top, width: box.width, height: box.height };
+});
+
+const onWide = await railBox();
+if (onWide.left !== 0 || onWide.height < 500) {
+  problems.push(`the rail is not a column beside the content: ${JSON.stringify(onWide)}`);
+}
+
 await page.setViewport({ width: 430, height: 900, deviceScaleFactor: 2 });
 await page.goto(`${BASE}/`, { waitUntil: "networkidle0" });
 await page.waitForSelector('a[href="/gitlab"]', { timeout: 15000 });
 await shot("f07-home-cards-mobile");
+
+// the rail crosses the bottom of a narrow screen, where a thumb reaches it
+const onNarrow = await railBox();
+if (onNarrow.width < 430 || onNarrow.top + onNarrow.height < 890) {
+  problems.push(`the rail is not a bar along the bottom: ${JSON.stringify(onNarrow)}`);
+}
+// the bar is fixed, so the room it takes has to be given back: the last row must clear it
+await page.goto(`${BASE}/gitlab`, { waitUntil: "networkidle0" });
+await settle(600);
+await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+await settle(400);
+const clearance = await page.evaluate(() => {
+  const rows = [...document.querySelectorAll('a[href^="https://gitlab.example.org"]')];
+  const last = rows.at(-1);
+  const nav = document.querySelector('nav[aria-label="Sections"]');
+  if (last === undefined || nav === null) return null;
+  return nav.getBoundingClientRect().top - last.getBoundingClientRect().bottom;
+});
+await shot("f07b-gitlab-feed-mobile");
+if (clearance === null) problems.push("no feed rows on a narrow screen");
+else if (clearance < 0) problems.push(`the last row sits ${-clearance}px under the rail`);
+
 await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 2 });
 
 /*

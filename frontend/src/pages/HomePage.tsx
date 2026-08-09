@@ -6,7 +6,7 @@ import { SourceSummary } from "../home/SourceSummary";
 import { Page } from "../layout/Page";
 import { useMinimumDuration } from "../lib/minimumDuration";
 import { SourceAlerts } from "../sources/SourceAlerts";
-import { useConnectors, useIsSyncing, useSources } from "../sources/sources";
+import { useConnectors, useSources } from "../sources/sources";
 
 export function HomePage() {
 	// counts, not rows: a card says how much is new, and the rows are a page away
@@ -14,9 +14,12 @@ export function HomePage() {
 	const { data: sources } = useSources();
 	// and what could be connected, so a source nobody has yet is offered rather than hidden
 	const { data: connectors } = useConnectors();
-	// any source, since a card here summarises each of them
-	const syncing = useIsSyncing();
-	const loading = useMinimumDuration(isPending || sources === undefined || connectors === undefined || syncing);
+	/*
+	 * only the first load, never a refresh somebody pressed. a card already says "Syncing now" and
+	 * turns its own icon, so replacing the whole page with a skeleton would hide the one card that
+	 * was asked about, along with every other card and the offers.
+	 */
+	const loading = useMinimumDuration(isPending || sources === undefined || connectors === undefined);
 
 	let body: ReactNode;
 	// the undefined checks are repeated rather than left to the hook, which cannot narrow the type

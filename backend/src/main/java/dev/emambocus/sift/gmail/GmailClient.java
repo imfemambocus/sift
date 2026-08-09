@@ -39,9 +39,6 @@ class GmailClient {
 
 	private static final String UNREAD_LABEL = "UNREAD";
 
-	/** Everything the row shows. Asking for the body would multiply the payload for no gain. */
-	private static final String[] HEADERS = {"Subject", "From", "To", "Date"};
-
 	private final SourceHttp http;
 	private final GmailProperties config;
 
@@ -210,20 +207,20 @@ class GmailClient {
 	}
 
 	/**
-	 * One message, with its headers and labels but not its body, or null when the mailbox no longer
-	 * holds it. Listing and reading are separate calls, so a message can be deleted between the two,
-	 * and one that has gone must not fail the whole sweep.
+	 * One message, or null when the mailbox no longer holds it. Listing and reading are separate
+	 * calls, so a message can be deleted between the two, and one that has gone must not fail the
+	 * whole sweep.
+	 *
+	 * <p>The whole message rather than its metadata, because the name of a file that came with it is
+	 * on the parts of the payload and the metadata format carries no parts. The body arrives with it
+	 * and is read past: only the snippet is kept.
 	 */
 	GmailResponses.Message fetchMessage(String accessToken, String id) {
 		return executeAllowingMissing(() -> client(accessToken)
 				.get()
-				.uri(uri -> {
-					uri.path("/gmail/v1/users/me/messages/{id}").queryParam("format", "metadata");
-					for (String header : HEADERS) {
-						uri.queryParam("metadataHeaders", header);
-					}
-					return uri.build(id);
-				})
+				.uri(uri -> uri.path("/gmail/v1/users/me/messages/{id}")
+						.queryParam("format", "full")
+						.build(id))
 				.retrieve()
 				.body(GmailResponses.Message.class), "a message").orElse(null);
 	}
