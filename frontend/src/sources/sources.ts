@@ -18,6 +18,12 @@ const sourceStatusSchema = z.object({
 	account: z.string().nullable(),
 	/** False while the source is still reading its older history, which can take hours. */
 	historyComplete: z.boolean(),
+	/** How far back that reading has reached. Null for a source with no history of its own. */
+	historyFrom: z.string().nullable(),
+	/** True when the last few reads reached nothing older, so the walk back is getting nowhere. */
+	historyStalled: z.boolean(),
+	/** True when this source can be asked to read its history again from the beginning. */
+	canReread: z.boolean(),
 	/** True while a read of this source is running on the server, whoever asked for it. */
 	syncing: z.boolean(),
 });
@@ -161,6 +167,29 @@ export function useSyncError(source: string): unknown {
 	});
 	// the newest, since a press while a failed one is still cached would otherwise show the old reason
 	return errors.at(-1) ?? null;
+}
+
+const REREAD_KEY = "reread-source";
+
+/**
+ * Asks the source to read its history again from the beginning.
+ *
+ * <p>Its own key rather than the sync one, and it invalidates no feed page: the rows stay where they
+ * are and fill back in over the following reads, so a skeleton here would take away a list that is
+ * not going anywhere. `useRefreshWhenSynced` in the frame picks the new rows up as each read ends.
+ */
+export function useRereadSource(source: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationKey: [REREAD_KEY, source],
+		mutationFn: async () => {
+			const payload = await request<unknown>(`/api/sources/${source}/reread`, { method: "POST" });
+			return sourceStatusSchema.parse(payload);
+		},
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
+		},
+	});
 }
 
 export function useDisconnectSource(source: string) {

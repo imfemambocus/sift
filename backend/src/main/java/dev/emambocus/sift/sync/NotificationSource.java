@@ -22,11 +22,24 @@ public interface NotificationSource {
 	SourceFetch fetch(SourceCredential credential);
 
 	/**
-	 * False while the source still has older history to read. A source that reads everything it has on
-	 * every sweep is always complete; one that walks a large history backwards is not, and a list that
-	 * is still filling in should be able to say so rather than looking short for no reason.
+	 * How much of the source's history is here. A source that reads everything it has on every sweep is
+	 * always complete; one that walks a large history backwards is not, and a list that is still filling
+	 * in should be able to say so rather than looking short for no reason.
 	 */
-	default boolean historyComplete(SourceCredential credential) {
-		return true;
+	default SourceHistory history(SourceCredential credential) {
+		return SourceHistory.COMPLETE;
+	}
+
+	/**
+	 * Forgets how much of the source has been read, so the next read starts again at the newest end and
+	 * walks back through all of it. False from a source that has nothing to forget.
+	 *
+	 * <p>Only ever for a cursor, never for a watermark. A cursor says how much of a corpus has been
+	 * read, and the rows are the only copy of what it read, so reading it again fills them back in. A
+	 * watermark says what has already been announced, and forgetting one announces months of settled
+	 * news a second time.
+	 */
+	default boolean rereadHistory(SourceCredential credential) {
+		return false;
 	}
 }

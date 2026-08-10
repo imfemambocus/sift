@@ -11,6 +11,7 @@ time, so only what the mode adds is ever new.
 
     make-mail.py <mode> <path> [base epoch millis]
 """
+import base64
 import json
 import sys
 from datetime import datetime, timedelta, timezone
@@ -30,7 +31,13 @@ def part(name, disposition):
     }
 
 
-def message(ident, thread, hours_ago, sender, subject, snippet, labels, recipient=None, files=()):
+def text_part(body):
+    """What the message says. Unpadded base64url, which is how Gmail sends a part's data."""
+    encoded = base64.urlsafe_b64encode(body.encode()).decode().rstrip("=")
+    return {"mimeType": "text/plain", "filename": "", "body": {"data": encoded}}
+
+
+def message(ident, thread, hours_ago, sender, subject, snippet, labels, recipient=None, files=(), body=None):
     headers = [
         {"name": "Subject", "value": subject},
         {"name": "From", "value": sender},
@@ -40,14 +47,18 @@ def message(ident, thread, hours_ago, sender, subject, snippet, labels, recipien
         # what a sent row is about: mail you wrote is named after whoever received it
         headers.append({"name": "To", "value": recipient})
     payload = {"mimeType": "multipart/mixed", "headers": headers}
+    # a part with no data of its own is what Gmail answers for one it holds separately
+    text = text_part(body) if body else {"mimeType": "text/plain", "filename": ""}
     if files:
         # the shape a real one has: an inline image sits inside the part that draws it, and a part
         # somebody attached sits beside that part
         inline = [part(name, "inline") for name, kind in files if kind == "inline"]
         payload["parts"] = [
             {"mimeType": "multipart/related", "filename": "",
-             "parts": [{"mimeType": "text/plain", "filename": ""}] + inline},
+             "parts": [text] + inline},
         ] + [part(name, "attachment") for name, kind in files if kind == "attachment"]
+    elif body:
+        payload["parts"] = [text]
     return {
         "id": ident,
         "threadId": thread,
@@ -69,7 +80,9 @@ BASE = [
     message("m1", "t1", 0.3, ADA, "Chart V2 review", "Could you look at the colour ramp?", INBOX),
     # same thread as m1: the two must collapse into one entry in the feed
     message("m2", "t1", 0.2, GRETE, "Re: Chart V2 review", "I pushed a fix for it.", INBOX),
-    message("m3", "t2", 4, GRETE, "Seminar on Thursday", "Room B on the first floor.", SEEN),
+    # the only place "projector" appears, so a search for it can only match what the message says
+    message("m3", "t2", 4, GRETE, "Seminar on Thursday", "Room B on the first floor.", SEEN,
+            body="Room B on the first floor. It has a projector and enough seats for everyone."),
     # the signature image is inline and must never be named as something somebody attached
     message("m4", "t3", 28, ADA, "Grant report draft", "Draft attached for your comments.", INBOX,
             files=[("grant report.pdf", "attachment"), ("signature.png", "inline")]),

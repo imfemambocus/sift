@@ -7,10 +7,13 @@ import dev.emambocus.sift.sync.FeedSyncStore;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.NotificationSource;
 import dev.emambocus.sift.sync.SourceFetch;
+import dev.emambocus.sift.sync.SourceHistory;
 import dev.emambocus.sift.sync.SourceReadState;
 import dev.emambocus.sift.sync.SourceUnavailableException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -76,6 +79,25 @@ class GmailSource implements NotificationSource {
 	/** A bound on the column. Nothing is looking for the twenty-first file on one message. */
 	private static final int MAX_ATTACHMENTS = 20;
 
+	/**
+	 * How much of a message's text is kept for the search. The snippet alone is about the first
+	 * hundred characters, which is too little to find a message by something it says, and the whole
+	 * body multiplies the size of the table and slows a search that already reads every row.
+	 */
+	private static final int MAX_BODY_CHARS = 1000;
+
+	private static final String TEXT_PART = "text/plain";
+
+	private static final String HTML_PART = "text/html";
+
+	/** How much markup is worth looking through for the prefix above, which is far less of it. */
+	private static final int MAX_MARKUP_CHARS = 20_000;
+
+	/** Reads in a row that reached nothing older before a page is told the walk back is stuck. */
+	private static final int STALLED_AFTER = 3;
+
+	private static final SourceHistory NOTHING_READ_YET = new SourceHistory(false, null, false, true);
+
 	private final GmailClient client;
 	private final GmailOAuth oauth;
 	private final GmailSyncStore store;
@@ -99,12 +121,25 @@ class GmailSource implements NotificationSource {
 
 	/*
 	 * a mailbox is walked backwards a chunk at a time, so a connection spends its first hours with
-	 * only part of its history in the feed. false before the first sweep as well, which is honest:
-	 * nothing of it has been read yet.
+	 * only part of its history in the feed. incomplete before the first sweep as well, which is
+	 * honest: nothing of it has been read yet.
 	 */
 	@Override
-	public boolean historyComplete(SourceCredential credential) {
-		return store.cursorFor(credential.getId()).map(GmailCursor::backfillDone).orElse(false);
+	public SourceHistory history(SourceCredential credential) {
+		return store.cursorFor(credential.getId())
+				.map(cursor -> new SourceHistory(cursor.backfillDone(), cursor.oldest(),
+						cursor.stalledSweeps() >= STALLED_AFTER, true))
+				.orElse(NOTHING_READ_YET);
+	}
+
+	/*
+	 * the mailbox is a corpus and this is a cursor over it, so forgetting it is safe: the rows are
+	 * what the reading produced, they are keyed on the message id, and reading again fills them in.
+	 */
+	@Override
+	public boolean rereadHistory(SourceCredential credential) {
+		store.forget(credential.getId());
+		return true;
 	}
 
 	@Override
@@ -299,7 +334,7 @@ class GmailSource implements NotificationSource {
 
 		GmailCursor moved = read(accessToken, older, cursor, items);
 		if (moved.oldest() != null && moved.oldest().isBefore(cursor.oldest())) {
-			return moved;
+			return moved.progressing();
 		}
 
 		/*
@@ -307,7 +342,7 @@ class GmailSource implements NotificationSource {
 		 * ask for the same messages for ever. stepping the floor under that second is what ends it.
 		 */
 		log.warn("Gmail backfill did not move below {}; stepping the floor back one second", cursor.oldest());
-		return moved.floorAt(cursor.oldest().minusSeconds(1));
+		return moved.floorAt(cursor.oldest().minusSeconds(1)).stalling();
 	}
 
 	private GmailCursor read(String accessToken, List<GmailResponses.MessageRef> refs, GmailCursor cursor,
@@ -363,8 +398,98 @@ class GmailSource implements NotificationSource {
 				!labels(message).contains(UNREAD),
 				null,
 				attachmentsOf(message),
+				searchableBody(message),
 				// a message happened once. the next sweep not listing it says nothing at all.
 				false);
+	}
+
+	/**
+	 * A bounded prefix of what the message says, for the search and never for the row.
+	 *
+	 * <p>The text part is preferred, and the HTML one is taken without its markup when a message has
+	 * no text part at all, which a great deal of mail sent by machines does not. Both are cut to
+	 * {@link #MAX_BODY_CHARS}, so what this costs the table and the search is the same either way.
+	 */
+	private static String searchableBody(GmailResponses.Message message) {
+		String plain = firstPartOfType(message.payload(), TEXT_PART);
+		if (plain != null) {
+			return bounded(collapsed(plain));
+		}
+		String html = firstPartOfType(message.payload(), HTML_PART);
+		return html == null ? null : bounded(collapsed(withoutMarkup(html)));
+	}
+
+	/** The first part of this type that carries its own text, which for a large one Gmail does not. */
+	private static String firstPartOfType(GmailResponses.MessagePart part, String mimeType) {
+		if (part == null) {
+			return null;
+		}
+		if (mimeType.equalsIgnoreCase(part.mimeType())) {
+			String text = decoded(part);
+			if (text != null) {
+				return text;
+			}
+		}
+		if (part.parts() == null) {
+			return null;
+		}
+		for (GmailResponses.MessagePart within : part.parts()) {
+			String found = firstPartOfType(within, mimeType);
+			if (found != null) {
+				return found;
+			}
+		}
+		return null;
+	}
+
+	private static String decoded(GmailResponses.MessagePart part) {
+		if (part.body() == null || part.body().data() == null || part.body().data().isBlank()) {
+			return null;
+		}
+		try {
+			// base64url, and the decoder refuses anything outside that alphabet, whitespace included
+			byte[] bytes = Base64.getUrlDecoder().decode(part.body().data().replaceAll("\\s", ""));
+			return new String(bytes, StandardCharsets.UTF_8);
+		}
+		catch (IllegalArgumentException ex) {
+			// one unreadable part must not cost the message its row, so its text is left out
+			log.warn("Gmail sent a {} part that could not be decoded", part.mimeType());
+			return null;
+		}
+	}
+
+	/*
+	 * enough markup to reach the text under it, and not a parser. what comes out only ever feeds the
+	 * search haystack, where a stray character costs nothing and a dependency would cost plenty. the
+	 * input is bounded first, because a newsletter is far larger than the prefix that is kept.
+	 */
+	private static String withoutMarkup(String html) {
+		String head = html.length() <= MAX_MARKUP_CHARS ? html : html.substring(0, MAX_MARKUP_CHARS);
+		return head.replaceAll("(?is)<(script|style)\\b[^>]*>.*?</\\1>", " ")
+				.replaceAll("(?s)<[^>]*>", " ")
+				.replace("&nbsp;", " ")
+				.replace("&amp;", "&")
+				.replace("&lt;", "<")
+				.replace("&gt;", ">")
+				.replace("&quot;", "\"")
+				.replace("&#39;", "'");
+	}
+
+	private static String collapsed(String text) {
+		return text.replaceAll("\\s+", " ").trim();
+	}
+
+	private static String bounded(String text) {
+		if (text.isEmpty()) {
+			return null;
+		}
+		if (text.length() <= MAX_BODY_CHARS) {
+			return text;
+		}
+		String cut = text.substring(0, MAX_BODY_CHARS);
+		// a word cut in half matches nothing, so the last whole word is where it ends
+		int lastSpace = cut.lastIndexOf(' ');
+		return lastSpace > 0 ? cut.substring(0, lastSpace) : cut;
 	}
 
 	/**

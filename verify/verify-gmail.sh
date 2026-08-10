@@ -157,6 +157,10 @@ check "the first read succeeded"  '"OK"'    "$(echo "$STATUS" | python3 -c 'impo
 # this mailbox is smaller than one sweep, so the walk back reached its beginning straight away and
 # the page has nothing to explain
 check "the mailbox was read whole"    "True"    "$(echo "$STATUS" | field '"historyComplete"')"
+check "and it says how far back that is" "True" \
+  "$(echo "$STATUS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["historyFrom"] is not None)')"
+check "every read reached older mail"  "False"   "$(echo "$STATUS" | field '"historyStalled"')"
+check "a mailbox can be read again"    "True"    "$(echo "$STATUS" | field '"canReread"')"
 check "connectors says connected" "True" \
   "$(api "$BASE/api/sources/connectors" | python3 -c 'import json,sys; print(next(c["connected"] for c in json.load(sys.stdin) if c["source"]=="gmail"))')"
 
@@ -200,6 +204,16 @@ check "has:attachment narrows to it"   1 "$(feed 'q=has:attachment' | len)"
 # the name is in the haystack, so the file finds the message that carried it
 check "the file name is searchable"    1 "$(feed 'q=pdf' | len)"
 check "and a typo in it is forgiven"   1 "$(feed 'q=graant' | len)"
+
+echo
+echo "--- what a message says is searchable, past the snippet the row shows ---"
+# only in the text part of one message, so nothing but the body of it can answer this
+check "a word from the body finds it"  1 "$(feed 'q=projector' | len)"
+check "and it is that message"         "Seminar on Thursday" "$(feed 'q=projector' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["title"])')"
+check "a typo in it is forgiven too"   1 "$(feed 'q=projecter' | len)"
+# the row still says what it always said: the rest of the text exists for the search alone
+check "the row still shows the snippet" "Room B on the first floor." "$(titled 'Seminar on Thursday' body)"
 
 echo
 echo "--- a date scope narrows on the activity the list already shows ---"
@@ -297,6 +311,22 @@ check "and the feed is whole again"          6 "$(rows)"
 relabel m8 delete
 post "$BASE/api/sources/gmail/sync" >/dev/null
 check "a message deleted outright loses its row too" 0 "$(absent 'One more thing')"
+
+echo
+echo "--- reading the whole mailbox again, without disconnecting it ---"
+# a message that appeared below a finished floor is never looked for again, so it is the proof that
+# the reading really started over rather than carrying on from the edges it had
+check "the old message is still out of the feed" 0 "$(absent 'Ancient history')"
+check "the re-read was accepted" 200 "$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" \
+  -X POST -H "X-XSRF-TOKEN: $(csrf)" "$BASE/api/sources/gmail/reread")"
+sift_await_sync gmail
+check "the message under the old floor arrived" 1 "$(absent 'Ancient history')"
+check "and every row that was there is still there" 6 "$(rows)"
+# the rows are keyed on the message id, so reading again fills them in rather than copying them
+check "what Sift had read stays read"     "True"  "$(titled 'Grant report draft' read)"
+check "and what was unread stays unread"  "False" "$(titled 'Chart V2 review' read)"
+check "the mailbox is whole again"        "True" \
+  "$(api "$BASE/api/sources" | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["historyComplete"])')"
 
 echo
 echo "--- disconnecting, and what survives it ---"

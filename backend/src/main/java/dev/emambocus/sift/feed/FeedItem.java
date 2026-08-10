@@ -109,6 +109,13 @@ public class FeedItem {
 	@Column
 	private String attachments;
 
+	/**
+	 * More of the source's own text, part of the stored search haystack and never sent to the client.
+	 * A mail body is what needs it: the snippet the row shows is too little to search a message by.
+	 */
+	@Column(name = "search_extra")
+	private String searchExtra;
+
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "raw_payload")
 	private String rawPayload;

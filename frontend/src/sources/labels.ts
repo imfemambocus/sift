@@ -1,6 +1,6 @@
 import { GitBranch, Mail } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { agoPhrase } from "../lib/time";
+import { agoPhrase, monthAndYear } from "../lib/time";
 import type { SourceStatus } from "./sources";
 
 const NAMES: Record<string, string> = {
@@ -70,6 +70,31 @@ export function isReading(source: SourceStatus): boolean {
  *     source is being read, and it is only asked again every so often, so without this the words
  *     stay on "Synced 2m ago" for the whole of a read somebody just pressed.
  */
+/**
+ * How far back a source has read so far, which is what a list that is still filling in cannot say
+ * for itself. Null when there is nothing to say: the source has no history of its own, it has read
+ * all of it, or it has not started.
+ *
+ * <p>A month rather than a date. The floor moves on every read, and nobody is waiting on the day.
+ */
+export function historyPhrase(source: SourceStatus): string | null {
+	if (source.historyComplete || source.historyFrom === null) {
+		return null;
+	}
+	return `Read back to ${monthAndYear(source.historyFrom)} so far.`;
+}
+
+/**
+ * Why a source that says it is reading is not getting anywhere. Every read succeeded, so nothing on
+ * the credential says so, and the walk back is where it shows.
+ */
+export function historyWarning(source: SourceStatus): string | null {
+	if (!source.historyStalled) {
+		return null;
+	}
+	return "The last few reads reached nothing older than this, so the source may be refusing the pace.";
+}
+
 export function syncPhrase(source: SourceStatus, asked = false): string {
 	if (asked || isReading(source)) {
 		return "Syncing now";

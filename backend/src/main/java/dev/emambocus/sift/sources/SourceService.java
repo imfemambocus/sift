@@ -68,8 +68,26 @@ public class SourceService {
 	private SourceStatusResponse status(UUID userId, SourceCredential credential) {
 		return SourceStatusResponse.of(credential,
 				store.itemCount(userId, credential.getSource()),
-				syncService.historyComplete(credential),
+				syncService.history(credential),
 				syncService.isSyncing(credential.getId()));
+	}
+
+	/**
+	 * Forgets how much of the source has been read, then reads it again behind the answer. The rows
+	 * stay, so nothing goes missing from the feed while it fills back in.
+	 *
+	 * <p>Empty when the source is not connected. The answer says the source is syncing, since the read
+	 * is claimed before this returns.
+	 */
+	public Optional<SourceStatusResponse> reread(UUID userId, SourceType source) {
+		Optional<SourceCredential> credential = store.forUser(userId, source);
+		if (credential.isEmpty()) {
+			return Optional.empty();
+		}
+		if (!syncService.rereadHistory(credential.get())) {
+			throw new HistoryNotRereadableException(source);
+		}
+		return Optional.of(status(userId, credential.get()));
 	}
 
 	/**

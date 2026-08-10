@@ -5,6 +5,7 @@ import dev.emambocus.sift.auth.EmailDomainNotAllowedException;
 import dev.emambocus.sift.credential.UnknownSourceException;
 import dev.emambocus.sift.feed.FeedItemNotFoundException;
 import dev.emambocus.sift.feed.InvalidFeedRequestException;
+import dev.emambocus.sift.sources.HistoryNotRereadableException;
 import dev.emambocus.sift.sync.SourceAuthException;
 import dev.emambocus.sift.sync.SourceUnavailableException;
 import org.springframework.http.HttpStatus;
@@ -41,6 +42,12 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(FeedItemNotFoundException.class)
 	public ProblemDetail handleFeedItemNotFound(FeedItemNotFoundException ex) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+	}
+
+	/** Connected, and there is nothing a second reading of it would fill in. */
+	@ExceptionHandler(HistoryNotRereadableException.class)
+	public ProblemDetail handleHistoryNotRereadable(HistoryNotRereadableException ex) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
 	}
 
 	/** The request was well formed; the credential in it was not accepted by the source. */

@@ -229,6 +229,7 @@ public class FeedSyncStore {
 		stored.setContextUrl(item.contextUrl());
 		stored.setUrl(item.url());
 		stored.setAttachments(nameLines(item.attachments()));
+		stored.setSearchExtra(item.searchExtra());
 		// recomputed rather than set once, since a source may correct the url of a row it already sent
 		stored.setGroupKey(groupKeyOf(stored.getSource(), item));
 		/*

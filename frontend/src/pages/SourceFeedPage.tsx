@@ -10,7 +10,7 @@ import { FeedSkeleton } from "../feed/FeedSkeleton";
 import type { FeedFilter, FeedOrder } from "../feed/view";
 import { Page } from "../layout/Page";
 import { useMinimumDuration } from "../lib/minimumDuration";
-import { sourceName } from "../sources/labels";
+import { historyPhrase, historyWarning, sourceName } from "../sources/labels";
 import { LastSynced } from "../sources/LastSynced";
 import { SourceAlerts } from "../sources/SourceAlerts";
 import { useIsSyncing, useSource } from "../sources/sources";
@@ -59,6 +59,11 @@ export function SourceFeedPage({
 	const syncing = useIsSyncing(slug);
 	const loading = useMinimumDuration(feed.isPending || syncing);
 
+	// only while there is older history to come: once it is all here the list speaks for itself
+	const reading = source !== undefined && !source.historyComplete;
+	const readingLine = reading ? [stillReading, historyPhrase(source)].filter(Boolean).join(" ") : "";
+	const stalled = reading ? historyWarning(source) : null;
+
 	return (
 		<Page title={sourceName(slug)} description={description}>
 			<SourceAlerts only={slug} />
@@ -90,10 +95,14 @@ export function SourceFeedPage({
 
 			{/*
 			  * a source that walks a large history backwards spends its first hours with only part of
-			  * it here, and a short list with no explanation reads as a broken one
+			  * it here, and a short list with no explanation reads as a broken one. how far back it has
+			  * reached comes from the source itself, since it moves on every read.
 			  */}
-			{stillReading !== undefined && source?.historyComplete === false && (
-				<p className="text-[12px] text-fg-muted">{stillReading}</p>
+			{(readingLine !== "" || stalled !== null) && (
+				<div className="flex flex-col gap-1">
+					{readingLine !== "" && <p className="text-[12px] text-fg-muted">{readingLine}</p>}
+					{stalled !== null && <p className="text-[12px] text-fg">{stalled}</p>}
+				</div>
 			)}
 
 			{loading ? <FeedSkeleton /> : (

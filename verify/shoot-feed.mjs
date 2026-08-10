@@ -486,6 +486,34 @@ if (railCount !== null && railCount.badge === null) {
   problems.push("the rail shows no badge while Gmail has unread mail");
 }
 
+/*
+ * reading a mailbox again. the confirmation is the part that needs a browser: the button asks first,
+ * says what it costs, and the rows must still be on screen afterwards, since a re-read fills them in
+ * rather than throwing them away.
+ */
+await page.goto(`${BASE}/settings`, { waitUntil: "networkidle0" });
+const rereadOffer = await page.waitForSelector("button::-p-text(Read it all again)", { timeout: 10000 })
+  .catch(() => null);
+if (rereadOffer === null) {
+  problems.push("Settings offers no way to read the mailbox again");
+} else {
+  await rereadOffer.click();
+  const confirm = await page.waitForSelector("button::-p-text(Yes, read it all again)", { timeout: 5000 })
+    .catch(() => null);
+  if (confirm === null) {
+    problems.push("reading the mailbox again did not ask first");
+  } else {
+    await shot("f14-settings-reread-confirm-dark");
+    await confirm.click();
+    await settle(3000);
+    await page.goto(`${BASE}/gmail`, { waitUntil: "networkidle0" });
+    const kept = await page.evaluate(
+      () => document.querySelectorAll('a[href^="https://mail.google.com"]').length);
+    console.log(`  ${kept} mail row(s) still on screen after asking for a re-read`);
+    if (kept === 0) problems.push("reading the mailbox again emptied the feed");
+  }
+}
+
 // withdraw the approval upstream and let the fast sweep notice, to capture the alert
 writeFileSync(`${WORK}/revoked`, "");
 console.log("  withdrew the approval upstream, waiting for the sweep");

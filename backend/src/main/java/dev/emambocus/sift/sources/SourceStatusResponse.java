@@ -1,6 +1,7 @@
 package dev.emambocus.sift.sources;
 
 import dev.emambocus.sift.credential.SourceCredential;
+import dev.emambocus.sift.sync.SourceHistory;
 import java.time.Instant;
 
 public record SourceStatusResponse(
@@ -15,10 +16,16 @@ public record SourceStatusResponse(
 		String account,
 		/** False while the source is still reading older history, so the page can say so. */
 		boolean historyComplete,
+		/** How far back that reading has reached, for a source that walks a history. Null otherwise. */
+		Instant historyFrom,
+		/** True when successive reads stopped reaching anything older, so a page can warn about it. */
+		boolean historyStalled,
+		/** True when this source can be told to read its history again from the beginning. */
+		boolean canReread,
 		/** True while a read of this source is running, which is what the page shows as "syncing now". */
 		boolean syncing) {
 
-	public static SourceStatusResponse of(SourceCredential credential, long itemCount, boolean historyComplete,
+	public static SourceStatusResponse of(SourceCredential credential, long itemCount, SourceHistory history,
 			boolean syncing) {
 		return new SourceStatusResponse(
 				credential.getSource().slug(),
@@ -29,7 +36,10 @@ public record SourceStatusResponse(
 				credential.getLastSyncAt(),
 				itemCount,
 				credential.getAccountLabel(),
-				historyComplete,
+				history.complete(),
+				history.readBackTo(),
+				history.stalled(),
+				history.rereadable(),
 				syncing);
 	}
 }

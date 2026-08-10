@@ -60,7 +60,10 @@ These parts are built:
 - a Home page with one card for each source. A source you have not connected gets a card too, and
   that card connects it. The sidebar shows a source only after you connect it.
 - a warning when a connection no longer works. An empty list then never looks like good news.
-- a source that says **Syncing now** while Sift reads it, so a short list explains itself
+- a source that says **Syncing now** while Sift reads it, so a short list explains itself. For a
+  mailbox it also names the month the reading has reached, because that takes hours.
+- a button that reads a mailbox again from the beginning, which keeps every row and everything you
+  have read
 - a layout for a small screen. On a phone the sidebar becomes a bar along the bottom of the screen.
 
 Read and unread behaves like this:
@@ -95,6 +98,10 @@ Every page has a search field at the top. It searches every connected source, an
 whole history. It does not search only the tab you are on, and it does not search only the part of
 the list on screen. It forgives a typo. It forgives words in the wrong order. `is:unread`, `is:mr`,
 `project:` and `from:` make a search narrow.
+
+For a message, the search covers more than the row shows you. The row shows the subject, the sender
+and the first line. The search also reads about the first thousand characters of the message itself,
+so a word from the middle of the first paragraph finds it.
 
 The icon at the right of the field lists every prefix, with one line each on what it does. Hold the
 pointer over it, or reach it with the keyboard.
@@ -293,13 +300,17 @@ why Gmail is in Sift. A limit on how far back Sift reads is thus a limit on what
 The first read takes the newest messages. Each read after it does two things. It takes the messages
 that arrived since the last read. It also takes one more group of older messages. Sift thus moves
 back through your mailbox until it gets to the first message. A large mailbox needs many reads. You
-can use Sift while this happens, and the Gmail page tells you that older mail is still on its way.
-The card keeps **Syncing now** for the whole of it, and gives you a time only when Sift has read your
-mailbox back to its first message.
+can use Sift while this happens, and the Gmail page tells you that older mail is still on its way. It
+also names the month the reading has reached, and that month moves with every read. The card keeps
+**Syncing now** for the whole of it, and gives you a time only when Sift has read your mailbox back to
+its first message. If several reads in a row reach nothing older, Sift says so. Google is usually
+refusing the pace, and a longer `SIFT_SYNC_INTERVAL` clears it.
 
-Sift reads the file names of a message at the moment it reads that message, and it never goes back over
-a message it has already read. If `has:attachment` finds fewer messages than you expect, disconnect
-Gmail and connect it again. That reads your mailbox from the beginning.
+Sift reads a message once and never looks at that message again. So a message read before a version of
+Sift that keeps something new carries only what Sift kept at the time. **Read it all again** in
+**Settings** answers this. It reads your whole mailbox from the newest end, and it keeps every row and
+everything you have read. Use it if `has:attachment` finds fewer messages than you expect, or if a
+search inside your older messages finds nothing. It takes as long as the first read did.
 
 Sift usually shows many more items than Gmail shows you. There are two reasons. Gmail counts a
 conversation as one line, and Sift makes a row for each message in it. Gmail also opens on your

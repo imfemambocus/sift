@@ -72,9 +72,18 @@ final class GmailResponses {
 	 *     file are parts of a multipart payload, and a forwarded message nests again.
 	 */
 	record MessagePart(
+			@JsonProperty("mimeType") String mimeType,
 			String filename,
 			List<Header> headers,
+			MessagePartBody body,
 			List<MessagePart> parts) {
+	}
+
+	/**
+	 * @param data the part itself, base64url encoded, and absent on a part Gmail holds as an
+	 *     attachment of its own rather than inline
+	 */
+	record MessagePartBody(String data) {
 	}
 
 	record Header(String name, String value) {

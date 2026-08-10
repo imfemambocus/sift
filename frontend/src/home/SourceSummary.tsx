@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import type { FeedSummary } from "../feed/feed";
 import type { EventFamily } from "../feed/events";
 import { eventFamily, FAMILY_FILL, FAMILY_LABEL, FAMILY_ORDER } from "../feed/events";
-import { sourceName, sourcePath, syncPhrase } from "../sources/labels";
+import { historyPhrase, sourceName, sourcePath, syncPhrase } from "../sources/labels";
 import { SyncButton } from "../sources/SyncButton";
 import type { SourceStatus } from "../sources/sources";
 import { useIsSyncing } from "../sources/sources";
@@ -45,6 +45,7 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 	 * a skeleton here would take away every other card and the offers to answer for one of them.
 	 */
 	const asked = useIsSyncing(source.source);
+	const reachedSoFar = historyPhrase(source);
 
 	return (
 		<article className="relative flex flex-col gap-4 rounded-panel border border-border bg-surface px-5 py-4 transition-colors hover:border-fg-muted/40">
@@ -112,6 +113,9 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 				{/* beside the line it refreshes, as on a feed page, and clear of the rest of the card */}
 				<SyncButton source={source} />
 			</div>
+
+			{/* a mailbox arrives over hours, so the card says where that has reached rather than only that it is running */}
+			{reachedSoFar !== null && <p className="text-[11px] text-fg-muted">{reachedSoFar}</p>}
 		</article>
 	);
 }

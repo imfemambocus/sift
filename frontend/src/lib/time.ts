@@ -53,6 +53,11 @@ export function agoPhrase(iso: string, now: number = Date.now()): string {
 	return short === "now" ? "just now" : `${short} ago`;
 }
 
+/** Coarse on purpose: how far back a long read has reached is a month, never a day and an hour. */
+export function monthAndYear(iso: string): string {
+	return new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
 export function fullTimestamp(iso: string): string {
 	return new Date(iso).toLocaleString();
 }

@@ -8,7 +8,8 @@ import { Spinner } from "../components/Spinner";
 import { errorMessage } from "../lib/api";
 import { agoPhrase } from "../lib/time";
 import { CheckNowButton } from "./CheckNowButton";
-import { isReading, sourceName } from "./labels";
+import { historyPhrase, historyWarning, isReading, sourceName } from "./labels";
+import { RereadButton } from "./RereadButton";
 import type { SourceStatus } from "./sources";
 import { useConnector, useDisconnectSource, useSource, useStartOAuth } from "./sources";
 
@@ -62,6 +63,8 @@ type SourceCardProps = {
 function SourceCard({ source, canReconnect, onReconnect, onDisconnect, disconnecting }: SourceCardProps) {
 	const [confirming, setConfirming] = useState(false);
 	const status = statusLine(source);
+	const reachedSoFar = historyPhrase(source);
+	const stalled = historyWarning(source);
 
 	return (
 		<div className="flex w-full flex-col gap-3 rounded-panel border border-border bg-surface px-4 py-3.5">
@@ -80,7 +83,10 @@ function SourceCard({ source, canReconnect, onReconnect, onDisconnect, disconnec
 
 			<p className="text-[13px] text-fg-muted">
 				{source.itemCount} {source.itemCount === 1 ? "item" : "items"} in your feed.
+				{reachedSoFar !== null && ` ${reachedSoFar}`}
 			</p>
+
+			{stalled !== null && <p className="text-[13px] text-fg">{stalled}</p>}
 
 			{/*
 			  * three different weights on purpose: checking is the safe one, authorizing again is a
@@ -110,6 +116,8 @@ function SourceCard({ source, canReconnect, onReconnect, onDisconnect, disconnec
 					</Button>
 				)}
 			</div>
+
+			<RereadButton source={source} />
 		</div>
 	);
 }

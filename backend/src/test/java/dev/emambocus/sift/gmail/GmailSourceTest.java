@@ -16,7 +16,9 @@ import dev.emambocus.sift.sync.FeedSyncService;
 import dev.emambocus.sift.sync.IncomingItem;
 import dev.emambocus.sift.sync.SourceAuthException;
 import dev.emambocus.sift.sync.SourceFetch;
+import dev.emambocus.sift.sources.HistoryNotRereadableException;
 import dev.emambocus.sift.sources.SourceService;
+import dev.emambocus.sift.sources.SourceStatusResponse;
 import dev.emambocus.sift.sync.SourceReadSync;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -58,6 +60,9 @@ class GmailSourceTest extends SiftIntegrationTest {
 
 	@Autowired
 	private SourceService sources;
+
+	@Autowired
+	private GmailSyncStore syncStore;
 
 	@BeforeEach
 	void emptyMailbox() {
@@ -249,15 +254,15 @@ class GmailSourceTest extends SiftIntegrationTest {
 		SourceCredential credential = credential("walking@uni.lu");
 
 		// nothing of it has been read yet, which is honest rather than a special case
-		assertThat(source.historyComplete(credential)).isFalse();
+		assertThat(source.history(credential).complete()).isFalse();
 
 		read(credential);
-		assertThat(source.historyComplete(credential))
+		assertThat(source.history(credential).complete())
 				.as("a chunk below the floor was still to be asked for")
 				.isFalse();
 
 		read(credential);
-		assertThat(source.historyComplete(credential)).isTrue();
+		assertThat(source.history(credential).complete()).isTrue();
 	}
 
 	@Test
@@ -517,6 +522,107 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("what a message says is searchable past its snippet, up to a bound")
+	void theTextOfAMessageIsSearchable() {
+		String far = "Okabe";
+		String beyond = "Vermilion";
+		String text = "The ramp is wrong. " + "filler ".repeat(70) + far + " ramp. " + "filler ".repeat(200)
+				+ beyond + ".";
+		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "Chart V2 review").saying(text));
+
+		IncomingItem item = read(credential("body@uni.lu")).getFirst();
+
+		// the row still shows the snippet: this text is for the search and is never sent to a client
+		assertThat(item.body()).isEqualTo("a snippet");
+		assertThat(item.searchExtra()).startsWith("The ramp is wrong.").contains(far).doesNotContain(beyond);
+		assertThat(item.searchExtra().length()).isLessThanOrEqualTo(1000);
+	}
+
+	@Test
+	@DisplayName("a message that is only markup is searched by what it says, not by its tags")
+	void markupIsNotWhatAMessageSays() {
+		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "The newsletter")
+				.sayingInHtml("""
+						<html><head><style>.a{color:red}</style></head>
+						<body><p>Seats for the <b>seminar</b> are free.</p></body></html>"""));
+
+		IncomingItem item = read(credential("markup@uni.lu")).getFirst();
+
+		assertThat(item.searchExtra()).contains("Seats for the seminar are free.");
+		assertThat(item.searchExtra()).doesNotContain("<p>", "style", "color");
+	}
+
+	@Test
+	@DisplayName("the whole mailbox is read again on request, and the rows and their read state stay")
+	void readingTheMailboxAgainKeepsTheRows() {
+		GMAIL.deliver(
+				Msg.unread("m1", "t1", minutesAgo(30), ADA, "The older one"),
+				Msg.unread("m2", "t2", minutesAgo(10), ADA, "The newer one"));
+		SourceCredential credential = credential("again@uni.lu");
+		UUID userId = credential.getUserId();
+		syncService.sync(credential);
+		feed.setRead(userId, row(userId, "msg:m1").getId(), true);
+
+		assertThat(source.rereadHistory(credential)).isTrue();
+		List<IncomingItem> second = read(credential);
+
+		// every message again, and no second copy of any of them: a row is keyed on the message id
+		assertThat(second).extracting(IncomingItem::sourceId).containsExactlyInAnyOrder("msg:m1", "msg:m2");
+		assertThat(items.findByUserIdAndSource(userId, SourceType.GMAIL)).hasSize(2);
+		// what was read here stays read: the mailbox's own answer only ever seeds a new row
+		assertThat(readFlag(userId, "msg:m1")).isTrue();
+	}
+
+	@Test
+	@DisplayName("the status says how far back the mailbox has been read, and that it can be read again")
+	void theStatusSaysHowFarBackTheReadingHasReached() {
+		Instant oldest = Instant.ofEpochMilli(minutesAgo(30));
+		GMAIL.deliver(
+				Msg.unread("m1", "t1", oldest.toEpochMilli(), ADA, "The older one"),
+				Msg.unread("m2", "t2", minutesAgo(10), ADA, "The newer one"));
+		SourceCredential credential = credential("howfar@uni.lu");
+		syncService.sync(credential);
+
+		SourceStatusResponse status = statusOf(credential.getUserId());
+
+		assertThat(status.historyFrom()).isEqualTo(oldest);
+		assertThat(status.canReread()).isTrue();
+		assertThat(status.historyStalled()).isFalse();
+		// a mailbox this small is walked back to its beginning by the first read
+		assertThat(status.historyComplete()).isTrue();
+	}
+
+	@Test
+	@DisplayName("reads in a row that reach nothing older are what the status calls stalled")
+	void successiveReadsThatReachNothingOlderAreReported() {
+		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "The only one"));
+		SourceCredential credential = credential("stalled@uni.lu");
+		syncService.sync(credential);
+		GmailCursor read = syncStore.cursorFor(credential.getId()).orElseThrow();
+
+		syncStore.advance(credential.getId(), read.stalling().stalling().stalling());
+
+		assertThat(statusOf(credential.getUserId()).historyStalled()).isTrue();
+		// and one read that reaches older mail again is the end of it
+		syncStore.advance(credential.getId(), read.progressing());
+		assertThat(statusOf(credential.getUserId()).historyStalled()).isFalse();
+	}
+
+	@Test
+	@DisplayName("a source that reads all of itself every pass has no history to read again")
+	void aSourceWithNoHistoryRefusesToReadItAgain() {
+		SourceCredential credential = credential("nothing@uni.lu");
+		UUID userId = credential.getUserId();
+		credentials.save(SourceCredential.oauth(userId, SourceType.GITLAB,
+				"https://gitlab.example.org", "live-access", "gl-refresh",
+				Instant.now().plus(1, ChronoUnit.HOURS), Instant.now()));
+
+		// GitLab's watch state is a watermark: forgetting one re-announces months of settled news
+		assertThatThrownBy(() -> sources.reread(userId, SourceType.GITLAB))
+				.isInstanceOf(HistoryNotRereadableException.class);
+	}
+
+	@Test
 	@DisplayName("a row of another source is not offered to Gmail")
 	void anotherSourceIsNotGmailsBusiness() {
 		SourceCredential credential = credential("other@uni.lu");
@@ -573,6 +679,13 @@ class GmailSourceTest extends SiftIntegrationTest {
 	private SourceCredential connect(UUID userId, String accessToken, Instant expiresAt) {
 		return credentials.save(SourceCredential.oauth(userId, SourceType.GMAIL,
 				"https://mail.google.com", accessToken, "old-refresh", expiresAt, Instant.now()));
+	}
+
+	private SourceStatusResponse statusOf(UUID userId) {
+		return sources.statuses(userId).stream()
+				.filter(status -> status.source().equals(SourceType.GMAIL.slug()))
+				.findFirst()
+				.orElseThrow();
 	}
 
 	private FeedItem row(UUID userId, String sourceId) {

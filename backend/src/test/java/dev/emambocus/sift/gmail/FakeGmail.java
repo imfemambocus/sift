@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,32 +53,50 @@ public final class FakeGmail implements AutoCloseable {
 		}
 	}
 
-	/** One message, as the fixtures describe it. Labels are Gmail's own vocabulary. */
+	/**
+	 * One message, as the fixtures describe it. Labels are Gmail's own vocabulary.
+	 *
+	 * @param body what the message says, and null for one with no text part at all
+	 * @param html true when {@code body} is the markup of an HTML-only message, which is what a great
+	 *     deal of mail sent by machines is
+	 */
 	public record Msg(String id, String threadId, long arrivedAtMillis, String from, String to, String subject,
-			String snippet, List<String> labels, List<File> files) {
+			String snippet, List<String> labels, List<File> files, String body, boolean html) {
 
 		public static Msg unread(String id, String threadId, long arrivedAtMillis, String from, String subject) {
 			return new Msg(id, threadId, arrivedAtMillis, from, null, subject, "a snippet",
-					List.of("INBOX", "UNREAD"), List.of());
+					List.of("INBOX", "UNREAD"), List.of(), null, false);
 		}
 
 		public static Msg read(String id, String threadId, long arrivedAtMillis, String from, String subject) {
 			return new Msg(id, threadId, arrivedAtMillis, from, null, subject, "a snippet",
-					List.of("INBOX"), List.of());
+					List.of("INBOX"), List.of(), null, false);
 		}
 
 		/** Mail you wrote: Gmail labels it SENT, and the recipient is who it is about. */
 		public static Msg sent(String id, String threadId, long arrivedAtMillis, String to, String subject) {
 			return new Msg(id, threadId, arrivedAtMillis, "me@uni.lu", to, subject, "a snippet",
-					List.of("SENT"), List.of());
+					List.of("SENT"), List.of(), null, false);
 		}
 
 		public Msg labelled(String... labels) {
-			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, List.of(labels), files);
+			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, List.of(labels), files,
+					body, html);
 		}
 
 		public Msg carrying(File... files) {
-			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, labels, List.of(files));
+			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, labels, List.of(files),
+					body, html);
+		}
+
+		/** What the message says, as a text part beside whatever else it carries. */
+		public Msg saying(String body) {
+			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, labels, files, body, false);
+		}
+
+		/** The same, for a message whose only part is markup. */
+		public Msg sayingInHtml(String markup) {
+			return new Msg(id, threadId, arrivedAtMillis, from, to, subject, snippet, labels, files, markup, true);
 		}
 	}
 
@@ -428,7 +447,7 @@ public final class FakeGmail implements AutoCloseable {
 				 ]%s}}
 				""".formatted(message.id(), message.threadId(), labels, message.arrivedAtMillis(),
 				escape(message.snippet()), escape(message.subject()), escape(message.from()), to,
-				partsJson(message.files()));
+				partsJson(message));
 	}
 
 	/*
@@ -436,21 +455,38 @@ public final class FakeGmail implements AutoCloseable {
 	 * and an inline image or anything that came with a forwarded message sits within it. both depths
 	 * are here on purpose, since a reader that looked at only one of them would pass on the other.
 	 */
-	private static String partsJson(List<File> files) {
-		if (files.isEmpty()) {
-			return "";
+	private static String partsJson(Msg message) {
+		if (message.files().isEmpty()) {
+			return message.body() == null ? "" : ", \"parts\": [" + textPartJson(message) + "]";
 		}
 		StringBuilder beside = new StringBuilder();
 		StringBuilder within = new StringBuilder();
-		for (File file : files) {
+		for (File file : message.files()) {
 			StringBuilder into = file.nested() ? within : beside;
 			into.append(',').append(fileJson(file));
 		}
 		return """
 				, "parts": [
 				  {"mimeType": "multipart/related", "filename": "",
-				   "parts": [{"mimeType": "text/plain", "filename": ""}%s]}%s]"""
-				.formatted(within, beside);
+				   "parts": [%s%s]}%s]"""
+				.formatted(textPartJson(message), within, beside);
+	}
+
+	/**
+	 * The part that carries what the message says. Without a body it is the empty text part a message
+	 * with only a file in it has, which is also what Gmail answers for a part too large to inline.
+	 *
+	 * <p>The data is unpadded base64url, as Gmail sends it, so a reader that assumed padding fails.
+	 */
+	private static String textPartJson(Msg message) {
+		if (message.body() == null) {
+			return "{\"mimeType\": \"text/plain\", \"filename\": \"\"}";
+		}
+		return """
+				{"mimeType": "%s", "filename": "", "body": {"data": "%s"}}"""
+				.formatted(message.html() ? "text/html" : "text/plain",
+						Base64.getUrlEncoder().withoutPadding()
+								.encodeToString(message.body().getBytes(StandardCharsets.UTF_8)));
 	}
 
 	private static String fileJson(File file) {

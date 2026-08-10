@@ -10,4 +10,6 @@ interface GmailSyncStateRepository extends Repository<GmailSyncState, UUID> {
 	Optional<GmailSyncState> findByCredentialId(UUID credentialId);
 
 	GmailSyncState save(GmailSyncState state);
+
+	void deleteByCredentialId(UUID credentialId);
 }

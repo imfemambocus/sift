@@ -44,6 +44,19 @@ public class SourceController {
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "That source is not connected."));
 	}
 
+	/**
+	 * Forgets how much of the source has been read, so the next read walks all of it again. The rows
+	 * stay where they are and fill back in, which is what separates this from disconnecting.
+	 */
+	@PostMapping("/{source}/reread")
+	public SourceStatusResponse reread(@PathVariable String source,
+			@AuthenticationPrincipal SiftUserDetails principal) {
+
+		SourceType type = sources.resolve(source);
+		return sources.reread(principal.id(), type)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "That source is not connected."));
+	}
+
 	@DeleteMapping("/{source}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void disconnect(@PathVariable String source, @AuthenticationPrincipal SiftUserDetails principal) {

@@ -61,10 +61,27 @@ public class FeedSyncService {
 		background.shutdownNow();
 	}
 
-	/** Whether this source has read everything it holds, which only a source with a history answers. */
-	public boolean historyComplete(SourceCredential credential) {
+	/** How much of this source is here, which only a source with a history of its own answers. */
+	public SourceHistory history(SourceCredential credential) {
 		NotificationSource source = sources.get(credential.getSource());
-		return source == null || source.historyComplete(credential);
+		return source == null ? SourceHistory.COMPLETE : source.history(credential);
+	}
+
+	/**
+	 * Tells the source to read its history again from the beginning, and reads it now. False when the
+	 * source has nothing to forget, which is not a failure: it already holds everything it can.
+	 *
+	 * <p>The rows are left where they are. They are keyed on the source's own id, so the read that
+	 * follows fills them in again rather than making a second copy, and the read state Sift holds
+	 * survives it.
+	 */
+	public boolean rereadHistory(SourceCredential credential) {
+		NotificationSource source = sources.get(credential.getSource());
+		if (source == null || !source.rereadHistory(credential)) {
+			return false;
+		}
+		syncInBackground(credential);
+		return true;
 	}
 
 	/** Whether a read of this credential is running, which is what a page says as "syncing now". */

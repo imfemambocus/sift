@@ -50,6 +50,10 @@ public class GmailSyncState {
 	@Column(name = "history_id")
 	private Long historyId;
 
+	/** How many reads in a row reached nothing older than {@link #oldestMessageAt}. */
+	@Column(name = "stalled_sweeps", nullable = false)
+	private int stalledSweeps;
+
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 }

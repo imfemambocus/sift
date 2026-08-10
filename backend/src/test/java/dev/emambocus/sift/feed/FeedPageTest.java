@@ -197,6 +197,22 @@ class FeedPageTest extends SiftIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("a message is found by something its text says, and never shows that text on the row")
+	void searchFindsTheTextOfAMessage() {
+		UUID user = newUser("bodies@uni.lu");
+		store.persist(user, SourceType.GMAIL, List.of(
+				said("msg:1", "Chart V2 review", MAIL + "1", "The Okabe-Ito ramp is the one to use."),
+				said("msg:2", "Lunch on Thursday", MAIL + "2", "Room B, at one.")));
+
+		assertThat(titles(user, "okabe")).containsExactly("Chart V2 review");
+		// forgiven the same typo the subject and the file names are, since it is one haystack
+		assertThat(titles(user, "okabi")).containsExactly("Chart V2 review");
+		assertThat(titles(user, "room")).containsExactly("Lunch on Thursday");
+		// the row carries the snippet and nothing more: this text exists for the search alone
+		assertThat(found(user, "okabe").getFirst().body()).isNull();
+	}
+
+	@Test
 	@DisplayName("asking for read and unread at once finds nothing, since every token has to match")
 	void contradictoryScopes() {
 		UUID user = newUser("both@uni.lu");
@@ -300,6 +316,12 @@ class FeedPageTest extends SiftIntegrationTest {
 
 	private static IncomingItem mail(String sourceId, String subject, String url, List<String> files) {
 		return new IncomingItem(sourceId, "mail_received", subject, null, "Ada", null, "ada@uni.lu",
-				null, url, null, MONDAY, MONDAY, false, null, files, false);
+				null, url, null, MONDAY, MONDAY, false, null, files, null, false);
+	}
+
+	/** A message with more of its text stored for the search, which is where a mail body goes. */
+	private static IncomingItem said(String sourceId, String subject, String url, String text) {
+		return new IncomingItem(sourceId, "mail_received", subject, null, "Ada", null, "ada@uni.lu",
+				null, url, null, MONDAY, MONDAY, false, null, List.of(), text, false);
 	}
 }
