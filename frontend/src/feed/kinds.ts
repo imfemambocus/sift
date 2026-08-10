@@ -15,14 +15,18 @@ const LABELS: Record<string, string> = {
 	okr_checkin_requested: "Check-in requested",
 	marked: "You marked this",
 	member_access_requested: "Access requested",
-	// read from the merge request list rather than a to-do, so the wording says state not event
+	/*
+	 * read from the merge request list rather than a to-do, so the wording says state not event. it
+	 * must also differ from the `assigned` to-do above, which can share a group with it.
+	 */
 	mr_review_requested: "Waiting for your review",
-	mr_assigned: "Assigned to you",
+	mr_assigned: "Waiting on you",
 
 	// participation: one row per thread, so the plural is honest
 	new_thread: "New thread",
 	new_comment: "New replies",
 	changes_pushed: "Changes pushed",
+	mr_approved: "Approved",
 	mr_merged: "Merged",
 
 	// mail: one row per message, so the wording says what happened rather than what it wants

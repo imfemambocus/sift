@@ -33,7 +33,10 @@ the same feed as your GitLab items, and its search covers all of it.
   new thread. You are part of an item when you are the author, the assignee or a reviewer. One
   comment of yours is also enough. Each thread gets one row. A thread with twelve replies stays one
   row.
-- **Commits on a merge request you review.** The row names the author of the branch.
+- **Commits on a merge request.** This covers a merge request you review, one assigned to you and one
+  you wrote. The row names the author of the branch. Your own push gets a row too, because the merge
+  request comes back to your list whenever it changes and the row is what says what the change was.
+- **A merge request that somebody approves.** The row names the person who approved it.
 - **A merge request that merges.** The row names the person who merged it. The item leaves your list
   in a visible way.
 - **A failure.** A pipeline fails. A merge request cannot merge.
@@ -41,9 +44,10 @@ the same feed as your GitLab items, and its search covers all of it.
   row. This includes the mail that you sent. Each row opens that message in Gmail. Messages of one
   conversation make one entry.
 
-Your own comments never notify you. Your own commits never notify you. GitLab writes system notes
-about itself, and Sift ignores them. Sift leaves out your drafts and your chats. A draft is not sent,
-and a chat is not mail. Sift also leaves out spam and trash, because Gmail leaves them out.
+Your own comments never notify you, and neither does your own approval. GitLab writes system notes
+about itself, and Sift ignores them. The note that records an approval is the one exception. Sift
+leaves out your drafts and your chats. A draft is not sent, and a chat is not mail. Sift also leaves
+out spam and trash, because Gmail leaves them out.
 
 ## Status
 
@@ -396,7 +400,7 @@ the row. The work that still waits for you is therefore the first thing you see 
 
 Each row also gives the reason it is in your list, next to the time. A colour groups the reasons:
 needs review, assigned to you, you were named, a discussion moved, something broke, mail arrived, or
-merged. The reason is a word. You do not decode a colour.
+an outcome such as approved or merged. The reason is a word. You do not decode a colour.
 
 The style of an action shows what the action costs you. Check a source, connect a source again and
 disconnect a source sit next to each other, and the three look different. The destructive one is

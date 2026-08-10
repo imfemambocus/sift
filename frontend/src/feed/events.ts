@@ -43,7 +43,8 @@ const FAMILY_BY_KIND: Record<string, EventFamily> = {
 
 	marked: "other",
 	member_access_requested: "other",
-	// merged is the one row that wants nothing from you, so it stays the quiet grey
+	// approved and merged report an outcome and want nothing from you, so they stay the quiet grey
+	mr_approved: "other",
 	mr_merged: "other",
 };
 

@@ -192,7 +192,7 @@ check "one new_thread appeared" 1 "$(count new_thread)"
 check "the older thread row is untouched" 1 "$(count new_comment)"
 
 echo
-echo "--- pushing to my own merge request is not news ---"
+echo "--- pushing to my own merge request is announced as well ---"
 python3 - "$MRS" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1]))
@@ -201,7 +201,8 @@ data["authored"][0]["updated_at"] = "2026-08-03T14:00:00.000Z"
 json.dump(data, open(sys.argv[1], "w"))
 PY
 connect
-check "my own push raised no row" 1 "$(count changes_pushed)"
+check "my own push raised a commits row" 2 "$(count changes_pushed)"
+check "on my own merge request" 1 "$(titled "My own branch, nobody else on it")"
 
 echo
 echo "--- several events on one merge request collapse into one entry ---"
@@ -210,6 +211,68 @@ feed = json.load(sys.stdin)
 key = next(i["groupKey"] for i in feed if i["kind"] == "mr_review_requested")
 print(sum(1 for i in feed if i["groupKey"] == key))')"
 check "the note anchor is not part of the key" '"gitlab:https://gl.example.org/team/web/-/merge_requests/20"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["groupKey"] for i in json.load(sys.stdin) if i["kind"]=="new_comment")))')"
+
+echo
+echo "--- an approval is a row, and it comes out of a system note ---"
+python3 - "$DISC" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["merge_requests:5:20"].append(
+    {"id": "d4", "notes": [
+        {"id": 2100, "body": "approved this merge request", "system": True,
+         "created_at": "2026-08-03T14:30:00.000Z", "author": {"id": 9, "username": "maxime", "name": "Maxime"}}]})
+json.dump(data, open(sys.argv[1], "w"))
+PY
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["review_requested"][0]["updated_at"] = "2026-08-03T14:30:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "the approval is a row" 1 "$(count mr_approved)"
+check "named after whoever approved" '"Maxime"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="mr_approved")))')"
+check "activity is when they approved" '"2026-08-03T14:30:00Z"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["activityAt"] for i in json.load(sys.stdin) if i["kind"]=="mr_approved")))')"
+check "it sits in the merge request's group" '"gitlab:https://gl.example.org/team/web/-/merge_requests/20"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["groupKey"] for i in json.load(sys.stdin) if i["kind"]=="mr_approved")))')"
+check "a system note is not a thread row" 1 "$(count new_thread)"
+
+# my own approval is my own action, so it is not news to me
+python3 - "$DISC" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["merge_requests:5:20"].append(
+    {"id": "d5", "notes": [
+        {"id": 2101, "body": "approved this merge request", "system": True,
+         "created_at": "2026-08-03T14:35:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}}]})
+json.dump(data, open(sys.argv[1], "w"))
+PY
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["review_requested"][0]["updated_at"] = "2026-08-03T14:35:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "my own approval raised nothing" 1 "$(count mr_approved)"
+
+# an unapproval is a system note whose body contains an approval's, so it must not match
+python3 - "$DISC" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["merge_requests:5:20"].append(
+    {"id": "d6", "notes": [
+        {"id": 2102, "body": "unapproved this merge request", "system": True,
+         "created_at": "2026-08-03T14:40:00.000Z", "author": {"id": 9, "username": "maxime", "name": "Maxime"}}]})
+json.dump(data, open(sys.argv[1], "w"))
+PY
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["review_requested"][0]["updated_at"] = "2026-08-03T14:40:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "no unapproval row, and no second approval row" 1 "$(count mr_approved)"
 
 echo
 echo "--- merged: announced once, then there is nothing left to watch ---"
@@ -319,7 +382,7 @@ data["single"]["5:40"]["updated_at"] = "2026-08-03T18:00:00.000Z"
 json.dump(data, open(sys.argv[1], "w"))
 PY
 connect
-check "a push on it raised no commits row"         1 "$(count changes_pushed)"
+check "a push on it raised no commits row"         2 "$(count changes_pushed)"
 check "and still only the one row about it"        1 "$(titled "$TITLE")"
 
 echo

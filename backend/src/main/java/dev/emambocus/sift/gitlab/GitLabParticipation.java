@@ -32,6 +32,8 @@ class GitLabParticipation {
 
 	private static final int SNIPPET_LENGTH = 180;
 
+	private static final String APPROVED = "approved this merge request";
+
 	/** A resource worth watching, flattened out of whichever list it was found in. */
 	record Watched(
 			GitLabResourceType type,
@@ -42,7 +44,6 @@ class GitLabParticipation {
 			String projectPath,
 			Instant updatedAt,
 			String sha,
-			Long authorId,
 			String authorName,
 			String authorAvatarUrl,
 			GitLabWatchReason reason) {
@@ -106,7 +107,7 @@ class GitLabParticipation {
 				known = GitLabWatchedResource.of(userId, resource.type(), resource.projectId(),
 						resource.iid(), resource.title(), resource.webUrl(), now);
 			}
-			else if (announcesPush(resource, known, selfId)) {
+			else if (announcesPush(resource, known)) {
 				items.add(changesPushed(resource, now));
 			}
 
@@ -201,19 +202,27 @@ class GitLabParticipation {
 			long alreadySeen = knownThread == null ? 0 : knownThread.getLastNoteId();
 			long newest = notes.stream().mapToLong(GitLabResponses.Note::id).max().orElse(0);
 
-			List<GitLabResponses.Note> unseen = notes.stream()
+			// what you did yourself is never news to you, in a reply and in a system note alike
+			List<GitLabResponses.Note> fresh = notes.stream()
 					.filter(note -> note.id() > alreadySeen)
-					.filter(note -> !Boolean.TRUE.equals(note.system()))
 					.filter(note -> note.author() == null || !Objects.equals(note.author().id(), selfId))
+					.toList();
+
+			// a system note is GitLab narrating itself, not a person writing to you
+			List<GitLabResponses.Note> unseen = fresh.stream()
+					.filter(note -> !Boolean.TRUE.equals(note.system()))
 					.toList();
 
 			/*
 			 * a resource seen for the first time is only baselined. without this, connecting an
 			 * account would emit a row for every thread the user has ever been in.
 			 */
-			if (!firstSight && !unseen.isEmpty()) {
-				String kind = knownThread == null ? "new_thread" : "new_comment";
-				items.add(thread(resource, discussion, unseen, kind));
+			if (!firstSight) {
+				if (!unseen.isEmpty()) {
+					String kind = knownThread == null ? "new_thread" : "new_comment";
+					items.add(thread(resource, discussion, unseen, kind));
+				}
+				announceApprovals(resource, fresh, items);
 			}
 
 			if (knownThread == null) {
@@ -234,17 +243,16 @@ class GitLabParticipation {
 	}
 
 	/*
-	 * a branch moving is news to whoever is expected to look at it, so a resource watched only because
-	 * you once replied to it stays quiet: the replies to you are what you were kept for. your own
-	 * pushes are never news, for the same reason your own replies are not.
+	 * a resource watched only because you once replied to it stays quiet: the replies to you are what
+	 * it is kept for. every other push is announced whoever made it, because a merge request's state
+	 * row returns to unread on any change GitLab records, and that row cannot say what the change was.
 	 */
-	private static boolean announcesPush(Watched resource, GitLabWatchedResource known, Long selfId) {
+	private static boolean announcesPush(Watched resource, GitLabWatchedResource known) {
 		return resource.reason().announcesPushes()
 				&& resource.type() == GitLabResourceType.MERGE_REQUEST
 				&& resource.sha() != null
 				&& known.getLastSha() != null
-				&& !known.getLastSha().equals(resource.sha())
-				&& !Objects.equals(resource.authorId(), selfId);
+				&& !known.getLastSha().equals(resource.sha());
 	}
 
 	/*
@@ -269,6 +277,45 @@ class GitLabParticipation {
 				false,
 				null,
 				// commits landing is an event; it does not un-happen on the next sweep
+				false);
+	}
+
+	/*
+	 * GitLab raises no to-do when somebody approves, and records it as a system note on the merge
+	 * request. Its body is English whatever the user's locale, and the body of an unapproval contains
+	 * the body of an approval, so the test is an exact match rather than a prefix or a substring.
+	 */
+	private static void announceApprovals(Watched resource, List<GitLabResponses.Note> fresh,
+			List<IncomingItem> items) {
+
+		if (resource.type() != GitLabResourceType.MERGE_REQUEST) {
+			return;
+		}
+		for (GitLabResponses.Note note : fresh) {
+			if (Boolean.TRUE.equals(note.system()) && note.body() != null && APPROVED.equals(note.body().trim())) {
+				items.add(approved(resource, note));
+			}
+		}
+	}
+
+	private static IncomingItem approved(Watched resource, GitLabResponses.Note note) {
+		return new IncomingItem(
+				"mr-approved:" + resource.projectId() + ":" + resource.iid() + ":" + note.id(),
+				"mr_approved",
+				resource.title(),
+				null,
+				note.author() == null ? null : note.author().name(),
+				note.author() == null ? null : note.author().avatarUrl(),
+				resource.projectPath(),
+				null,
+				// the note anchor, so the group key still comes out as the merge request itself
+				resource.webUrl() + "#note_" + note.id(),
+				null,
+				note.createdAt(),
+				note.createdAt(),
+				false,
+				null,
+				// it was approved once. the next sweep not saying so again says nothing.
 				false);
 	}
 

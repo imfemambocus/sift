@@ -153,7 +153,6 @@ public class GitLabSource implements NotificationSource {
 					GitLabUrls.projectPath(mergeRequest.references()),
 					mergeRequest.updatedAt(),
 					mergeRequest.sha(),
-					mergeRequest.author() == null ? null : mergeRequest.author().id(),
 					mergeRequest.author() == null ? null : mergeRequest.author().name(),
 					mergeRequest.author() == null ? null : mergeRequest.author().avatarUrl(),
 					reason));
@@ -176,7 +175,6 @@ public class GitLabSource implements NotificationSource {
 					GitLabUrls.projectPath(issue.references()),
 					issue.updatedAt(),
 					null,
-					issue.author() == null ? null : issue.author().id(),
 					issue.author() == null ? null : issue.author().name(),
 					issue.author() == null ? null : issue.author().avatarUrl(),
 					reason));
