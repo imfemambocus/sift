@@ -221,13 +221,13 @@ export function ConnectSource({ source: slug }: { readonly source: string }) {
 			)}
 
 			{needsCredential && !connector.configured && (
-				<div className="flex w-full max-w-sm flex-col gap-2 rounded-panel border border-border bg-surface px-4 py-3.5">
+				<div className="flex w-full flex-col gap-2 rounded-panel border border-border bg-surface px-4 py-3.5">
 					{setupInstructions(slug, connector.target)}
 				</div>
 			)}
 
 			{needsCredential && connector.configured && (
-				<div className="flex w-full max-w-sm flex-col gap-4">
+				<div className="flex w-full flex-col gap-4">
 					<p className="text-[13px] leading-relaxed text-fg-muted">
 						{approvalNote(slug, connector.target)}
 					</p>

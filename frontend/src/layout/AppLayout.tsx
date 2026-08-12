@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router";
 import { useUnreadBadge } from "../feed/unreadBadge";
+import { useUnreadSound } from "../feed/unreadSound";
 import { isSearching } from "../search/search";
 import { SearchField } from "../search/SearchField";
 import { SearchResults } from "../search/SearchResults";
@@ -22,6 +23,7 @@ export function AppLayout() {
 	const [query, setQuery] = useState("");
 	const { pathname } = useLocation();
 	useUnreadBadge();
+	useUnreadSound();
 	// the frame, because a read that finishes has to reach whichever page is open
 	useRefreshWhenSynced();
 

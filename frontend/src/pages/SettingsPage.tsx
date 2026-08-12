@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { useSession, useSignOut } from "../auth/session";
 import { Button } from "../components/Button";
+import { SoundChoice } from "../feed/SoundChoice";
 import { Page } from "../layout/Page";
 import { ConnectSource } from "../sources/ConnectSource";
 import { useConnectors } from "../sources/sources";
@@ -38,6 +39,11 @@ export function SettingsPage() {
 			<section className="flex flex-col items-start gap-3">
 				<h2 className="eyebrow">Appearance</h2>
 				<ThemeChoice />
+			</section>
+
+			<section className="flex flex-col items-start gap-3">
+				<h2 className="eyebrow">Sound</h2>
+				<SoundChoice />
 			</section>
 
 			{/* one section per source the app knows, so a new one needs no edit here */}

@@ -48,6 +48,38 @@ final class GitLabResponses {
 	}
 
 	/**
+	 * The pipeline on a merge request's own head. Only the single merge request endpoint carries it;
+	 * the lists do not, which is why it costs a request of its own.
+	 *
+	 * <p>{@code status} is GitLab's own vocabulary and it holds far more than a verdict: {@code created},
+	 * {@code waiting_for_resource}, {@code preparing}, {@code pending}, {@code running}, {@code success},
+	 * {@code failed}, {@code canceling}, {@code canceled}, {@code skipped}, {@code manual} and
+	 * {@code scheduled}. Only the two that are a verdict are ever announced.
+	 */
+	record Pipeline(
+			Long id,
+			String status,
+			String ref,
+			String sha,
+			@JsonProperty("web_url") String webUrl,
+			@JsonProperty("updated_at") Instant updatedAt,
+			User user) {
+
+		boolean failed() {
+			return "failed".equals(status);
+		}
+
+		boolean succeeded() {
+			return "success".equals(status);
+		}
+
+		/** A pipeline still moving says nothing yet, and its verdict must not overwrite the last one. */
+		boolean settled() {
+			return failed() || succeeded();
+		}
+	}
+
+	/**
 	 * {@code mergeUser} is the current field for who pressed merge and {@code mergedBy} the older one
 	 * it replaced; both are read because which one an instance sends depends on its version.
 	 */
@@ -67,6 +99,7 @@ final class GitLabResponses {
 			@JsonProperty("merged_at") Instant mergedAt,
 			@JsonProperty("merge_user") User mergeUser,
 			@JsonProperty("merged_by") User mergedBy,
+			@JsonProperty("head_pipeline") Pipeline headPipeline,
 			User author,
 			References references) {
 

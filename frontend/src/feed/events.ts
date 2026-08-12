@@ -40,12 +40,14 @@ const FAMILY_BY_KIND: Record<string, EventFamily> = {
 	build_failed: "blocked",
 	unmergeable: "blocked",
 	merge_train_removed: "blocked",
+	pipeline_failed: "blocked",
 
 	marked: "other",
 	member_access_requested: "other",
-	// approved and merged report an outcome and want nothing from you, so they stay the quiet grey
+	// approved, merged and a pipeline back to green report an outcome and want nothing from you
 	mr_approved: "other",
 	mr_merged: "other",
+	pipeline_fixed: "other",
 };
 
 export const FAMILY_ORDER: readonly EventFamily[] = [

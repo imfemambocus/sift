@@ -275,6 +275,72 @@ connect
 check "no unapproval row, and no second approval row" 1 "$(count mr_approved)"
 
 echo
+echo "--- the pipeline on a merge request: red once, green once, and neither of them twice ---"
+# no list carries a pipeline, so this is the one thing Sift asks the merge request itself for
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+mr = dict(data["review_requested"][0])
+mr["head_pipeline"] = {"id": 9001, "status": "running", "ref": "chart-v2", "sha": "aaa111",
+                       "web_url": "https://gl.example.org/team/web/-/pipelines/9001",
+                       "updated_at": "2026-08-03T14:45:00.000Z",
+                       "user": {"id": 9, "username": "maxime", "name": "Maxime"}}
+data.setdefault("single", {})["5:20"] = mr
+data["review_requested"][0]["updated_at"] = "2026-08-03T14:45:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "a pipeline still running says nothing yet" 0 "$(count pipeline_failed)"
+
+# it finishes red, and the merge request itself does not move: only the pending flag comes back here
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["single"]["5:20"]["head_pipeline"].update({"status": "failed", "updated_at": "2026-08-03T14:50:00.000Z"})
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "the failure is a row"                     1 "$(count pipeline_failed)"
+check "named after whoever ran it"               '"Maxime"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["actorName"] for i in json.load(sys.stdin) if i["kind"]=="pipeline_failed")))')"
+check "activity is when the pipeline finished"   '"2026-08-03T14:50:00Z"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["activityAt"] for i in json.load(sys.stdin) if i["kind"]=="pipeline_failed")))')"
+check "it sits in the merge request's group"     '"gitlab:https://gl.example.org/team/web/-/merge_requests/20"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["groupKey"] for i in json.load(sys.stdin) if i["kind"]=="pipeline_failed")))')"
+
+# the same red pipeline, read again because the merge request moved. it is not news a second time.
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["review_requested"][0]["updated_at"] = "2026-08-03T14:55:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "still one failure row"                    1 "$(count pipeline_failed)"
+
+# somebody pushes a fix and the replacement pipeline passes
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["single"]["5:20"]["head_pipeline"].update(
+    {"id": 9002, "status": "success", "updated_at": "2026-08-03T15:00:00.000Z"})
+data["review_requested"][0]["updated_at"] = "2026-08-03T15:00:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "the fix is a row"                         1 "$(count pipeline_fixed)"
+check "and it raised no second failure"          1 "$(count pipeline_failed)"
+
+# green staying green is not a fix, because nothing was broken
+python3 - "$MRS" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["single"]["5:20"]["head_pipeline"].update(
+    {"id": 9003, "status": "success", "updated_at": "2026-08-03T15:05:00.000Z"})
+data["review_requested"][0]["updated_at"] = "2026-08-03T15:05:00.000Z"
+json.dump(data, open(sys.argv[1], "w"))
+PY
+connect
+check "still one fix row"                        1 "$(count pipeline_fixed)"
+
+echo
 echo "--- merged: announced once, then there is nothing left to watch ---"
 python3 - "$MRS" <<'PY'
 import json, sys

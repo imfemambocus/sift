@@ -39,7 +39,11 @@ the same feed as your GitLab items, and its search covers all of it.
 - **A merge request that somebody approves.** The row names the person who approved it.
 - **A merge request that merges.** The row names the person who merged it. The item leaves your list
   in a visible way.
-- **A failure.** A pipeline fails. A merge request cannot merge.
+- **A pipeline that fails, and the pipeline that passes after it.** Sift reads the pipeline of each
+  merge request you review, of each one assigned to you and of each one you wrote. A failure is a row.
+  The next pipeline that passes is a row as well, so you learn that it is fixed without opening it. A
+  merge request you only commented on says nothing about its pipeline. A merge request that cannot
+  merge is also a row.
 - **Every message in your mailbox.** Sift makes no judgement about your mail. Each message becomes a
   row. This includes the mail that you sent. Each row opens that message in Gmail. Messages of one
   conversation make one entry.
@@ -85,6 +89,11 @@ Read and unread behaves like this:
   stays current while you look at a different tab. Your browser slows a timer in a tab you do not
   look at, so expect the count to change after approximately one minute. Sift must be open in a tab.
   It shows you nothing when it is closed.
+- Sift can also make a short sound when something new arrives. It is off until you turn it on, in
+  **Settings** under **Sound**. It sounds only while you look somewhere else, so it stays quiet while
+  Sift is the window in front of you. Turn it on and you hear it once, which is how you know what it
+  is. It has the same two limits as the count: a tab must be open, and a background tab is slow, so
+  the sound can follow the arrival by approximately one minute.
 
 Several events can happen on one merge request. Sift puts them in one entry, and you can collapse
 that entry. The list does not repeat the same title four times. A long list loads fifty entries at
@@ -190,7 +199,8 @@ An administrator can prevent a person from making an application. If your instan
 administrator for an application. Sift has no other way to connect a source.
 
 The access token expires after approximately two hours, and Sift renews it without your help. If the
-permission stops working, Sift says so on the feed itself. Settings then offers to connect again. You
+permission stops working, Sift says so on the feed itself. See **If a connection stops working**
+below. You
 can withdraw the permission on GitLab at any time. If you disconnect the source in Sift, Sift
 withdraws it for you.
 
@@ -331,6 +341,22 @@ can change a label at all. You can withdraw the permission in your Google accoun
 If you disconnect Gmail in Sift, Sift withdraws the permission for you. It also removes the rows of
 that mailbox. Connect it again, and Sift reads the mailbox from the beginning, which for a large one
 takes as long as it did the first time.
+
+## If a connection stops working
+
+Sift says on **Home** and in **Settings** when a source refuses its permission. It then reads that
+source no more, and it does not try again by itself. An empty list therefore never looks like good
+news.
+
+Press **Check now** first. Sift renews the token and reads the source immediately. A permission that
+is still good works again at once. Connect the source again only if **Check now** gives you the same
+answer.
+
+A permission can look dead while nothing is wrong with it. Sift runs in Docker, and the clock of a
+Docker virtual machine falls behind while your machine sleeps. Sift then keeps a token that the
+source already retired, and the source refuses it. Both of your sources can fail in the same minute
+in this way. Do not disconnect a source for this. A disconnection of Gmail removes every row of that
+mailbox, and the next read then takes as long as the first one did.
 
 ## Ports
 

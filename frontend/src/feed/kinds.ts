@@ -8,7 +8,12 @@ const LABELS: Record<string, string> = {
 	approval_required: "Approval required",
 	directly_addressed: "You were addressed",
 	mentioned: "You were mentioned",
-	build_failed: "Pipeline failed",
+	/*
+	 * GitLab's own to-do for a failed build, which can share a group with the pipeline row below it.
+	 * it keeps the to-do's word so the two are told apart: one is a to-do you can dismiss on GitLab,
+	 * the other is the verdict Sift watched arrive.
+	 */
+	build_failed: "Build failed",
 	unmergeable: "Cannot be merged",
 	merge_train_removed: "Removed from the merge train",
 	review_submitted: "Review submitted",
@@ -28,6 +33,8 @@ const LABELS: Record<string, string> = {
 	changes_pushed: "Changes pushed",
 	mr_approved: "Approved",
 	mr_merged: "Merged",
+	pipeline_failed: "Pipeline failed",
+	pipeline_fixed: "Pipeline fixed",
 
 	// mail: one row per message, so the wording says what happened rather than what it wants
 	mail_received: "New message",

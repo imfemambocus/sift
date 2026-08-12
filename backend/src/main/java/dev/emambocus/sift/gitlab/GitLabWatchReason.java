@@ -14,10 +14,11 @@ enum GitLabWatchReason {
 	/** Assigned to you, or yours. */
 	INVOLVED,
 
-	/** You only left a comment on it: replies to you are news, a branch moving is not. */
+	/** You only left a comment on it: replies to you are news, the branch and its pipeline are not. */
 	COMMENTED;
 
-	boolean announcesPushes() {
+	/** Whether commits landing and the pipeline's verdict are worth a row, or only replies to you. */
+	boolean announcesBranchEvents() {
 		return this != COMMENTED;
 	}
 }

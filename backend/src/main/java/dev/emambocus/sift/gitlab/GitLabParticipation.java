@@ -111,9 +111,14 @@ class GitLabParticipation {
 				items.add(changesPushed(resource, now));
 			}
 
-			if (hasMoved(resource, known, firstSight)) {
+			boolean moved = hasMoved(resource, known, firstSight);
+			if (moved) {
 				readThreads(userId, access, selfId, resource, firstSight, knownThreads, items, threadUpdates, now,
 						maxPages);
+			}
+
+			if (watchesPipeline(resource, known, moved)) {
+				readPipeline(access, resource, known, firstSight, items, now);
 			}
 
 			known.setTitle(resource.title());
@@ -235,6 +240,111 @@ class GitLabParticipation {
 		}
 	}
 
+	/*
+	 * the merge request's own pipeline, which no list carries: only the single merge request endpoint
+	 * has head_pipeline, so this costs one request and is asked for as rarely as it can be.
+	 *
+	 * two triggers, because neither covers the other. a merge request that moved may have started a
+	 * pipeline, and a pipeline already seen running has to be looked at again until it reaches a
+	 * verdict, since GitLab does not promise to move the merge request when its pipeline finishes.
+	 */
+	private static boolean watchesPipeline(Watched resource, GitLabWatchedResource known, boolean moved) {
+		return resource.reason().announcesBranchEvents()
+				&& resource.type() == GitLabResourceType.MERGE_REQUEST
+				&& (moved || known.isPipelinePending());
+	}
+
+	private void readPipeline(GitLabAccess access, Watched resource, GitLabWatchedResource known,
+			boolean firstSight, List<IncomingItem> items, Instant now) {
+
+		Optional<GitLabResponses.MergeRequest> found;
+		try {
+			found = client.fetchMergeRequest(access, resource.projectId(), resource.iid());
+		}
+		catch (RuntimeException ex) {
+			// as with an unreadable thread: report it, leave the stored verdict alone, try again later
+			log.warn("could not read the pipeline on merge request {} in project {}: {}",
+					resource.iid(), resource.projectId(), ex.getMessage());
+			return;
+		}
+
+		GitLabResponses.Pipeline pipeline = found.map(GitLabResponses.MergeRequest::headPipeline).orElse(null);
+		if (pipeline == null || pipeline.id() == null) {
+			// nothing configured, or nothing has run yet. there is no verdict to keep or to contradict.
+			known.setPipelinePending(false);
+			return;
+		}
+
+		known.setPipelinePending(!pipeline.settled());
+		if (!pipeline.settled()) {
+			return;
+		}
+
+		/*
+		 * a first sight is baselined, exactly as a thread is: without it, connecting an account emits a
+		 * row for every merge request whose pipeline happens to be red today. anything after that is a
+		 * verdict Sift watched arrive, including the first one, which is why the test is the sighting
+		 * and not whether a verdict is already stored.
+		 */
+		if (!firstSight) {
+			pipelineItem(resource, known, pipeline, now).ifPresent(items::add);
+		}
+
+		known.setPipelineId(pipeline.id());
+		known.setPipelineStatus(pipeline.status());
+	}
+
+	/*
+	 * a failure is news once per pipeline, so a red one still red on the next sweep says nothing and a
+	 * replacement that fails again does. a fix is news only after a failure, which is what makes the
+	 * stored verdict worth keeping rather than the status of whatever ran last.
+	 */
+	private static Optional<IncomingItem> pipelineItem(Watched resource, GitLabWatchedResource known,
+			GitLabResponses.Pipeline pipeline, Instant now) {
+
+		boolean wasFailing = "failed".equals(known.getPipelineStatus());
+		boolean samePipeline = pipeline.id().equals(known.getPipelineId());
+
+		if (pipeline.failed() && !(wasFailing && samePipeline)) {
+			return Optional.of(pipelineRow(resource, pipeline, "pipeline_failed",
+					"The pipeline on this merge request failed.", now));
+		}
+		if (pipeline.succeeded() && wasFailing) {
+			return Optional.of(pipelineRow(resource, pipeline, "pipeline_fixed",
+					"The pipeline on this merge request passed again.", now));
+		}
+		return Optional.empty();
+	}
+
+	/*
+	 * the merge request's url rather than the pipeline's, so this shares the group of everything else
+	 * about that merge request. the pipeline of a merge request is read from its page anyway, and a
+	 * url of its own would give one merge request two places in the list.
+	 */
+	private static IncomingItem pipelineRow(Watched resource, GitLabResponses.Pipeline pipeline, String kind,
+			String body, Instant now) {
+
+		GitLabResponses.User by = pipeline.user();
+		return new IncomingItem(
+				"mr-" + kind.replace('_', '-') + ":" + resource.projectId() + ":" + resource.iid()
+						+ ":" + pipeline.id(),
+				kind,
+				resource.title(),
+				body,
+				by == null ? resource.authorName() : by.name(),
+				by == null ? resource.authorAvatarUrl() : by.avatarUrl(),
+				resource.projectPath(),
+				null,
+				resource.webUrl(),
+				null,
+				pipeline.updatedAt() == null ? now : pipeline.updatedAt(),
+				pipeline.updatedAt() == null ? now : pipeline.updatedAt(),
+				false,
+				null,
+				// a pipeline reached its verdict once; the next sweep not saying so again says nothing
+				false);
+	}
+
 	private static boolean hasMoved(Watched resource, GitLabWatchedResource known, boolean firstSight) {
 		if (firstSight || known.getLastUpdatedAt() == null || resource.updatedAt() == null) {
 			return true;
@@ -248,7 +358,7 @@ class GitLabParticipation {
 	 * row returns to unread on any change GitLab records, and that row cannot say what the change was.
 	 */
 	private static boolean announcesPush(Watched resource, GitLabWatchedResource known) {
-		return resource.reason().announcesPushes()
+		return resource.reason().announcesBranchEvents()
 				&& resource.type() == GitLabResourceType.MERGE_REQUEST
 				&& resource.sha() != null
 				&& known.getLastSha() != null

@@ -50,6 +50,17 @@ public class GitLabWatchedResource {
 	@Column(name = "last_sha")
 	private String lastSha;
 
+	@Column(name = "pipeline_id")
+	private Long pipelineId;
+
+	/** The last verdict, so a failure is still remembered while its replacement is running. */
+	@Column(name = "pipeline_status")
+	private String pipelineStatus;
+
+	/** True while a pipeline has been seen but has not reached a verdict, which is what to look again for. */
+	@Column(name = "pipeline_pending", nullable = false)
+	private boolean pipelinePending;
+
 	@Column(name = "first_seen_at", nullable = false)
 	private Instant firstSeenAt;
 
