@@ -27,8 +27,9 @@ it already. A suite that drives the callback itself calls it by hand.
                               the mailbox, a message thrown away and taken back out of the bin,
                               and a reconnection that reads the mailbox again
 ./verify-unreadable-token.sh  a token that will not decrypt, and "check now"
-./verify-feed-ui.sh           the same flow in a browser, plus search, grouping, the tab badge, and
-                              an item completed upstream that stays in the feed as history
+./verify-feed-ui.sh           the same flow in a browser, plus search, grouping, the tab badge, the
+                              sound with the tab behind another one, and an item completed upstream
+                              that stays in the feed as history
 ```
 
 ## Two rules

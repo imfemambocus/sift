@@ -21,6 +21,27 @@ const page = await browser.newPage();
  * the session probe answers 401 before anyone has signed in, by design, and chromium logs every failed
  * request to the console. ignoring that one url is what makes a clean run actually read as clean.
  */
+/*
+ * every oscillator the page starts, recorded before any of the app's own scripts run. headless
+ * chromium has no speaker, so this is the only thing a suite can check: that the sound is asked for
+ * at the moment it should be. whether it is audible is a thing only a person can confirm.
+ */
+await page.evaluateOnNewDocument(() => {
+  window.__rings = [];
+  const Real = window.AudioContext;
+  window.AudioContext = class extends Real {
+    createOscillator() {
+      const oscillator = super.createOscillator();
+      const start = oscillator.start.bind(oscillator);
+      oscillator.start = (when) => {
+        window.__rings.push(when ?? 0);
+        return start(when);
+      };
+      return oscillator;
+    }
+  };
+});
+
 const EXPECTED_401 = "/api/auth/me";
 page.on("console", (m) => {
   if (m.type() !== "error") return;
@@ -391,6 +412,79 @@ console.log(`  after mark-all-read: ${afterReading.unread} unread, ${afterReadin
 if (afterReading.unread !== "0") problems.push(`reading everything left Home at ${afterReading.unread} unread`);
 if (afterReading.waiting !== "11") problems.push(`reading everything moved waiting to ${afterReading.waiting}`);
 await shot("f06f-home-all-read-dark");
+
+/*
+ * the sound for something new. it is checked here because mark-all-read has just taken the count to
+ * zero, so one arriving to-do is a rise from a known floor.
+ */
+const rings = () => page.evaluate(() => window.__rings.length);
+
+await page.goto(`${BASE}/settings`, { waitUntil: "networkidle0" });
+const soundOn = await page.$('button[aria-pressed]::-p-text(On)');
+if (soundOn === null) {
+  problems.push("Settings offers no way to turn the sound on");
+} else {
+  const before = await rings();
+  await soundOn.click();
+  await settle(600);
+  const afterTurningOn = await rings();
+  console.log(`  turning the sound on played it once: ${afterTurningOn - before} note(s)`);
+  if (afterTurningOn <= before) {
+    problems.push("turning the sound on played nothing, so nobody can tell what they just asked for");
+  }
+
+  /*
+   * a second tab takes the focus, which is the case the sound exists for. the count is raised from
+   * there too, so nothing touches the Sift page: a click on it would hand the focus back.
+   */
+  const other = await browser.newPage();
+  await other.goto(`${BASE}/settings`, { waitUntil: "networkidle0" });
+  await other.bringToFront();
+  await settle(500);
+
+  const blurred = await page.evaluate(() => !document.hasFocus());
+  if (!blurred) {
+    problems.push("the Sift page kept the focus with another tab in front, so this proves nothing");
+  }
+
+  const quiet = await rings();
+  const arrived = JSON.parse(readFileSync(todosPath, "utf8"));
+  arrived.push({
+    id: 9100, action_name: "mentioned", target_url: "https://gitlab.example.org/team/web/-/issues/91",
+    created_at: "2026-08-04T09:00:00.000Z", updated_at: "2026-08-04T09:00:00.000Z",
+    author: { id: 9, name: "Maxime" },
+    project: { id: 5, path_with_namespace: "team/web" },
+    target: { title: "Something arrived while you were looking away" },
+  });
+  writeFileSync(todosPath, JSON.stringify(arrived));
+
+  // the sync is asked for by the other tab, which shares the session cookie
+  await other.evaluate(async () => {
+    const token = document.cookie.split("; ").find((c) => c.startsWith("XSRF-TOKEN="))?.split("=")[1];
+    await fetch("/api/sources/gitlab/sync", { method: "POST", headers: { "X-XSRF-TOKEN": token ?? "" } });
+  });
+
+  /*
+   * the count is read on the Sift page's own 30s poll, which is the interval that has to keep running
+   * while the tab is behind another one. that is the whole wait, so it is generous.
+   */
+  let rang = 0;
+  for (let i = 0; i < 25; i += 1) {
+    await settle(2000);
+    rang = (await rings()) - quiet;
+    if (rang > 0) break;
+  }
+
+  const unreadNow = await page.evaluate(() => document.title);
+  console.log(`  something arrived while the tab was behind another: ${rang} note(s), tab "${unreadNow}"`);
+  if (rang === 0) {
+    problems.push(`nothing sounded when the count rose with the tab behind another one, tab "${unreadNow}"`);
+  }
+
+  await other.close();
+  await page.bringToFront();
+  await settle(400);
+}
 
 // mobile
 const railBox = async () => page.$eval('nav[aria-label="Sections"]', (nav) => {
