@@ -3,7 +3,7 @@
 /*
  * both themes are explicit selectors rather than a prefers-color-scheme media query: the inline
  * script in index.html always resolves the stored preference, "system" included, to a concrete
- * data-theme before first paint, so there is exactly one source of truth
+ * data-theme before first paint. exactly one source of truth
  */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -72,7 +72,7 @@
 	color-scheme: dark;
 }
 
-/* `inline` keeps the utilities pointing at the live custom property, so they follow the theme */
+/* `inline` keeps the utilities pointing at the live custom property: they follow the theme */
 @theme inline {
 	--color-bg: var(--bg);
 	--color-surface: var(--surface);
@@ -111,7 +111,7 @@
 
 	/*
 	 * the native scrollbar is hidden and replaced by WindowScrollbar. the document is still the
-	 * scroller, so this is purely cosmetic and no scrolling behaviour changes.
+	 * scroller: this is cosmetic, and no scrolling behaviour changes.
 	 */
 	html {
 		scrollbar-width: none;
@@ -147,8 +147,8 @@
 	 * a theme change fades, and every element fades on the same clock. that is the whole reason this is
 	 * imposed on `*` for the length of the swap rather than left to each component: the hover states put
 	 * `transition-colors` on seventeen elements, Button transitions filter too and the scrollbar runs at
-	 * 200ms, while the page background, every border and every icon have none at all, so relying on what
-	 * components happen to declare had some things snap and the rest drift in behind them.
+	 * 200ms, while the page background, every border and every icon have none at all. rely on what the
+	 * components happen to declare and some things snap while the rest drift in behind them.
 	 *
 	 * only colour-ish properties, never `all`, which would animate layout. !important because it has to
 	 * beat utilities in a later layer. motion is untouched: it animates through the Web Animations API.
@@ -182,11 +182,11 @@
 
 	/*
 	 * a browser paints its own background and text colour onto an autofilled field, which knows
-	 * nothing about the theme. the background cannot be set directly, so an inset shadow covers it
-	 * and text-fill-color replaces the text. the hover and focus states repeat it because the
-	 * browser reapplies its own colours on each of them.
+	 * nothing about the theme. the background cannot be set directly: an inset shadow covers it and
+	 * text-fill-color replaces the text. the hover and focus states repeat it because the browser
+	 * reapplies its own colours on each of them.
 	 *
-	 * `:is()` is forgiving, so the rule survives in a browser that knows only one of the two names,
+	 * `:is()` is forgiving. the rule survives in a browser that knows only one of the two names,
 	 * where a plain selector list holding an unknown name would be dropped whole.
 	 */
 	input:is(:autofill, :-webkit-autofill),

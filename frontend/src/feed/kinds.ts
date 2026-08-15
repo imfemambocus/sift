@@ -21,13 +21,13 @@ const LABELS: Record<string, string> = {
 	marked: "You marked this",
 	member_access_requested: "Access requested",
 	/*
-	 * read from the merge request list rather than a to-do, so the wording says state not event. it
+	 * read from the merge request list rather than a to-do: the wording says state, not event. it
 	 * must also differ from the `assigned` to-do above, which can share a group with it.
 	 */
 	mr_review_requested: "Waiting for your review",
 	mr_assigned: "Waiting on you",
 
-	// participation: one row per thread, so the plural is honest
+	// participation: one row per thread, which is what makes the plural honest
 	new_thread: "New thread",
 	new_comment: "New replies",
 	changes_pushed: "Changes pushed",
@@ -36,14 +36,14 @@ const LABELS: Record<string, string> = {
 	pipeline_failed: "Pipeline failed",
 	pipeline_fixed: "Pipeline fixed",
 
-	// mail: one row per message, so the wording says what happened rather than what it wants
+	// mail: one row per message. the wording says what happened, not what it wants
 	mail_received: "New message",
 	mail_sent: "Sent",
 };
 
 /*
- * mail is the one source where every row is the same kind, so printing that kind on each row says
- * nothing. sent mail keeps its name, because that one tells two rows apart.
+ * mail is the one source where every row is the same kind. printing that kind on each row says
+ * nothing at all. sent mail keeps its name: that one tells two rows apart.
  */
 const UNNAMED_ON_A_ROW = new Set(["mail_received"]);
 

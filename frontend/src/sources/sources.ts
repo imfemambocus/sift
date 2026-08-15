@@ -20,7 +20,7 @@ const sourceStatusSchema = z.object({
 	historyComplete: z.boolean(),
 	/** How far back that reading has reached. Null for a source with no history of its own. */
 	historyFrom: z.string().nullable(),
-	/** True when the last few reads reached nothing older, so the walk back is getting nowhere. */
+	/** True when the last few reads reached nothing older: the walk back is getting nowhere. */
 	historyStalled: z.boolean(),
 	/** True when this source can be asked to read its history again from the beginning. */
 	canReread: z.boolean(),
@@ -71,7 +71,7 @@ export function useConnector(source: string) {
 
 /**
  * Starts the authorization, then hands the browser to the provider. The exchange happens
- * server-side, so no token ever reaches this code.
+ * server-side. No token ever reaches this code.
  */
 export function useStartOAuth(source: string) {
 	return useMutation({
@@ -88,11 +88,11 @@ export function useSources() {
 		queryKey: SOURCES_KEY,
 		queryFn: async () => sourcesSchema.parse(await request<unknown>("/api/sources")),
 		/*
-		 * a read runs on the server and nobody here started it, so polling is the only way anything on
-		 * this side learns that one is running or that it has finished. faster while one is, so the
-		 * indicator clears about when the reading really stops rather than up to a quarter of a minute
-		 * later. it stops when the window does, unlike the unread count: nobody reads a status they are
-		 * not looking at.
+		 * a read runs on the server and nobody here started it. polling is the only way anything on this
+		 * side learns that one is running or that it has finished. faster while one is, which clears the
+		 * indicator about when the reading really stops rather than up to a quarter of a minute later.
+		 * it stops when the window does, unlike the unread count: nobody reads a status they are not
+		 * looking at.
 		 */
 		refetchInterval: (query) => (query.state.data?.some((entry) => entry.syncing) ? 2_000 : 15_000),
 	});
@@ -102,8 +102,8 @@ export function useSources() {
  * Refreshes the feed when a read that was running on the server finishes.
  *
  * <p>The rows land in the database with nothing on this side knowing, and a connection that has just
- * read a mailbox would otherwise sit empty until the list's own poll came round. Mounted once, in the
- * frame, so it covers whichever page is open.
+ * read a mailbox would otherwise sit empty until the list's own poll came round. Mounted once, in
+ * the frame, which covers whichever page is open.
  */
 export function useRefreshWhenSynced() {
 	const { data } = useSources();
@@ -136,7 +136,7 @@ export function useSyncSource(source: string) {
 			const payload = await request<unknown>(`/api/sources/${source}/sync`, { method: "POST" });
 			return sourceStatusSchema.parse(payload);
 		},
-		// awaited, so the mutation stays pending until the refetched feed has actually landed
+		// awaited: the mutation stays pending until the refetched feed has actually landed
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
 			await invalidateFeed(queryClient);
@@ -165,7 +165,7 @@ export function useSyncError(source: string): unknown {
 		filters: { mutationKey: [SYNC_KEY, source] },
 		select: (mutation) => mutation.state.error,
 	});
-	// the newest, since a press while a failed one is still cached would otherwise show the old reason
+	// the newest one. a press while a failed one is still cached would otherwise show that reason
 	return errors.at(-1) ?? null;
 }
 
@@ -175,8 +175,8 @@ const REREAD_KEY = "reread-source";
  * Asks the source to read its history again from the beginning.
  *
  * <p>Its own key rather than the sync one, and it invalidates no feed page: the rows stay where they
- * are and fill back in over the following reads, so a skeleton here would take away a list that is
- * not going anywhere. `useRefreshWhenSynced` in the frame picks the new rows up as each read ends.
+ * are and fill back in over the following reads. A skeleton here would take away a list that is not
+ * going anywhere. `useRefreshWhenSynced` in the frame picks the new rows up as each read ends.
  */
 export function useRereadSource(source: string) {
 	const queryClient = useQueryClient();
@@ -198,7 +198,7 @@ export function useDisconnectSource(source: string) {
 		mutationFn: () => request<null>(`/api/sources/${source}`, { method: "DELETE" }),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
-			// this one flips `connected`, so the rail drops its icon and Home puts the offer back
+			// this one flips `connected`: the rail drops its icon and Home puts the offer back
 			await queryClient.invalidateQueries({ queryKey: CONNECTORS_KEY });
 			await invalidateFeed(queryClient);
 		},

@@ -1,6 +1,6 @@
 /*
  * Kinds are the source's own vocabulary and there are already a dozen of them, with more coming
- * from participation. A colour per kind would be an unreadable legend, so they collapse into seven
+ * from participation. A colour per kind would be an unreadable legend. They collapse into seven
  * families that answer "why is this in my list": someone wants my review, it is mine, I was named,
  * a discussion moved, something is broken, a message arrived, or none of those.
  *
@@ -22,7 +22,7 @@ const FAMILY_BY_KIND: Record<string, EventFamily> = {
 	mr_review_requested: "review",
 	approval_required: "review",
 	review_submitted: "review",
-	// commits landing on something you are reviewing means look again, so it belongs with review
+	// commits landing on something you are reviewing means look again: that is a review
 	changes_pushed: "review",
 
 	assigned: "assigned",
@@ -86,8 +86,8 @@ export const FAMILY_TEXT: Record<EventFamily, string> = {
 
 /*
  * the same hue held back, for a row that has no kind wording to carry it. a name is read as a name
- * first, so it takes less colour than a word whose whole job is to say what kind of row this is.
- * written out rather than composed, because tailwind reads these class names out of the source.
+ * first: it takes less colour than a word whose whole job is to say what kind of row this is.
+ * written out rather than composed, since tailwind reads these class names out of the source.
  */
 export const FAMILY_TEXT_SOFT: Record<EventFamily, string> = {
 	review: "text-event-review/70",
@@ -117,7 +117,7 @@ export function eventFamily(kind: string): EventFamily {
  * What a row in the list wears, which is not the same question as what its kind means.
  *
  * <p>A resolved row is history: the to-do was completed, the merge request was merged. It wants
- * nothing from anyone, so it reads as the quiet grey whatever it was asking for while it was live.
+ * nothing from anyone: the quiet grey, whatever it was asking for while it was live.
  * Both the plain row and an event inside a group go through here so the two cannot drift.
  */
 export function rowFamily(kind: string, resolved: boolean): EventFamily {

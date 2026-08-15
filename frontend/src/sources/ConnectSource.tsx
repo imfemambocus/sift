@@ -22,8 +22,8 @@ const TONE_CLASS: Record<Tone, string> = {
 };
 
 /*
- * what a callback can say back. it redirects with a fixed word rather than a message, so nothing a
- * remote server wrote is carried in the URL of this app.
+ * what a callback can say back. it redirects with a fixed word rather than a message: nothing a
+ * remote server wrote is ever carried in the URL of this app.
  */
 const CALLBACK_MESSAGE: Record<string, string> = {
 	denied: "It was not connected. The approval was refused or it did not come back.",
@@ -68,7 +68,7 @@ function SourceCard({ source, canReconnect, onReconnect, onDisconnect, disconnec
 
 	return (
 		<div className="flex w-full flex-col gap-3 rounded-panel border border-border bg-surface px-4 py-3.5">
-			{/* the account is what a person recognises, so it leads and the host explains it */}
+			{/* the account is what a person recognises: it leads, and the host explains it */}
 			<p className="font-mono text-[12px] text-fg">{source.account ?? source.instanceUrl}</p>
 
 			{source.account !== null && (
@@ -186,7 +186,7 @@ function approvalNote(source: string, target: string | null): ReactNode {
  * One source's whole settings section: the card when it is connected, and the offer when it is not.
  *
  * <p>Only two paragraphs of prose differ per source, which is exactly what should differ: the
- * buttons, the statuses and the disconnect confirmation are one copy, so they cannot drift apart.
+ * buttons, the statuses and the disconnect confirmation are one copy and cannot drift apart.
  */
 export function ConnectSource({ source: slug }: { readonly source: string }) {
 	const { data: source } = useSource(slug);

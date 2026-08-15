@@ -28,7 +28,7 @@ type SourceSummaryProps = {
 export function SourceSummary({ source, counts }: SourceSummaryProps) {
 	/*
 	 * the headline is unread, because the question a dashboard answers is "is there anything for me".
-	 * waiting cannot answer it: reading a row here does not complete the to-do in GitLab, so a source
+	 * waiting cannot answer it. reading a row here does not complete the to-do in GitLab: a source
 	 * that still reports 15 items reports them whether or not you have dealt with every one.
 	 *
 	 * it is counts.unread rather than counts.waitingUnread so this and the tab badge can never print
@@ -53,8 +53,8 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 				<h2 className="text-[14px] font-semibold tracking-[-0.01em] text-fg">
 					{/*
 					  * the whole card leads to the source, but the refresh button has to be a sibling of the
-					  * link rather than inside it, so the link stretches over the card from here instead of
-					  * wrapping it. the name is then the whole of what a screen reader announces for it.
+					  * link rather than inside it. the link therefore stretches over the card from here
+					  * instead of wrapping it, and the name is the whole of what a screen reader announces.
 					  */}
 					<Link
 						to={sourcePath(source.source)}
@@ -63,7 +63,7 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 						{sourceName(source.source)}
 					</Link>
 				</h2>
-				{/* quiet unless something is actually wrong, so the card is not a wall of status */}
+				{/* quiet unless something is actually wrong. a card is not a wall of status */}
 				{rejected && <span className="text-[11px] text-danger">Token rejected</span>}
 			</div>
 
@@ -114,7 +114,7 @@ export function SourceSummary({ source, counts }: SourceSummaryProps) {
 				<SyncButton source={source} />
 			</div>
 
-			{/* a mailbox arrives over hours, so the card says where that has reached rather than only that it is running */}
+			{/* a mailbox arrives over hours: the card says where it has reached, not only that it runs */}
 			{reachedSoFar !== null && <p className="text-[11px] text-fg-muted">{reachedSoFar}</p>}
 		</article>
 	);

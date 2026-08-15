@@ -33,7 +33,7 @@ const feedItemSchema = z.object({
 
 const feedPageSchema = z.object({
 	items: z.array(feedItemSchema),
-	/** Null is the last page, so a "Show more" is never a button that would do nothing. */
+	/** Null is the last page. "Show more" is therefore never a button that would do nothing. */
 	nextCursor: z.string().nullable(),
 });
 
@@ -91,7 +91,7 @@ function pathFor(view: FeedView, cursor: string | null): string {
 /**
  * One page of the feed at a time, as whole groups.
  *
- * <p>The server narrows, orders, searches and pages, so neither this request nor the poll behind it
+ * <p>The server narrows, orders, searches and pages. Neither this request nor the poll behind it
  * grows with the history. Anything that needs a number over more than the loaded pages reads
  * {@link useFeedSummary} instead.
  */
@@ -101,7 +101,7 @@ export function useFeedPages(view: FeedView, enabled = true) {
 		queryFn: async ({ pageParam }) => feedPageSchema.parse(await request<unknown>(pathFor(view, pageParam))),
 		initialPageParam: null as string | null,
 		getNextPageParam: (last: FeedPage) => last.nextCursor,
-		// off while a search query is still being typed, so a half-word never asks for the whole feed
+		// off while a search query is still being typed: a half-word must not ask for the whole feed
 		enabled,
 		/*
 		 * tanstack's default of pausing while the tab is in the background is wanted here: nobody
@@ -128,17 +128,17 @@ export function useFeedSummary() {
 		queryFn: async () => summarySchema.parse(await request<unknown>("/api/feed/summary")),
 		refetchInterval: 30_000,
 		/*
-		 * TanStack pauses an interval whenever the window loses focus, and this one must not: the
-		 * count on the tab is read while somebody is looking at something else, so a paused poll
-		 * would make it true only once they looked, which is when it stops being needed. One small
-		 * request, so a background poll is cheap. A browser throttles a timer in a hidden tab, so
-		 * treat 30s as about a minute there.
+		 * TanStack pauses an interval whenever the window loses focus, and this one must not. The
+		 * count on the tab is read while somebody is looking at something else: a paused poll would
+		 * make it true only once they looked, which is when it stops being needed. It is one small
+		 * request, cheap enough to run in the background. A browser throttles a timer in a hidden
+		 * tab, so treat 30s as about a minute there.
 		 */
 		refetchIntervalInBackground: true,
 	});
 }
 
-/** Zeros rather than undefined for a source with no rows yet, so a card can render before a sync. */
+/** Zeros rather than undefined for a source with no rows yet: a card renders before the first sync. */
 export function summaryFor(summary: readonly FeedSummary[] | undefined, source: string): FeedSummary {
 	return summary?.find((entry) => entry.source === source) ?? { ...NOTHING, source };
 }
@@ -158,7 +158,7 @@ async function optimisticRead(
 	picks: (item: FeedItem) => boolean,
 	read: boolean,
 ): Promise<CachedFeeds> {
-	// by prefix, so every narrowed feed on screen is written at once and none of them disagree
+	// by prefix: every narrowed feed on screen is written at once, and none of them disagree
 	await queryClient.cancelQueries({ queryKey: [FEED_KEY] });
 	const previous = queryClient.getQueriesData<InfiniteData<FeedPage>>({ queryKey: [FEED_KEY] });
 
@@ -181,8 +181,8 @@ function rollback(queryClient: ReturnType<typeof useQueryClient>, previous: Cach
 }
 
 /**
- * Anything that changes the rows changes the counts as well, and the two are separate requests, so
- * they are refreshed together. Every caller has to use this rather than the feed key alone: a page
+ * Anything that changes the rows changes the counts as well, and the two are separate requests.
+ * They refresh together. Every caller has to use this rather than the feed key alone: a page
  * whose list moved while its All / Unread / Read numbers did not is the visible failure.
  *
  * <p>The counts are refetched rather than written optimistically. The row greying out under the
@@ -197,7 +197,7 @@ export async function invalidateFeed(queryClient: ReturnType<typeof useQueryClie
 	]);
 }
 
-/** Several ids at once, so clearing a whole group is one gesture and one cache write. */
+/** Several ids at once: clearing a whole group is one gesture and one cache write. */
 type SetReadInput = { readonly ids: readonly string[]; readonly read: boolean };
 
 /**
@@ -238,7 +238,7 @@ export function useMarkAllRead(source?: string) {
 	return useMutation({
 		mutationFn: () => request<null>(path, { method: "POST" }),
 
-		// the server clears the source, not the current filter, so the optimistic write matches it
+		// the server clears the source, not the current filter. the optimistic write has to match
 		onMutate: async () => ({
 			previous: await optimisticRead(
 				queryClient,

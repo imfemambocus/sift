@@ -32,12 +32,12 @@ export function sourceName(source: string): string {
 	return NAMES[source] ?? source.charAt(0).toUpperCase() + source.slice(1);
 }
 
-/** Falls back to Home, so a source with no tab yet still links somewhere sensible. */
+/** Falls back to Home: a source with no tab yet still links somewhere sensible. */
 export function sourcePath(source: string): string {
 	return PATHS[source] ?? "/";
 }
 
-/** Falls back to the generic dot, so an unknown source still draws rather than crashing the rail. */
+/** Falls back to the generic dot. An unknown source draws rather than crashing the rail. */
 export function sourceIcon(source: string): LucideIcon {
 	return ICONS[source] ?? GitBranch;
 }
@@ -49,8 +49,8 @@ export function sourceOffer(source: string): string {
 /**
  * Whether Sift is still filling this source in. A read in flight is one way; a history it has not
  * reached the beginning of is the other, and a mailbox takes many sweeps to walk back through. In
- * between those sweeps nothing is in flight, but the source is no nearer finished than it is
- * mid-read, so both count as one state.
+ * between those sweeps nothing is in flight, and the source is still no nearer finished than it is
+ * mid-read. both count as one state.
  */
 export function isReading(source: SourceStatus): boolean {
 	if (source.syncing) {
@@ -67,8 +67,8 @@ export function isReading(source: SourceStatus): boolean {
  * <p>"Synced" rather than "read": an item is read or unread, and one word cannot mean both.
  *
  * @param asked a read this page has asked for and is still waiting on. The server is what says a
- *     source is being read, and it is only asked again every so often, so without this the words
- *     stay on "Synced 2m ago" for the whole of a read somebody just pressed.
+ *     source is being read, and it is only asked again every so often. Without this the words stay
+ *     on "Synced 2m ago" for the whole of a read somebody just pressed.
  */
 /**
  * How far back a source has read so far, which is what a list that is still filling in cannot say
@@ -85,8 +85,8 @@ export function historyPhrase(source: SourceStatus): string | null {
 }
 
 /**
- * Why a source that says it is reading is not getting anywhere. Every read succeeded, so nothing on
- * the credential says so, and the walk back is where it shows.
+ * Why a source that says it is reading is not getting anywhere. Every read succeeded, which leaves
+ * nothing on the credential to say it. The walk back is where it shows.
  */
 export function historyWarning(source: SourceStatus): string | null {
 	if (!source.historyStalled) {

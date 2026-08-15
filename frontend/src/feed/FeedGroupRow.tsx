@@ -11,9 +11,9 @@ import { Attachments, DoneTag, edgeClass, MetaLine, ReadToggle, ROW_MOTION, Unre
 import { fullTimestamp, shortAgo } from "../lib/time";
 
 /*
- * height 0 to auto, so collapsing reads as the events folding back into the row rather than the list
+ * height 0 to auto: collapsing reads as the events folding back into the row rather than the list
  * below jumping up. `MotionConfig reducedMotion="user"` in App.tsx drops it to a cut for anyone who
- * asked the OS for that, so there is nothing to check here.
+ * asked the OS for that. nothing to check here.
  */
 const EVENTS_MOTION = {
 	open: { height: "auto", opacity: 1 },
@@ -26,9 +26,9 @@ const EVENTS_TRANSITION = { duration: 0.2, ease: "easeOut" } as const;
  * one merge request that was assigned to you, replied to twice and then merged is one thing to look
  * at, not four. the title is said once at the top and each event gets a line underneath it.
  *
- * the 2px edge runs down the whole group rather than per row, so a group occupies one place in the
- * list exactly as a single row does; the events inside carry a dot instead. they are still read one
- * at a time, so each keeps its own tick.
+ * the 2px edge runs down the whole group rather than per row. a group then occupies one place in
+ * the list exactly as a single row does, and the events inside carry a dot instead. they are still
+ * read one at a time: each keeps its own tick.
  *
  * open by default: collapsing it is a way to put something aside, not the state you start in.
  */
@@ -135,7 +135,7 @@ export function FeedGroupRow({ group }: { readonly group: FeedGroup }) {
 	);
 }
 
-/** The title is already above it, so what this line is for is which event it was, and when. */
+/** The title is already above it. This line is for which event it was, and when. */
 function GroupedEvent({ item }: { readonly item: FeedItem }) {
 	const family = rowFamily(item.kind, item.resolved);
 	const setRead = useSetRead();
@@ -152,7 +152,7 @@ function GroupedEvent({ item }: { readonly item: FeedItem }) {
 
 	return (
 		<div className="flex items-start transition-colors hover:bg-raised">
-			{/* the dot sits well right of the title above it, so the pair reads as heading and list */}
+			{/* the dot sits well right of the title above it: the pair reads as heading and list */}
 			<a
 				href={item.url}
 				target="_blank"
@@ -176,7 +176,7 @@ function GroupedEvent({ item }: { readonly item: FeedItem }) {
 							<span className={namesItsKind(item.kind) ? "" : FAMILY_TEXT_SOFT[family]}>{item.actorName}</span>
 						)}
 
-						{/* a mail thread is a group whose events are messages, so the files are per event */}
+						{/* a mail thread is a group whose events are messages: the files are per event */}
 						<Attachments names={item.attachments} />
 
 						<time

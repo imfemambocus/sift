@@ -26,7 +26,7 @@ export function soundEnabled(): boolean {
 }
 
 export function setSoundEnabled(on: boolean) {
-	// kept in memory as well, so the choice still holds where storage is refused
+	// kept in memory as well: the choice still holds where storage is refused
 	enabled = on;
 	try {
 		window.localStorage.setItem(STORAGE_KEY, on ? "on" : "off");
@@ -90,13 +90,13 @@ function unlock() {
 
 /**
  * A sound for something new, mounted once in the app frame beside the count on the tab. It reads the
- * same summary, so the sound and the number can never disagree.
+ * same summary. The sound and the number can never disagree.
  *
  * <p>It rings only while the window does not have focus. That is the rule the badge already follows:
  * with Sift in front of you the row arrives on screen, and a sound says nothing the list has not
  * said. It is also what keeps your own actions quiet, since you mark a row unread while looking at it.
  *
- * <p>Honest limit, the same one the badge has: a browser slows a timer in a background tab, so the
+ * <p>Honest limit, the same one the badge has. A browser slows a timer in a background tab: the
  * sound follows the arrival by up to about a minute, and a tab must be open for it at all.
  */
 export function useUnreadSound() {
@@ -105,8 +105,8 @@ export function useUnreadSound() {
 	const previous = useRef<number | null>(null);
 
 	/*
-	 * a browser refuses audio until the page has been interacted with, so the first click or key press
-	 * is what makes any sound possible. it is built here rather than on the first ring, which happens
+	 * a browser refuses audio until the page has been interacted with. the first click or key press is
+	 * what makes any sound possible. it is built here rather than on the first ring, which happens
 	 * when the window is not focused and therefore carries no interaction of its own.
 	 */
 	useEffect(() => {
