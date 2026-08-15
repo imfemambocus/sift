@@ -85,8 +85,8 @@ mark_all_read() {
 sql() { docker exec sift-read-db psql -U sift -d sift -qtAc "$1" | tr -d ' '; }
 
 api "$BASE/actuator/health" >/dev/null
-post -d '{"email":"isfaaq@uni.lu","displayName":"Isfaaq","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
-post -d '{"email":"isfaaq@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
+post -d '{"email":"sam@uni.lu","displayName":"Sam","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
+post -d '{"email":"sam@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
 sift_connect_gitlab >/dev/null
 
 echo "--- everything arrives unread ---"

@@ -2,7 +2,7 @@
 """A stand-in GitLab instance: /api/v4/user, a paginated /api/v4/todos, merge requests, issues,
 threads, the caller's own activity feed, and the OAuth token endpoint.
 
-Every dataset is re-read from disk on every request, so a test can change what the instance returns
+Every dataset is re-read from disk on every request. A test can change what the instance returns
 between phases without restarting anything.
 """
 import json
@@ -56,15 +56,15 @@ def _issue(chain):
 
 USER = {
     "id": 42,
-    "username": "isfaaq",
-    "name": "Isfaaq M. F. Emambocus",
+    "username": "sam",
+    "name": "Sam",
     "avatar_url": "https://gitlab.example.org/avatar/42",
-    "web_url": "https://gitlab.example.org/isfaaq",
+    "web_url": "https://gitlab.example.org/sam",
 }
 
 
 def load(path):
-    """Re-read on every request, so a test can change fixtures between sweeps."""
+    """Re-read on every request: fixtures can change between sweeps."""
     if not path or not os.path.exists(path):
         return {}
     with open(path) as handle:
@@ -130,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not field("code") or not field("code_verifier") or not field("redirect_uri"):
                     self._send(400, {"error": "invalid_request"})
                     return
-                # every approval starts a chain of its own, so two users do not share one token
+                # every approval starts a chain of its own: two users never share one token
                 chain = OAUTH["issued"] + 1
             elif grant == "refresh_token":
                 # popped, so presenting the same refresh token twice is refused the second time
@@ -181,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v4/user":
-            # the first call of every read, so delaying it holds the whole read open
+            # the first call of every read. delaying it holds the whole read open
             if os.path.exists(SLOW_FILE):
                 time.sleep(SLOW_SECONDS)
             self._send(200, USER)

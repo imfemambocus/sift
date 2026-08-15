@@ -1,12 +1,12 @@
 # shellcheck shell=bash
 # Connecting GitLab, for every suite that needs a connected source but is not about the flow itself.
 #
-# An approval is the only way to connect a source, so a suite has to walk the real authorization
-# code flow. It is cheap, because the stand-in instance answers the token endpoint directly and no
-# approval page is involved.
+# An approval is the only way to connect a source. Every suite therefore walks the real
+# authorization code flow. It is cheap: the stand-in instance answers the token endpoint directly
+# and no approval page is involved.
 #
 # Source this after $BASE, $JAR and a `post` helper are defined, and start the backend with the four
-# SIFT_GITLAB_* values. `sift_oauth_env` prints them, so no suite has to remember all four.
+# SIFT_GITLAB_* values. `sift_oauth_env` prints them; no suite has to remember all four.
 # `sift_gmail_env` does the same for Gmail, for a suite that needs both sources.
 
 SIFT_OAUTH_CLIENT_ID=sift-verify
@@ -21,7 +21,7 @@ sift_oauth_env() {
 }
 
 # Google's half. The stand-in serves all three of its hosts, which is what SIFT_GMAIL_BASE_URL is
-# for, so one address covers the token endpoint and the API.
+# for: one address covers the token endpoint and the API.
 sift_gmail_env() {
   echo "SIFT_GMAIL_CLIENT_ID=$SIFT_OAUTH_CLIENT_ID" \
        "SIFT_GMAIL_CLIENT_SECRET=$SIFT_OAUTH_CLIENT_SECRET" \
@@ -66,7 +66,7 @@ sift_connect_gmail() {
 }
 
 # Authorizes GitLab, waits for its first read, and leaves it connected. Echoes the callback's http
-# status, so a caller can check it: 302 is success, since the callback answers a redirect and never JSON.
+# status, for a caller to check. 302 is success: the callback answers a redirect and never JSON.
 sift_connect_gitlab() {
   local authorize state code
   authorize=$(post "$BASE/api/sources/gitlab/oauth/start" \

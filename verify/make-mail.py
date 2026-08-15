@@ -71,7 +71,7 @@ def message(ident, thread, hours_ago, sender, subject, snippet, labels, recipien
 
 ADA = '"Ada Lovelace" <ada@uni.lu>'
 GRETE = "grete@uni.lu"
-ME = '"Isfaaq M. F. Emambocus" <isfaaq@uni.lu>'
+ME = '"Sam" <sam@uni.lu>'
 
 INBOX = ["INBOX", "UNREAD"]
 SEEN = ["INBOX"]

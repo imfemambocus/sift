@@ -12,7 +12,7 @@ TODOS="$WORK/todos.json"
 MAIL="$WORK/feed-mail.json"
 FAKE=http://127.0.0.1:7788
 GOOGLE=http://127.0.0.1:7790
-# the browser lives on the vite origin, so the callback has to come back there and not to the
+# the browser lives on the vite origin. the callback has to come back there and not to the
 # backend directly. vite proxies /api to 7779, and the redirect to home then stays on 5174.
 BASE=http://localhost:5174
 # shellcheck source=oauth-connect.sh
@@ -31,11 +31,11 @@ trap cleanup EXIT
 rm -f "$WORK/revoked" "$WORK/feed-slow"
 python3 "$HERE/make-todos.py" full "$TODOS" >/dev/null
 python3 "$HERE/make-mrs.py" "$WORK/feed-mrs.json" >/dev/null
-# a thread the user is already in, so a later reply produces a real participation row
+# a thread the user is already in: a later reply produces a real participation row
 cat > "$WORK/feed-disc.json" <<'JSON'
 {"merge_requests:5:12": [{"id": "t1", "notes": [
   {"id": 5001, "body": "Can we avoid the extra round trip here?", "system": false,
-   "created_at": "2026-08-03T08:00:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}}]}]}
+   "created_at": "2026-08-03T08:00:00.000Z", "author": {"id": 42, "username": "sam", "name": "Sam"}}]}]}
 JSON
 # SLOW_FILE holds a read open long enough to photograph a card while it is being read
 PORT=7788 TODOS_FILE="$TODOS" MRS_FILE="$WORK/feed-mrs.json" DISCUSSIONS_FILE="$WORK/feed-disc.json" REVOKE_FILE="$WORK/revoked" SLOW_FILE="$WORK/feed-slow" SLOW_SECONDS=4 python3 "$HERE/fake-gitlab.py" &
@@ -43,7 +43,7 @@ STUB_PID=$!
 for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:7788/oauth/issued && break; sleep 1; done
 echo "stub gitlab up"
 
-# the same base time for every rewrite of the mailbox, so a message already read cannot look new
+# one base time for every rewrite of the mailbox. a message already read cannot then look new
 NOW_MS=$(python3 -c 'import time; print(int(time.time() * 1000))')
 python3 "$HERE/make-mail.py" base "$MAIL" "$NOW_MS" >/dev/null
 PORT=7790 MESSAGES_FILE="$MAIL" OAUTH_CLIENT_ID="$SIFT_OAUTH_CLIENT_ID" \
@@ -76,7 +76,7 @@ echo "backend up"
 if curl -sf -o /dev/null http://localhost:5174/; then
   echo "something is already serving http://localhost:5174 - stop it and run this again"; exit 1
 fi
-# exec vite itself rather than `npm run dev`, so VITE_PID is the server and not a wrapper whose
+# exec vite itself rather than `npm run dev`: VITE_PID is then the server and not a wrapper whose
 # death leaves it listening on 5174 for the next run to drive by mistake
 (cd "$ROOT/frontend" && SIFT_BACKEND_URL=http://localhost:7779 exec ./node_modules/.bin/vite >"$WORK/feed-vite.log" 2>&1) &
 VITE_PID=$!

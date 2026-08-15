@@ -7,18 +7,18 @@ once. So `/token` is here, and so is `/gmail/v1/users/me/...`.
 It is deliberately strict, in the ways that catch a real mistake:
 
   * it demands the client id and the client secret on every grant
-  * it refuses an authorization_code grant with no code_verifier, so a flow that drops PKCE fails
+  * it refuses an authorization_code grant with no code_verifier: a flow that drops PKCE fails
   * it refuses a refresh_token grant that is not the newest one it issued
-  * it accepts only the newest access token as a bearer, so a renewal that was not stored fails on
-    the very next call rather than passing quietly
-  * it never sends refresh_token on a renewal, which is what Google does, so a client that stores
-    what the response carried loses the connection an hour later
+  * it accepts only the newest access token as a bearer. a renewal that was not stored fails on the
+    very next call rather than passing quietly
+  * it never sends refresh_token on a renewal, which is what Google does. a client that stores what
+    the response carried loses the connection an hour later
 
 It also honours `after:` and `before:` in the search itself. How the mailbox is walked is the part
 of the mail adapter most worth proving, and a stub that answered a fixed list would pass a test that
 only checked the rows.
 
-MESSAGES_FILE is re-read on every request, so a test can deliver mail between sweeps.
+MESSAGES_FILE is re-read on every request: a test can deliver mail between sweeps.
 """
 import json
 import os
@@ -28,7 +28,7 @@ from urllib.parse import urlparse, parse_qs, quote
 
 PORT = int(os.environ.get("PORT", "7790"))
 MESSAGES_FILE = os.environ["MESSAGES_FILE"]
-MAILBOX = os.environ.get("MAILBOX", "isfaaq@uni.lu")
+MAILBOX = os.environ.get("MAILBOX", "sam@uni.lu")
 # touching this file makes Google reject every token, standing in for a withdrawn approval
 REVOKE_FILE = os.environ.get("REVOKE_FILE", "/nonexistent")
 # what the mailbox has recorded happening to it, written by relabel-mail.py
@@ -45,19 +45,19 @@ OAUTH_EXPIRES_IN = int(os.environ.get("OAUTH_EXPIRES_IN", "3600"))
 
 OAUTH = {
     "issued": 0,
-    "access": None,     # only the newest is accepted, so a stale token fails loudly
+    "access": None,     # only the newest is accepted. a stale token fails loudly
     "refresh": None,    # long-lived: a renewal does not rotate it, which is Google's behaviour
     "revoked": 0,       # how many times the grant was withdrawn, which only a disconnect does
 }
 OAUTH_LOCK = threading.Lock()
-# the mailbox and its history are written together, so one modification cannot land inside another
+# the mailbox and its history are written together: one modification cannot land inside another
 HISTORY_LOCK = threading.Lock()
 
 
 def _issue(mint_refresh):
     """A fresh access token. The refresh token is minted only by a first consent.
 
-    Google does not rotate it and does not resend it, so a client keeps the one it already has for
+    Google does not rotate it and does not resend it. A client keeps the one it already has for
     the life of the grant. A stub that rotated it here would fail a correct client on its second
     renewal, which is the opposite of what this suite is for.
     """
@@ -70,7 +70,7 @@ def _issue(mint_refresh):
 
 
 def load():
-    """Re-read on every request, so a test can deliver mail between sweeps."""
+    """Re-read on every request. A test can deliver mail between sweeps."""
     if not os.path.exists(MESSAGES_FILE):
         return []
     with open(MESSAGES_FILE) as handle:
@@ -96,7 +96,7 @@ def visible(messages):
 
 
 def without_parts(message):
-    """The metadata format: headers and labels, and no parts at all, so no file name is in it."""
+    """The metadata format: headers and labels, and no parts at all. No file name is in it."""
     payload = {k: v for k, v in message["payload"].items() if k != "parts"}
     return {**message, "payload": payload}
 
@@ -127,8 +127,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
 
-        # Sift telling the mailbox what has been read here. it really changes the labels and it
-        # really records the change, so the next sweep reads its own write back and agrees with it.
+        # Sift telling the mailbox what has been read here. it really changes the labels and really
+        # records the change: the next sweep reads its own write back and agrees with it.
         if path == "/gmail/v1/users/me/messages/batchModify":
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length) or "{}")
@@ -139,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(204, {})
             return
 
-        # withdrawing the grant. google answers 200 for a token it has already forgotten, so this
+        # withdrawing the grant. google answers 200 for a token it has already forgotten: this
         # records the call and says yes either way.
         if path == "/revoke":
             length = int(self.headers.get("Content-Length", "0"))

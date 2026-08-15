@@ -23,8 +23,8 @@ const page = await browser.newPage();
  */
 /*
  * every oscillator the page starts, recorded before any of the app's own scripts run. headless
- * chromium has no speaker, so this is the only thing a suite can check: that the sound is asked for
- * at the moment it should be. whether it is audible is a thing only a person can confirm.
+ * chromium has no speaker. all a suite can check is that the sound is asked for at the moment it
+ * should be; whether it is audible is a thing only a person can confirm.
  */
 await page.evaluateOnNewDocument(() => {
   window.__rings = [];
@@ -51,9 +51,9 @@ page.on("console", (m) => {
 page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 
 /*
- * a page load costs one page of the feed and one read of the counts, and they are counted apart:
- * the summary is a second endpoint, so lumping them together would hide a page that quietly
- * fires two list queries. GET only, so marking read does not count.
+ * a page load costs one page of the feed and one read of the counts, and they are counted apart.
+ * the summary is a second endpoint: lumping the two together would hide a page that quietly fires
+ * two list queries. GET only, which keeps marking read out of the count.
  */
 let feedReads = 0;
 let summaryReads = 0;
@@ -74,8 +74,8 @@ async function shot(name) {
 await page.goto(`${BASE}/create-account`, { waitUntil: "networkidle0" });
 await setTheme("dark");
 await page.reload({ waitUntil: "networkidle0" });
-await page.type('input[name="displayName"]', "Isfaaq");
-await page.type('input[name="email"]', "isfaaq@uni.lu");
+await page.type('input[name="displayName"]', "Sam");
+await page.type('input[name="email"]', "sam@uni.lu");
 await page.type('input[name="password"]', "correct-horse-battery");
 await page.click('button[type="submit"]');
 await page.waitForSelector('nav[aria-label="Sections"]', { timeout: 20000 });
@@ -123,7 +123,7 @@ if (connected === null) {
 // the two fixes: buttons must look clickable
 for (const [label, selector] of [["theme toggle", 'button[aria-label^="Theme"]'], ["sign out", 'button[aria-label="Sign out"]']]) {
   const cursor = await page.$eval(selector, (el) => getComputedStyle(el).cursor);
-  console.log(`  cursor on ${label}: ${cursor}${cursor === "pointer" ? "" : "   <-- WRONG"}`);
+  console.log(`  cursor on ${label}: ${cursor}${cursor === "pointer" ? "" : "   WRONG"}`);
 }
 
 // a colleague replies, and the fast sweep should turn it into a row of its own
@@ -162,7 +162,7 @@ if (feedReads - readsBefore > 1) problems.push(`opening a source tab cost ${feed
 if (summaryReads - summariesBefore > 1) problems.push(`opening a source tab read the counts ${summaryReads - summariesBefore} times, not one`);
 await shot("f06-gitlab-feed-dark");
 
-// the reply lands on the same merge request as its review request, so there must be a group
+// the reply lands on the same merge request as its review request: there must be a group
 const chevron = await page.$('button[aria-expanded="true"]');
 if (chevron === null) {
   problems.push("no expandable group on the feed, so grouping did not happen");
@@ -177,9 +177,9 @@ if (chevron === null) {
 const SEARCH = 'input[type="search"]';
 const heading = () => page.$eval("h1", (el) => el.textContent);
 /*
- * the previous query is selected through setSelectionRange, not a triple click or cmd+A: both left it
- * in the field and the next query was appended to it, so a scoped search silently became nonsense.
- * headless chromium does not implement the platform select-all shortcut at all.
+ * the previous query is selected through setSelectionRange, not a triple click or cmd+A. both leave it
+ * in the field and the next query is appended to it, which turns a scoped search into nonsense in
+ * silence. headless chromium does not implement the platform select-all shortcut at all.
  */
 async function searchFor(text) {
   await page.click(SEARCH);
@@ -188,7 +188,7 @@ async function searchFor(text) {
   const left = await page.$eval(SEARCH, (el) => el.value);
   if (left !== "") problems.push(`the search field would not clear, so "${text}" was typed onto "${left}"`);
   await page.type(SEARCH, text);
-  // the search waits 250ms for the typing to stop and then asks the server, so this must outlast both
+  // the search waits 250ms for the typing to stop and then asks the server; this outlasts both
   await settle(1200);
   return { heading: await heading(), rows: (await page.$$('a[href^="https://gitlab.example.org"]')).length };
 }
@@ -230,7 +230,7 @@ const handedBack = await heading();
 console.log(`  escape handed the page back to "${handedBack}"`);
 if (handedBack !== "GitLab") problems.push(`escape left the page on "${handedBack}"`);
 
-// a refresh someone pressed must skeleton the list, which a background sweep must not
+// a refresh someone pressed must skeleton the list. a background sweep must not
 const refresh = await page.$('button[aria-label^="Check GitLab"]');
 if (refresh === null) {
   problems.push("no refresh button on the feed page");
@@ -245,9 +245,9 @@ if (refresh === null) {
 
 /*
  * a theme swap fades, and the point is that everything fades on one clock. these three normally differ
- * (a row has transition-colors, the rail nav has none, the search input has its own), so them agreeing
- * during a swap is the invariant worth asserting. the flag going on and off is racy to catch from out
- * here, so this sets it directly and checks the rule rather than the timing that turns it on.
+ * (a row has transition-colors, the rail nav has none, the search input has its own), which makes them
+ * agreeing during a swap the invariant worth asserting. the flag going on and off is racy to catch
+ * from out here: this sets it directly and checks the rule rather than the timing that turns it on.
  */
 const swap = await page.evaluate(() => {
   const parts = {
@@ -315,21 +315,21 @@ if (settled === null) {
 await shot("f06e-resolved-history-dark");
 
 /*
- * Home leads with unread and keeps waiting as context, so both numbers are checked. they answer
- * different questions: reading every row leaves the source still reporting all of them, so waiting
- * does not move and only unread says whether anything has been dealt with.
+ * Home leads with unread and keeps waiting as context. both numbers are checked, because they answer
+ * different questions: reading every row leaves the source still reporting all of them, which holds
+ * waiting where it is and leaves unread as the only number saying anything has been dealt with.
  */
 /*
- * read off the elements, never off the card's textContent: the family counts abut the footer, so
- * "Everything else" with 2 followed by "11 waiting" reads as one run of "211 waiting" and a regex
+ * read off the elements, never off the card's textContent. the family counts abut the footer:
+ * "Everything else" with 2 followed by "11 waiting" reads as one run of "211 waiting", and a regex
  * over the whole string quietly answers 211.
  */
 async function homeCounts() {
   await page.click('a[aria-label="Home"]');
   /*
-   * the card is an article, and its link covers it from the heading rather than wrapping it, so the
-   * refresh button can be a sibling of that link. the rail links to /gitlab too, so the href never
-   * identified the card on its own.
+   * the card is an article, and its link covers it from the heading rather than wrapping it, which is
+   * what lets the refresh button be a sibling of that link. the rail links to /gitlab too, so the href
+   * never identified the card on its own.
    */
   await page.waitForFunction(() => [...document.querySelectorAll("article")]
     .some((el) => el.textContent.includes("waiting")), { timeout: 15000 });
@@ -359,7 +359,7 @@ const cardRefresh = await page.$('article button[aria-label^="Check GitLab"]');
 if (cardRefresh === null) {
   problems.push("the Home card offers no way to check the source again");
 } else {
-  // hold the read open, so the picture below is of a card being read rather than one that has been
+  // hold the read open: the picture below is of a card being read, not one that has been
   writeFileSync(`${WORK}/feed-slow`, "");
   await cardRefresh.click();
   /*
@@ -369,7 +369,7 @@ if (cardRefresh === null) {
    */
   /*
    * waited for rather than read once, since the read itself has to still be running. it settles on
-   * whichever happens first, a skeleton or a card saying so, so each way of getting this wrong is
+   * whichever happens first, a skeleton or a card saying so. each way of getting this wrong is then
    * reported as itself rather than as "nothing appeared".
    */
   const duringRefresh = await page.waitForFunction(() => {
@@ -378,7 +378,7 @@ if (cardRefresh === null) {
     const icon = document.querySelector('article button[aria-label^="Check"] svg');
     const saying = card?.textContent?.includes("Syncing now") === true;
     const turning = icon?.classList.contains("animate-spin") === true;
-    // the turning icon is the earliest of the three, so waiting on it reports the other two as
+    // the turning icon is the earliest of the three. waiting on it reports the other two as
     // themselves rather than as the read having finished before anything was looked at
     if (!skeleton && !turning) return false;
     return { skeleton, saying, turning, cards: document.querySelectorAll("article").length };
@@ -415,7 +415,7 @@ await shot("f06f-home-all-read-dark");
 
 /*
  * the sound for something new. it is checked here because mark-all-read has just taken the count to
- * zero, so one arriving to-do is a rise from a known floor.
+ * zero: one arriving to-do is then a rise from a known floor.
  */
 const rings = () => page.evaluate(() => window.__rings.length);
 
@@ -435,7 +435,7 @@ if (soundOn === null) {
 
   /*
    * a second tab takes the focus, which is the case the sound exists for. the count is raised from
-   * there too, so nothing touches the Sift page: a click on it would hand the focus back.
+   * there too, leaving the Sift page untouched: a click on it would hand the focus back.
    */
   const other = await browser.newPage();
   await other.goto(`${BASE}/settings`, { waitUntil: "networkidle0" });
@@ -465,8 +465,8 @@ if (soundOn === null) {
   });
 
   /*
-   * the count is read on the Sift page's own 30s poll, which is the interval that has to keep running
-   * while the tab is behind another one. that is the whole wait, so it is generous.
+   * the count is read on the Sift page's own 30s poll, the interval that has to keep running while
+   * the tab is behind another one. that poll is the whole wait, hence the generous bound.
    */
   let rang = 0;
   for (let i = 0; i < 25; i += 1) {
@@ -507,7 +507,7 @@ const onNarrow = await railBox();
 if (onNarrow.width < 430 || onNarrow.top + onNarrow.height < 890) {
   problems.push(`the rail is not a bar along the bottom: ${JSON.stringify(onNarrow)}`);
 }
-// the bar is fixed, so the room it takes has to be given back: the last row must clear it
+// the bar is fixed. the room it takes has to be given back, or the last row sits under it
 await page.goto(`${BASE}/gitlab`, { waitUntil: "networkidle0" });
 await settle(600);
 await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -526,7 +526,7 @@ else if (clearance < 0) problems.push(`the last row sits ${-clearance}px under t
 await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 2 });
 
 /*
- * the Gmail leg. verify-gmail.sh drives the same flow over real HTTP, so what is here is only what
+ * the Gmail leg. verify-gmail.sh drives the same flow over real HTTP; what is here is only what
  * needs a browser: the offer on Home, the redirect landing back on the app's own origin, mail on
  * screen, and the count the rail carries once there is more than one source to tell apart.
  */
@@ -563,8 +563,8 @@ if (mail.sent === 0) problems.push("mail you sent never reaches the feed");
 await shot("f13-gmail-feed-dark");
 
 /*
- * the rail badge. the accessible name is the assertion, because that is the contract: the number is
- * in the link's label and the painted badge is aria-hidden, so it is announced once and not twice.
+ * the rail badge. the accessible name is the assertion, because that is the contract: the number
+ * lives in the link's label and the painted badge is aria-hidden. announced once, never twice.
  */
 const railCount = await page.evaluate(() => {
   const link = document.querySelector('a[href="/gmail"]');

@@ -47,7 +47,7 @@ cat > "$MRS" <<'JSON'
    "state": "opened", "draft": false, "sha": "ccc111", "project_id": 5, "user_notes_count": 0,
    "web_url": "https://gl.example.org/team/web/-/merge_requests/30",
    "created_at": "2026-08-01T09:00:00.000Z", "updated_at": "2026-08-03T09:00:00.000Z",
-   "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"},
+   "author": {"id": 42, "username": "sam", "name": "Sam"},
    "references": {"full": "team/web!30"}}]}
 JSON
 # one thread the user is in, already containing their own comment
@@ -55,7 +55,7 @@ cat > "$DISC" <<'JSON'
 {"merge_requests:5:20": [
   {"id": "d1", "notes": [
     {"id": 1001, "body": "This colour ramp is not colourblind safe.", "system": false,
-     "created_at": "2026-08-02T10:00:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}}]}]}
+     "created_at": "2026-08-02T10:00:00.000Z", "author": {"id": 42, "username": "sam", "name": "Sam"}}]}]}
 JSON
 
 PORT=7788 TODOS_FILE="$TODOS" MRS_FILE="$MRS" ISSUES_FILE="$ISSUES" DISCUSSIONS_FILE="$DISC" \
@@ -82,7 +82,7 @@ echo "backend up"; echo
 
 csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
 api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
-# the feed is paged over groups, so a suite asks for one page large enough to hold every fixture
+# the feed is paged over groups. a suite asks for one page large enough to hold every fixture
 # and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
 feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
@@ -157,7 +157,7 @@ import json, sys
 data = json.load(open(sys.argv[1]))
 data["merge_requests:5:20"][0]["notes"].append(
     {"id": 1004, "body": "Great, thanks.", "system": False,
-     "created_at": "2026-08-03T12:00:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}})
+     "created_at": "2026-08-03T12:00:00.000Z", "author": {"id": 42, "username": "sam", "name": "Sam"}})
 json.dump(data, open(sys.argv[1], "w"))
 PY
 python3 - "$MRS" <<'PY'
@@ -236,14 +236,14 @@ check "activity is when they approved" '"2026-08-03T14:30:00Z"' "$(feed | python
 check "it sits in the merge request's group" '"gitlab:https://gl.example.org/team/web/-/merge_requests/20"' "$(feed | python3 -c 'import json,sys; print(json.dumps(next(i["groupKey"] for i in json.load(sys.stdin) if i["kind"]=="mr_approved")))')"
 check "a system note is not a thread row" 1 "$(count new_thread)"
 
-# my own approval is my own action, so it is not news to me
+# my own approval is my own action. it is not news to me
 python3 - "$DISC" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1]))
 data["merge_requests:5:20"].append(
     {"id": "d5", "notes": [
         {"id": 2101, "body": "approved this merge request", "system": True,
-         "created_at": "2026-08-03T14:35:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}}]})
+         "created_at": "2026-08-03T14:35:00.000Z", "author": {"id": 42, "username": "sam", "name": "Sam"}}]})
 json.dump(data, open(sys.argv[1], "w"))
 PY
 python3 - "$MRS" <<'PY'
@@ -255,7 +255,7 @@ PY
 connect
 check "my own approval raised nothing" 1 "$(count mr_approved)"
 
-# an unapproval is a system note whose body contains an approval's, so it must not match
+# an unapproval is a system note whose body contains an approval's: it must not match
 python3 - "$DISC" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1]))
@@ -276,7 +276,7 @@ check "no unapproval row, and no second approval row" 1 "$(count mr_approved)"
 
 echo
 echo "--- the pipeline on a merge request: red once, green once, and neither of them twice ---"
-# no list carries a pipeline, so this is the one thing Sift asks the merge request itself for
+# no list carries a pipeline: this is the one thing Sift asks the merge request itself for
 python3 - "$MRS" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1]))
@@ -350,7 +350,7 @@ merged = dict(data["review_requested"][0])
 merged.update({
     "state": "merged",
     "merged_at": "2026-08-03T15:00:00.000Z",
-    # a third person merged it, so reading merge_user rather than the author is what is under test
+    # a third person merged it. reading merge_user rather than the author is what is under test
     "merge_user": {"id": 11, "username": "david", "name": "David"},
 })
 # it leaves every opened list, which is the only thing the sweep sees directly
@@ -401,11 +401,11 @@ cat > "$EVENTS" <<'JSON'
 [{"project_id": 5, "action_name": "commented on", "created_at": "2026-08-03T16:00:00.000Z",
   "note": {"id": 3001, "body": "Does this retry on a 500 as well?", "system": false,
            "noteable_type": "MergeRequest", "noteable_iid": 40,
-           "created_at": "2026-08-03T16:00:00.000Z", "author": {"id": 42, "name": "Isfaaq"}}},
+           "created_at": "2026-08-03T16:00:00.000Z", "author": {"id": 42, "name": "Sam"}}},
  {"project_id": 5, "action_name": "commented on", "created_at": "2026-08-03T16:05:00.000Z",
   "note": {"id": 3002, "body": "Nice cleanup.", "system": false,
            "noteable_type": "Commit", "noteable_iid": null,
-           "created_at": "2026-08-03T16:05:00.000Z", "author": {"id": 42, "name": "Isfaaq"}}}]
+           "created_at": "2026-08-03T16:05:00.000Z", "author": {"id": 42, "name": "Sam"}}}]
 JSON
 python3 - "$DISC" <<'PY'
 import json, sys
@@ -413,7 +413,7 @@ data = json.load(open(sys.argv[1]))
 data["merge_requests:5:40"] = [
   {"id": "d3", "notes": [
     {"id": 3001, "body": "Does this retry on a 500 as well?", "system": False,
-     "created_at": "2026-08-03T16:00:00.000Z", "author": {"id": 42, "username": "isfaaq", "name": "Isfaaq"}}]}]
+     "created_at": "2026-08-03T16:00:00.000Z", "author": {"id": 42, "username": "sam", "name": "Sam"}}]}]
 json.dump(data, open(sys.argv[1], "w"))
 PY
 connect

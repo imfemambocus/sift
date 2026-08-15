@@ -50,8 +50,8 @@ KEY="$(openssl rand -base64 32)"
 NOW_MS="$(python3 -c 'import time; print(int(time.time() * 1000))')"
 python3 "$HERE/make-mail.py" base "$MAIL" "$NOW_MS"
 
-# expires_in of one second, so every read has to renew first. the stub accepts only the newest
-# access token, so a renewal that was not stored fails on the very next call.
+# expires_in of one second: every read has to renew first. the stub accepts only the newest access
+# token, which is what makes a renewal that was not stored fail on the very next call.
 PORT=7790 MESSAGES_FILE="$MAIL" HISTORY_FILE="$HIST" HISTORY_GONE_FILE="$GONE" \
 OAUTH_CLIENT_ID="$CLIENT_ID" OAUTH_CLIENT_SECRET="$CLIENT_SECRET" \
 OAUTH_EXPIRES_IN=1 python3 "$HERE/fake-google.py" &
@@ -88,18 +88,18 @@ location() { curl -s -o /dev/null -w '%{redirect_url}' -c "$JAR" -b "$JAR" "$@";
 field() { python3 -c 'import json,sys; print(json.load(sys.stdin)['"$1"'])'; }
 issued() { curl -s "$FAKE/oauth/issued" | python3 -c 'import json,sys; print(json.load(sys.stdin)["issued"])'; }
 revoked() { curl -s "$FAKE/oauth/issued" | python3 -c 'import json,sys; print(json.load(sys.stdin)["revoked"])'; }
-# the feed answers one page of groups, so ask for one big enough to hold every fixture and unwrap it
+# the feed answers one page of groups. ask for one big enough to hold every fixture, then unwrap it
 feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 rows() { feed | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
 len() { python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
-# every value of a field, sorted, so an assertion does not depend on the order of the list
+# every value of a field, sorted: an assertion must not depend on the order of the list
 values() { feed | python3 -c "import json,sys; print(' '.join(sorted(str(i['$1']) for i in json.load(sys.stdin))))"; }
 # one field of the row whose title matches
 titled() { feed | python3 -c "import json,sys; print(next(str(i['$2']) for i in json.load(sys.stdin) if i['title']=='$1'))"; }
 
 api "$BASE/actuator/health" >/dev/null
-post -d '{"email":"isfaaq@uni.lu","displayName":"Isfaaq","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
-post -d '{"email":"isfaaq@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
+post -d '{"email":"sam@uni.lu","displayName":"Sam","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
+post -d '{"email":"sam@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
 
 echo "--- availability, and what Home is offered ---"
 AVAIL=$(api "$BASE/api/sources/gmail/oauth")
@@ -111,7 +111,7 @@ check "gmail is offered"  "True" \
   "$(echo "$CONNECTORS" | python3 -c 'import json,sys; print(next(c["configured"] for c in json.load(sys.stdin) if c["source"]=="gmail"))')"
 check "and not connected yet" "False" \
   "$(echo "$CONNECTORS" | python3 -c 'import json,sys; print(next(c["connected"] for c in json.load(sys.stdin) if c["source"]=="gmail"))')"
-# gitlab has no application here, so the same list proves the two sets of values are independent
+# gitlab has no application here. the same list therefore proves the two sets of values are independent
 check "gitlab is offered but unconfigured" "False" \
   "$(echo "$CONNECTORS" | python3 -c 'import json,sys; print(next(c["configured"] for c in json.load(sys.stdin) if c["source"]=="gitlab"))')"
 
@@ -148,14 +148,14 @@ STATE=$(python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sy
 # home, not settings: home is where the source has a card, and where the offer to connect sits
 check "the callback sends the browser to home" "$BASE/" \
   "$(location "$BASE/api/sources/gmail/oauth/callback?code=a-real-code&state=$STATE")"
-# the browser was handed back before any of this existed, so the mailbox has to be read first
+# the browser was handed back before any of this existed. the mailbox has to be read first
 sift_await_sync gmail
 STATUS=$(api "$BASE/api/sources" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)[0], sys.stdout)')
 echo "  $STATUS"
 check "connected as OAuth"        '"OAUTH"' "$(echo "$STATUS" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["credentialType"]))')"
 check "the first read succeeded"  '"OK"'    "$(echo "$STATUS" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["status"]))')"
-# this mailbox is smaller than one sweep, so the walk back reached its beginning straight away and
-# the page has nothing to explain
+# this mailbox is smaller than one sweep: the walk back reached its beginning straight away, and the
+# page has nothing left to explain
 check "the mailbox was read whole"    "True"    "$(echo "$STATUS" | field '"historyComplete"')"
 check "and it says how far back that is" "True" \
   "$(echo "$STATUS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["historyFrom"] is not None)')"
@@ -176,8 +176,8 @@ check "spam raised nothing"           0 "$(absent 'You have won')"
 
 echo
 echo "--- mail you sent is a row about whoever received it ---"
-# the search is the reason mail is in Sift, so an archive that could not find what you wrote
-# would miss one of the most common reasons to search a mailbox at all
+# the search is the reason mail is in Sift. an archive that could not find what you wrote would
+# miss one of the commonest reasons to search a mailbox at all
 check "sent mail is a row"        1                "$(feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if i["kind"]=="mail_sent"))')"
 check "and it is named for its recipient" "Ada Lovelace" "$(titled 'My own reply' actorName)"
 check "and carries their address"        "ada@uni.lu"   "$(titled 'My own reply' contextLabel)"
@@ -190,7 +190,7 @@ check "the sender's display name"   "Ada Lovelace"     "$(titled 'Chart V2 revie
 check "the sender's address"        "ada@uni.lu"       "$(titled 'Chart V2 review' contextLabel)"
 check "a sender with no name falls back to the address" "grete@uni.lu" "$(titled 'Seminar on Thursday' actorName)"
 check "the row opens that message"  "https://mail.google.com/mail/u/0/#all/m1" "$(titled 'Chart V2 review' url)"
-# a message happened once, so a later sweep not listing it must never mark it done
+# a message happened once. a later sweep not listing it must never mark it done
 check "nothing is resolved by absence" "False False False False False" "$(values resolved)"
 
 echo
@@ -201,13 +201,13 @@ check "the file is named on the row"   "grant report.pdf" "$(files 'Grant report
 check "the inline image is not one"    "grant report.pdf" "$(files 'Grant report draft')"
 check "a message with no files has none" ""              "$(files 'Chart V2 review')"
 check "has:attachment narrows to it"   1 "$(feed 'q=has:attachment' | len)"
-# the name is in the haystack, so the file finds the message that carried it
+# the name is in the haystack: the file finds the message that carried it
 check "the file name is searchable"    1 "$(feed 'q=pdf' | len)"
 check "and a typo in it is forgiven"   1 "$(feed 'q=graant' | len)"
 
 echo
 echo "--- what a message says is searchable, past the snippet the row shows ---"
-# only in the text part of one message, so nothing but the body of it can answer this
+# the word is only in the text part of one message. nothing but its body can answer this
 check "a word from the body finds it"  1 "$(feed 'q=projector' | len)"
 check "and it is that message"         "Seminar on Thursday" "$(feed 'q=projector' \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["title"])')"
@@ -217,8 +217,8 @@ check "the row still shows the snippet" "Room B on the first floor." "$(titled '
 
 echo
 echo "--- a date scope narrows on the activity the list already shows ---"
-# spans rather than dates, because the fixture is placed in hours back from the run and a calendar
-# day would say something different depending on the hour the suite is started at
+# spans rather than dates. the fixture is placed in hours back from the run, and a calendar day
+# would say something different depending on the hour the suite is started at
 check "a day back leaves the older one out" 4 "$(feed 'q=after:1d' | len)"
 check "and before: keeps only that one"     1 "$(feed 'q=before:1d' | len)"
 check "a week back holds the whole mailbox" 5 "$(feed 'q=after:7d' | len)"
@@ -250,8 +250,8 @@ python3 "$HERE/make-mail.py" plus-old "$MAIL" "$NOW_MS"
 post "$BASE/api/sources/gmail/sync" >/dev/null
 check "the new message arrived"    6 "$(rows)"
 check "it is the new one"          "One more thing" "$(titled 'One more thing' title)"
-# the walk back reached the beginning of this mailbox on the first read, so nothing looks below
-# the floor again and a message that appears down there afterwards stays out
+# the walk back reached the beginning of this mailbox on the first read. nothing looks below the
+# floor again, and a message that appears down there afterwards stays out
 check "a message below a finished floor stays out" 0 "$(absent 'Ancient history')"
 # and a sweep must not undo a decision made here
 check "Sift still owns the read state" "False" "$(titled 'Seminar on Thursday' read)"
@@ -262,10 +262,10 @@ BEFORE=$(issued)
 post "$BASE/api/sources/gmail/sync" >/dev/null
 AFTER=$(issued)
 check "it renewed again"  "$((BEFORE + 1))" "$AFTER"
-# the stub accepts only its newest access token, so a read succeeding is the proof it was stored
+# the stub accepts only its newest access token: a read succeeding is the proof it was stored
 check "the read still succeeded" '"OK"' \
   "$(api "$BASE/api/sources" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)[0]["status"]))')"
-# and Google sends no refresh_token on a renewal, so keeping the stored one is what makes this work
+# and Google sends no refresh_token on a renewal. keeping the stored one is what makes this work
 check "the feed did not lose anything" 6 "$(rows)"
 
 echo
@@ -295,7 +295,7 @@ rm -f "$GONE"
 
 echo
 echo "--- a message that leaves the mailbox loses its row, and gets it back ---"
-# sift never reads the bin, so a row for a message in it disagrees with the mailbox only because of
+# sift never reads the bin. a row for a message in it disagrees with the mailbox only because of
 # when it was thrown away
 relabel m1 trash
 post "$BASE/api/sources/gmail/sync" >/dev/null
@@ -314,7 +314,7 @@ check "a message deleted outright loses its row too" 0 "$(absent 'One more thing
 
 echo
 echo "--- reading the whole mailbox again, without disconnecting it ---"
-# a message that appeared below a finished floor is never looked for again, so it is the proof that
+# a message that appeared below a finished floor is never looked for again. that makes it the proof
 # the reading really started over rather than carrying on from the edges it had
 check "the old message is still out of the feed" 0 "$(absent 'Ancient history')"
 check "the re-read was accepted" 200 "$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" \
@@ -322,7 +322,7 @@ check "the re-read was accepted" 200 "$(curl -s -o /dev/null -w '%{http_code}' -
 sift_await_sync gmail
 check "the message under the old floor arrived" 1 "$(absent 'Ancient history')"
 check "and every row that was there is still there" 6 "$(rows)"
-# the rows are keyed on the message id, so reading again fills them in rather than copying them
+# the rows are keyed on the message id: reading again fills them in rather than copying them
 check "what Sift had read stays read"     "True"  "$(titled 'Grant report draft' read)"
 check "and what was unread stays unread"  "False" "$(titled 'Chart V2 review' read)"
 check "the mailbox is whole again"        "True" \
@@ -340,15 +340,15 @@ check "its items went with it" 0 "$(rows)"
 check "connectors offers it again" "False" \
   "$(api "$BASE/api/sources/connectors" | python3 -c 'import json,sys; print(next(c["connected"] for c in json.load(sys.stdin) if c["source"]=="gmail"))')"
 
-# how far a mailbox has been read belongs to the connection. disconnecting deleted every row, so
-# state that outlived it would claim a mailbox had been read whose rows are gone, and reconnecting
-# would read only what had arrived since.
+# how far a mailbox has been read belongs to the connection. disconnecting deleted every row: state
+# that outlived it would claim a mailbox had been read whose rows are gone, and reconnecting would
+# read only what had arrived since.
 STATE2=$(python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sys.argv[1]).query)["state"][0])' \
   "$(post "$BASE/api/sources/gmail/oauth/start" | field '"authorizeUrl"')")
 location "$BASE/api/sources/gmail/oauth/callback?code=another-code&state=$STATE2" >/dev/null
 sift_await_sync gmail
 check "reconnecting reads the mailbox again" 6 "$(rows)"
-# including what was under the floor of the connection that has gone, which is the whole mailbox
+# including what was under the floor of the connection that has gone. the whole mailbox, again
 check "right back to its beginning"          1 "$(absent 'Ancient history')"
 
 echo

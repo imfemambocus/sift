@@ -45,8 +45,8 @@ rm -f "$JAR" "$SLOW"
 KEY="$(openssl rand -base64 32)"
 python3 "$HERE/make-todos.py" full "$TODOS" >/dev/null
 
-# expires_in of one second, so the very next read has to renew: that is the rule worth proving,
-# and a two-hour token would let a broken refresh pass unnoticed
+# expires_in of one second: the very next read has to renew. that is the rule worth proving, and a
+# two-hour token would let a broken refresh pass unnoticed
 PORT=7788 TODOS_FILE="$TODOS" OAUTH_CLIENT_ID="$CLIENT_ID" OAUTH_CLIENT_SECRET="$CLIENT_SECRET" \
 OAUTH_EXPIRES_IN=1 SLOW_FILE="$SLOW" python3 "$HERE/fake-gitlab.py" &
 STUB_PID=$!
@@ -85,14 +85,14 @@ field() { python3 -c 'import json,sys; print(json.load(sys.stdin)['"$1"'])'; }
 issued() { curl -s "$FAKE/oauth/issued" | python3 -c 'import json,sys; print(json.load(sys.stdin)["issued"])'; }
 
 api "$BASE/actuator/health" >/dev/null
-post -d '{"email":"isfaaq@uni.lu","displayName":"Isfaaq","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
-post -d '{"email":"isfaaq@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
+post -d '{"email":"sam@uni.lu","displayName":"Sam","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
+post -d '{"email":"sam@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
 
 echo "--- availability ---"
 AVAIL=$(api "$BASE/api/sources/gitlab/oauth")
 check "configured"   "True"    "$(echo "$AVAIL" | field '"configured"')"
 # "target" rather than "instanceUrl" since the flow became a seam two sources share: gmail has no
-# instance, so the field names what the offer says rather than what only gitlab has
+# instance. the field names what the offer says, not what only gitlab has
 check "target"       "$FAKE"   "$(echo "$AVAIL" | field '"target"')"
 
 CONNECTORS=$(api "$BASE/api/sources/connectors")
@@ -130,7 +130,7 @@ check "no token was granted"  "0" "$(issued)"
 
 echo
 echo "--- a refused approval ---"
-# the state is single use, so this needs a fresh start of its own
+# the state is single use. this needs a fresh start of its own
 STATE2=$(python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sys.argv[1]).query)["state"][0])' \
   "$(post "$BASE/api/sources/gitlab/oauth/start" | field '"authorizeUrl"')")
 check "access_denied is refused" "$BASE/settings?gitlab=denied" \
@@ -140,14 +140,14 @@ echo
 echo "--- the real thing ---"
 STATE3=$(python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sys.argv[1]).query)["state"][0])' \
   "$(post "$BASE/api/sources/gitlab/oauth/start" | field '"authorizeUrl"')")
-# from here the stand-in instance takes three seconds to answer the first call of a read, so the
-# next two checks are about the order of the two rather than about which of them was quicker
+# from here the stand-in instance takes three seconds to answer the first call of a read. the next
+# two checks are about the order of the two, never about which of them was quicker
 touch "$SLOW"
 CALLBACK=$(curl -s -o /dev/null -w '%{redirect_url} %{time_total}' -c "$JAR" -b "$JAR" \
   "$BASE/api/sources/gitlab/oauth/callback?code=a-real-code&state=$STATE3")
 # home, not settings: home is where the source has a card, and where the offer to connect sits
 check "the callback sends the browser to home" "$BASE/" "${CALLBACK% *}"
-# the browser is handed back while the reading goes on. a mailbox is minutes of requests, so a
+# the browser is handed back while the reading goes on. a mailbox is minutes of requests: a
 # callback that read first would leave somebody watching a blank page for all of it.
 check "and hands it back before the read finishes" "True" \
   "$(python3 -c 'import sys; print(float(sys.argv[1]) < 2)' "${CALLBACK##* }")"

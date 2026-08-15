@@ -59,7 +59,7 @@ echo
 
 csrf() { awk '$6=="XSRF-TOKEN" {print $7}' "$JAR" | tail -1; }
 api() { curl -s -c "$JAR" -b "$JAR" "$@"; }
-# the feed is paged over groups, so a suite asks for one page large enough to hold every fixture
+# the feed is paged over groups. a suite asks for one page large enough to hold every fixture
 # and unwraps the items. `limit` counts groups; 500 is the server's own ceiling.
 feed() { api "$BASE/api/feed?limit=500${1:+&$1}" | python3 -c 'import json,sys; json.dump(json.load(sys.stdin)["items"], sys.stdout)'; }
 code() { curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" "$@"; }
@@ -67,11 +67,11 @@ post() { curl -s -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json'
 postcode() { curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" -X POST -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $(csrf)" "$@"; }
 
 api "$BASE/actuator/health" >/dev/null
-post -d '{"email":"isfaaq@uni.lu","displayName":"Isfaaq","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
-post -d '{"email":"isfaaq@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
+post -d '{"email":"sam@uni.lu","displayName":"Sam","password":"correct-horse-battery"}' "$BASE/api/auth/register" >/dev/null
+post -d '{"email":"sam@uni.lu","password":"correct-horse-battery"}' "$BASE/api/auth/login" >/dev/null
 
 # the connect endpoint is gone: authorizing is the only way in, and verify-oauth.sh is where the
-# flow itself is checked. an unknown source name still has its own path, so it keeps its check.
+# flow itself is checked. an unknown source name still has its own path and keeps its check.
 echo "--- an unknown source is still refused ---"
 check "unknown source name" 400 "$(postcode "$BASE/api/sources/bitbucket/sync")"
 
@@ -132,7 +132,7 @@ python3 "$HERE/make-todos.py" shrunk "$TODOS" >/dev/null
 sift_connect_gitlab >/dev/null
 check "the feed still holds all 8" 8 "$(feed | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
 check "two of them read as resolved" 2 "$(feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if i["resolved"]))')"
-# nothing is waiting on a finished item, so it must not sit in the unread count for ever
+# nothing is waiting on a finished item. it must not sit in the unread count for ever
 check "resolving read them" 2 "$(feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if i["resolved"] and i["read"]))')"
 check "and left the others unread" 6 "$(feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if not i["read"]))')"
 check "rows kept in the table" 8 "$(docker exec sift-sync-db psql -U sift -d sift -qtAc 'select count(*) from feed_items' | tr -d ' ')"
@@ -167,7 +167,7 @@ echo
 echo "--- pagination past one page of 100 ---"
 python3 "$HERE/make-todos.py" many:150 "$TODOS" >/dev/null
 sift_connect_gitlab >/dev/null
-# the eight from the first fixture are still in the feed as resolved history, so count the live rows
+# the eight from the first fixture are still in the feed as resolved history: count the live rows
 check "all 150 read across 2 pages" 150 "$(feed | python3 -c 'import json,sys; print(sum(1 for i in json.load(sys.stdin) if not i["resolved"]))')"
 
 echo
