@@ -26,7 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 class GitLabPipelineTest extends SiftIntegrationTest {
 
 	private static final String USER = """
-			{"id": 42, "username": "isfaaq", "name": "Isfaaq", "web_url": "https://gl.example.org/isfaaq"}
+			{"id": 42, "username": "sam", "name": "Sam", "web_url": "https://gl.example.org/sam"}
 			""";
 
 	private static final String MR_URL = "https://gl.example.org/team/web/-/merge_requests/20";

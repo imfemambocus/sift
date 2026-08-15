@@ -18,9 +18,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * anything: the unique key on {@code (user_id, source, source_id)}, the {@code jsonb} column, Flyway
  * and {@code ddl-auto: validate} are all things an in-memory database would fake or skip.
  *
- * <p>The container is static, so one is started for the whole test run rather than one per class, and
- * every subclass declares the same {@code @SpringBootTest} properties so Spring caches a single
- * context across all of them.
+ * <p>The container is static: one is started for the whole test run rather than one per class. Every
+ * subclass declares the same {@code @SpringBootTest} properties, which is what makes Spring cache a
+ * single context across all of them.
  */
 @SpringBootTest(properties = {
 		"sift.encryption-key=dGVzdC1rZXktdGhpcnR5LXR3by1ieXRlcy1sb25nISE=",
@@ -28,38 +28,38 @@ import org.testcontainers.containers.PostgreSQLContainer;
 		"sift.sync.initial-delay=PT2H",
 		"sift.sync.interval=PT2H",
 		/*
-		 * an OAuth application, so the flow is configured. the instance URL is a placeholder: a
-		 * refresh goes to the credential's own instance, which is the stand-in on an ephemeral port.
+		 * an OAuth application, which is what makes the flow configured. the instance URL is a
+		 * placeholder: a refresh goes to the credential's own instance, the stand-in on its own port.
 		 */
 		"sift.gitlab.oauth.instance-url=https://gl.example.org",
 		"sift.gitlab.oauth.client-id=sift-under-test",
 		"sift.gitlab.oauth.client-secret=not-a-real-secret",
 		"sift.gitlab.oauth.redirect-uri=http://localhost:7777/api/sources/gitlab/oauth/callback",
-		// and a Gmail client, so both flows are configured and the connectors list is complete
+		// and a Gmail client: both flows configured, and the connectors list complete
 		"sift.gmail.client-id=sift-mail-under-test",
 		"sift.gmail.client-secret=not-a-real-secret-either",
 		"sift.gmail.redirect-uri=http://localhost:7777/api/sources/gmail/oauth/callback",
 })
-// every user-owned table cascades from users, so one delete is the whole reset
+// every user-owned table cascades from users: one delete is the whole reset
 @Sql(statements = "delete from users", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 public abstract class SiftIntegrationTest {
 
 	/*
 	 * started by hand and never stopped, rather than with @Container. JUnit's container lifecycle is
-	 * per class, but Spring caches one context for the whole run, so the second test class inherited a
-	 * datasource pointing at a container the first class had already stopped: every test after the
-	 * first class failed on a refused connection, each one after a thirty-second pool timeout.
-	 * Testcontainers' own Ryuk sidecar removes it when the JVM exits.
+	 * per class where Spring caches one context for the whole run, so a per-class container leaves
+	 * every later class holding a datasource that points at a stopped one. each of their tests then
+	 * fails on a refused connection, thirty seconds of pool timeout apiece. Testcontainers' own Ryuk
+	 * sidecar removes the container when the JVM exits.
 	 */
 	@ServiceConnection
-	// the same image compose runs, so a migration that passes here passes there
+	// the same image compose runs: a migration that passes here passes there
 	static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	/*
 	 * static for the same reason the container is. Google's three hosts are configuration rather than
-	 * something a credential carries, so pointing the source at a stand-in means setting a property,
-	 * and a property that differed per class would build a second application context. One server for
-	 * the whole run, reset by whichever test uses it.
+	 * something a credential carries. Pointing the source at a stand-in means setting a property, and
+	 * a property that differed per class would build a second application context. One server for the
+	 * whole run, reset by whichever test uses it.
 	 */
 	protected static final FakeGmail GMAIL = new FakeGmail();
 

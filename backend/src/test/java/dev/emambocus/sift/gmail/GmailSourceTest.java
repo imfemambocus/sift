@@ -31,8 +31,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * The mail adapter. Its rules are not GitLab's rules with different words: a mailbox has no to-do
- * list doing the narrowing, so every message becomes a row, and the things worth proving are the
- * ones that stop that being unusable.
+ * list doing the narrowing. Every message becomes a row, and what is worth proving here is the set
+ * of rules that stop that being unusable.
  */
 class GmailSourceTest extends SiftIntegrationTest {
 
@@ -82,7 +82,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 		IncomingItem first = fetched.stream().filter(item -> item.sourceId().equals("msg:m1")).findFirst().orElseThrow();
 		assertThat(first.title()).isEqualTo("Chart V2 review");
 		assertThat(first.actorName()).isEqualTo("Ada Lovelace");
-		// the address goes where a project path goes, so it reads as context and the search finds it
+		// the address goes where a project path goes: it reads as context, and the search finds it
 		assertThat(first.contextLabel()).isEqualTo("ada@uni.lu");
 		assertThat(first.url()).isEqualTo("https://mail.google.com/mail/u/0/#all/m1");
 		// a message happened once: the next sweep not listing it must not resolve it
@@ -130,14 +130,14 @@ class GmailSourceTest extends SiftIntegrationTest {
 		List<IncomingItem> second = read(credential);
 
 		/*
-		 * only the new one. every message costs a request of its own, so a sweep that re-read the
-		 * whole window would make a real mailbox unaffordable rather than merely slow.
+		 * only the new one. every message costs a request of its own: a sweep that re-read the whole
+		 * window would make a real mailbox unaffordable rather than merely slow.
 		 */
 		assertThat(second).extracting(IncomingItem::sourceId).containsExactly("msg:m2");
 	}
 
 	@Test
-	@DisplayName("mail already read in Gmail arrives read, so connecting a mailbox is not a wall of unread")
+	@DisplayName("mail already read in Gmail arrives read: connecting a mailbox is not a wall of unread")
 	void gmailsOwnReadStateSeedsTheRow() {
 		GMAIL.deliver(
 				Msg.read("m1", "t1", minutesAgo(10), ADA, "Dealt with in Gmail"),
@@ -151,7 +151,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("Sift owns read state after the row exists, so a later sweep cannot undo a decision here")
+	@DisplayName("Sift owns read state once the row exists, and a later sweep cannot undo a decision here")
 	void siftsOwnReadStateWinsAfterwards() {
 		GMAIL.deliver(Msg.read("m1", "t1", minutesAgo(10), ADA, "Read in Gmail"));
 		SourceCredential credential = credential("owned@uni.lu");
@@ -175,12 +175,12 @@ class GmailSourceTest extends SiftIntegrationTest {
 
 		List<IncomingItem> fetched = read(credential("kept@uni.lu"));
 
-		// mail you wrote is part of an archive you search, so only the two that are not mail go
+		// mail you wrote is part of an archive you search: only the two that are not mail go
 		assertThat(fetched).extracting(IncomingItem::sourceId).containsExactlyInAnyOrder("msg:m1", "msg:m2");
 	}
 
 	@Test
-	@DisplayName("mail you sent is a row about who received it, so it is findable by where it went")
+	@DisplayName("mail you sent is a row about who received it, and findable by where it went")
 	void sentMailIsARowAboutItsRecipient() {
 		GMAIL.deliver(Msg.sent("m1", "t1", minutesAgo(10),
 				"\"Grete Hermann\" <grete@uni.lu>", "The figures you asked for"));
@@ -216,14 +216,14 @@ class GmailSourceTest extends SiftIntegrationTest {
 		List<IncomingItem> fetched = read(credential("whole@uni.lu"));
 
 		/*
-		 * all of them, past the 200 one sweep reads at the top. gmail lists newest first, so a source
-		 * that only moved a forward edge would take the newest chunk and step over everything under it.
+		 * all of them, past the 200 one sweep reads at the top. gmail lists newest first: a source that
+		 * only moved a forward edge would take the newest chunk and step over everything under it.
 		 */
 		assertThat(fetched).hasSize(250);
 	}
 
 	@Test
-	@DisplayName("more arriving at once than one sweep can hold is read oldest first, so none is skipped")
+	@DisplayName("more arriving at once than one sweep can hold is read oldest first, and none is skipped")
 	void aBurstLargerThanOneSweepIsReadOldestFirst() {
 		GMAIL.deliver(Msg.unread("seed", "t0", minutesAgo(400), ADA, "The one already read"));
 		SourceCredential credential = credential("burst@uni.lu");
@@ -283,7 +283,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("messages in one conversation share a group, so a thread is one place in the list")
+	@DisplayName("messages in one conversation share a group, and a thread is one place in the list")
 	void aThreadIsOneGroup() {
 		GMAIL.deliver(
 				Msg.unread("m1", "t1", minutesAgo(30), ADA, "Chart V2 review"),
@@ -295,7 +295,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 
 		/*
 		 * the thread id, not the url. every message lives at the same path and differs only in the
-		 * fragment, so the rule that strips the fragment would make one group of the whole mailbox.
+		 * fragment: the rule that strips the fragment would make one group of the whole mailbox.
 		 */
 		assertThat(row(credential.getUserId(), "msg:m1").getGroupKey())
 				.isEqualTo(row(credential.getUserId(), "msg:m2").getGroupKey())
@@ -350,7 +350,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("marking a row unread here puts the label back, so the two stay in step")
+	@DisplayName("marking a row unread here puts the label back, and the two stay in step")
 	void unreadingHerePutsTheLabelBack() {
 		GMAIL.deliver(Msg.read("m1", "t1", minutesAgo(10), ADA, "Already read in Gmail"));
 		SourceCredential credential = credential("back@uni.lu");
@@ -434,7 +434,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 		GMAIL.forgettingHistory().floodingUnread();
 		syncService.sync(credential);
 
-		// the part that came back does not hold this one, so a partial answer would have called it read
+		// the part that came back does not hold this one: a partial answer would have called it read
 		assertThat(readFlag(credential.getUserId(), "msg:m1")).isFalse();
 	}
 
@@ -490,7 +490,7 @@ class GmailSourceTest extends SiftIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("disconnecting forgets how far the mailbox was read, so reconnecting reads it again")
+	@DisplayName("disconnecting forgets how far the mailbox was read, and reconnecting reads it again")
 	void reconnectingReadsTheMailboxAgain() {
 		GMAIL.deliver(
 				Msg.unread("m1", "t1", minutesAgo(30), ADA, "The older one"),
@@ -503,14 +503,14 @@ class GmailSourceTest extends SiftIntegrationTest {
 		syncService.sync(connect(userId));
 
 		/*
-		 * the whole mailbox. disconnecting deleted every row, so state saying it had been read would
+		 * the whole mailbox. disconnecting deleted every row: state saying it had been read would
 		 * leave the next connection reading only what arrived after it, and the rest never again.
 		 */
 		assertThat(items.findByUserIdAndSource(userId, SourceType.GMAIL)).hasSize(2);
 	}
 
 	@Test
-	@DisplayName("a read whose rows were never stored is read again, so nothing falls between the two")
+	@DisplayName("a read whose rows were never stored is read again, and nothing falls between the two")
 	void theEdgesMoveOnlyOnceTheRowsAreStored() {
 		GMAIL.deliver(Msg.unread("m1", "t1", minutesAgo(10), ADA, "The one that must not be lost"));
 		SourceCredential credential = credential("uncommitted@uni.lu");
@@ -627,10 +627,10 @@ class GmailSourceTest extends SiftIntegrationTest {
 	void anotherSourceIsNotGmailsBusiness() {
 		SourceCredential credential = credential("other@uni.lu");
 		syncService.sync(credential);
-		// the same user really does have a GitLab credential, so what is under test is the routing
-		// and not the absence of anything to route to
+		// the same user really does have a GitLab credential. what is under test is the routing,
+		// not the absence of anything to route to
 		credentials.save(SourceCredential.oauth(credential.getUserId(), SourceType.GITLAB,
-				// the token the stand-in Google accepts, so nothing but the routing can stop the call
+				// the token the stand-in Google accepts: nothing but the routing can stop the call
 				"https://gitlab.example.org", "live-access", "gl-refresh",
 				Instant.now().plus(1, ChronoUnit.HOURS), Instant.now()));
 

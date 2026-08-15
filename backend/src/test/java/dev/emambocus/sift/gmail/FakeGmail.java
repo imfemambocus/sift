@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * makes.
  *
  * <p>The JDK's own server rather than a mocked {@code RestClient}, for the reason {@code FakeGitLab}
- * gives: the client installs its own request factory for the timeouts, so anything intercepting at
+ * gives. The client installs its own request factory for the timeouts, and anything intercepting at
  * the builder would test a client production does not use.
  *
  * <p>It honours {@code after:} and {@code before:} in the search itself rather than answering a fixed
@@ -47,7 +47,7 @@ public final class FakeGmail implements AutoCloseable {
 			return new File(name, true, true);
 		}
 
-		/** Attached to a message that was forwarded, so it is a part of a part. */
+		/** Attached to a message that was forwarded: a part of a part. */
 		public static File forwarded(String name) {
 			return new File(name, false, true);
 		}
@@ -172,7 +172,7 @@ public final class FakeGmail implements AutoCloseable {
 	}
 
 	/**
-	 * Answers nothing until {@link #release()}, so a test can hold a read open and look at what the
+	 * Answers nothing until {@link #release()}. A test can hold a read open and look at what the
 	 * app says while one is running. The token endpoint is left answering: a test that holds the whole
 	 * server holds the authorization as well, and the wait would prove nothing about reading.
 	 */
@@ -194,7 +194,7 @@ public final class FakeGmail implements AutoCloseable {
 		return this;
 	}
 
-	/** Which bearer token the API accepts, so a test can prove a renewal was really applied. */
+	/** Which bearer token the API accepts. It is how a test proves a renewal was really applied. */
 	public FakeGmail accepting(String token) {
 		this.accessToken = token;
 		return this;
@@ -237,13 +237,13 @@ public final class FakeGmail implements AutoCloseable {
 		return this;
 	}
 
-	/** Gmail keeps its history for about a week, so an instance off for longer is told to start again. */
+	/** Gmail keeps its history for about a week. An instance off for longer is told to start again. */
 	public FakeGmail forgettingHistory() {
 		this.historyForgotten = true;
 		return this;
 	}
 
-	/** More unread mail than any sweep may page through, so no complete answer about it exists. */
+	/** More unread mail than any sweep may page through: no complete answer about it exists. */
 	public FakeGmail floodingUnread() {
 		this.unreadFloods = true;
 		return this;
@@ -265,7 +265,7 @@ public final class FakeGmail implements AutoCloseable {
 		return this;
 	}
 
-	/** The raw body of each batchModify, so a test can see which ids went and in which direction. */
+	/** The raw body of each batchModify. A test reads which ids went, and in which direction. */
 	public List<String> modifications() {
 		return List.copyOf(modified);
 	}
@@ -290,7 +290,7 @@ public final class FakeGmail implements AutoCloseable {
 			return;
 		}
 		if (path.equals("/gmail/v1/users/me/profile")) {
-			send(exchange, 200, "{\"emailAddress\": \"isfaaq@uni.lu\", \"historyId\": \"" + historyId + "\"}");
+			send(exchange, 200, "{\"emailAddress\": \"sam@uni.lu\", \"historyId\": \"" + historyId + "\"}");
 			return;
 		}
 		if (path.equals("/gmail/v1/users/me/history")) {
@@ -359,7 +359,7 @@ public final class FakeGmail implements AutoCloseable {
 				.toList());
 
 		/*
-		 * a page token that never runs out, so a caller paging for a complete answer never gets one.
+		 * a page token that never runs out: a caller paging for a complete answer never gets one.
 		 * it is the only way to stand in for a mailbox with more unread mail than a sweep may list.
 		 */
 		if (onlyUnread && unreadFloods) {
@@ -476,7 +476,7 @@ public final class FakeGmail implements AutoCloseable {
 	 * The part that carries what the message says. Without a body it is the empty text part a message
 	 * with only a file in it has, which is also what Gmail answers for a part too large to inline.
 	 *
-	 * <p>The data is unpadded base64url, as Gmail sends it, so a reader that assumed padding fails.
+	 * <p>The data is unpadded base64url, as Gmail sends it. A reader that assumed padding fails.
 	 */
 	private static String textPartJson(Msg message) {
 		if (message.body() == null) {

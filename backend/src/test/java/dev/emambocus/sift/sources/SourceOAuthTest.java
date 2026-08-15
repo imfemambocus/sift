@@ -84,7 +84,7 @@ class SourceOAuthTest extends SiftIntegrationTest {
 
 		try {
 			controller.callback("gmail", "a-code", "the-state", null, session, response,
-					new SiftUserDetails(userId, "landing@uni.lu", "Isfaaq", "{noop}unused"));
+					new SiftUserDetails(userId, "landing@uni.lu", "Sam", "{noop}unused"));
 
 			/*
 			 * the redirect is the assertion. a mailbox is minutes of sequential requests, so a callback
