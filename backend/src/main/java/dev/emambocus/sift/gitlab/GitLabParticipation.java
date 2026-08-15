@@ -182,8 +182,8 @@ class GitLabParticipation {
 		catch (RuntimeException ex) {
 			/*
 			 * one unreadable resource must not lose the whole sweep, including the to-dos already
-			 * fetched. it is reported and skipped, and its stored timestamp is not advanced, so the
-			 * next sweep tries again.
+			 * fetched. it is reported and skipped, and its stored timestamp is not advanced: the next
+			 * sweep tries again.
 			 */
 			log.warn("could not read discussions on {} {} in project {}: {}",
 					resource.type(), resource.iid(), resource.projectId(), ex.getMessage());
@@ -195,7 +195,7 @@ class GitLabParticipation {
 				continue;
 			}
 
-			// a note with no id cannot be compared against a watermark, so it is not usable at all
+			// a note with no id cannot be compared against a watermark. it is not usable at all
 			List<GitLabResponses.Note> notes = discussion.notes().stream()
 					.filter(note -> note.id() != null)
 					.toList();
@@ -242,7 +242,7 @@ class GitLabParticipation {
 
 	/*
 	 * the merge request's own pipeline, which no list carries: only the single merge request endpoint
-	 * has head_pipeline, so this costs one request and is asked for as rarely as it can be.
+	 * has head_pipeline. this costs one request, and is asked for as rarely as it can be.
 	 *
 	 * two triggers, because neither covers the other. a merge request that moved may have started a
 	 * pipeline, and a pipeline already seen running has to be looked at again until it reaches a
@@ -295,7 +295,7 @@ class GitLabParticipation {
 	}
 
 	/*
-	 * a failure is news once per pipeline, so a red one still red on the next sweep says nothing and a
+	 * a failure is news once per pipeline. a red one still red on the next sweep says nothing, and a
 	 * replacement that fails again does. a fix is news only after a failure, which is what makes the
 	 * stored verdict worth keeping rather than the status of whatever ran last.
 	 */
@@ -317,7 +317,7 @@ class GitLabParticipation {
 	}
 
 	/*
-	 * the merge request's url rather than the pipeline's, so this shares the group of everything else
+	 * the merge request's url rather than the pipeline's: this shares the group of everything else
 	 * about that merge request. the pipeline of a merge request is read from its page anyway, and a
 	 * url of its own would give one merge request two places in the list.
 	 */
@@ -393,7 +393,7 @@ class GitLabParticipation {
 	/*
 	 * GitLab raises no to-do when somebody approves, and records it as a system note on the merge
 	 * request. Its body is English whatever the user's locale, and the body of an unapproval contains
-	 * the body of an approval, so the test is an exact match rather than a prefix or a substring.
+	 * the body of an approval. the test is therefore an exact match, never a prefix or a substring.
 	 */
 	private static void announceApprovals(Watched resource, List<GitLabResponses.Note> fresh,
 			List<IncomingItem> items) {
@@ -418,7 +418,7 @@ class GitLabParticipation {
 				note.author() == null ? null : note.author().avatarUrl(),
 				resource.projectPath(),
 				null,
-				// the note anchor, so the group key still comes out as the merge request itself
+				// the note anchor: the group key still comes out as the merge request itself
 				resource.webUrl() + "#note_" + note.id(),
 				null,
 				note.createdAt(),
@@ -470,7 +470,7 @@ class GitLabParticipation {
 				newest.author() == null ? null : newest.author().avatarUrl(),
 				resource.projectPath(),
 				null,
-				// deep link to the note, so clicking lands on what changed rather than the top
+				// deep link to the note: clicking lands on what changed rather than the top
 				resource.webUrl() + "#note_" + newest.id(),
 				null,
 				newest.createdAt(),

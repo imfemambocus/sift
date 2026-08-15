@@ -18,9 +18,9 @@ import org.springframework.stereotype.Component;
  * Stage two of participation: the merge requests and issues someone is part of only because they
  * left a comment, with no assignee, reviewer or author relationship to find them by.
  *
- * <p>GitLab's activity feed is the only place that says so, so the token owner's own
- * {@code commented} events are read and the resources behind them are looked up in one request per
- * project rather than one per resource.
+ * <p>GitLab's activity feed is the only place that says so. The token owner's own {@code commented}
+ * events are read, and the resources behind them are looked up in one request per project rather
+ * than one per resource.
  */
 @Component
 class GitLabCommentedOn {
@@ -73,9 +73,9 @@ class GitLabCommentedOn {
 		}
 		catch (RuntimeException ex) {
 			/*
-			 * this runs after the to-dos and every list have already been read, so an instance that
-			 * will not answer the activity feed must cost the comment-only resources rather than the
-			 * whole sweep. the credential itself has already proved itself on /user by now.
+			 * this runs after the to-dos and every list have already been read. an instance that will
+			 * not answer the activity feed must cost the comment-only resources rather than the whole
+			 * sweep. the credential itself has already proved itself on /user by now.
 			 */
 			log.warn("could not read your own comments, so nothing commented-only was discovered: {}",
 					ex.getMessage());
@@ -141,7 +141,7 @@ class GitLabCommentedOn {
 				/*
 				 * a project you commented in and have since lost sight of answers 404, and one
 				 * inaccessible project must not lose the rest of the sweep. only open resources are
-				 * asked for, so anything already merged or closed simply comes back absent.
+				 * asked for: anything already merged or closed simply comes back absent.
 				 */
 				log.warn("could not read the {} you commented on in project {}: {}",
 						batch.type().pathSegment(), batch.projectId(), ex.getMessage());

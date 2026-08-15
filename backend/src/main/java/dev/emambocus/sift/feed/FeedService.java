@@ -28,12 +28,12 @@ public class FeedService {
 	/**
 	 * One page of everything the user has ever been sent.
 	 *
-	 * <p>Resolved rows are included. Read against unread is the only axis this list narrows on, so a
-	 * to-do somebody completed and a merge request that was merged stay in it. {@code resolvedAt}
+	 * <p>Resolved rows are included. Read against unread is the only axis this list narrows on: a
+	 * to-do somebody completed and a merge request that was merged both stay in it. {@code resolvedAt}
 	 * still records that the source stopped reporting an item, and it is still what counts how many
 	 * are waiting; it does not decide what the list contains.
 	 *
-	 * <p>The page is a number of groups, so one more group than the caller wants is asked for. If it
+	 * <p>The page is a number of groups, and one more group than the caller wants is asked for. If it
 	 * came back there is a next page, and the last group kept is where it starts.
 	 */
 	@Transactional(readOnly = true)
@@ -79,7 +79,7 @@ public class FeedService {
 	}
 
 	/**
-	 * Read is a per-item timestamp rather than a flag, so unread is "no timestamp" and a later sync
+	 * Read is a per-item timestamp rather than a flag. Unread is "no timestamp", and a later sync
 	 * can put an item back to unread by clearing it.
 	 */
 	@Transactional
@@ -103,7 +103,7 @@ public class FeedService {
 	 */
 	@Transactional
 	public List<SourceRow> markAllRead(UUID userId, SourceType source) {
-		// read before the update, so what goes upstream is exactly the set that stopped being unread
+		// read before the update: what goes upstream is exactly the set that stopped being unread
 		List<SourceRow> cleared = items.findUnreadSourceRows(userId, source);
 		Instant now = clock.instant();
 		if (source == null) {
@@ -116,8 +116,8 @@ public class FeedService {
 	}
 
 	/*
-	 * the query already returns a group's items together and in order, so one walk is enough. it must
-	 * stay that way: grouping by a map instead would quietly reorder the page.
+	 * the query already returns a group's items together and in order: one walk is enough. it must
+	 * stay that way, since grouping by a map instead would quietly reorder the page.
 	 */
 	private static List<List<FeedItem>> intoGroups(List<FeedItem> rows) {
 		List<List<FeedItem>> groups = new ArrayList<>();

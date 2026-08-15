@@ -11,7 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 /**
  * Extends the bare {@link Repository} rather than {@code JpaRepository} on purpose: this way the
- * whole query surface is written out here, so nothing user-scoped can be reached by an inherited
+ * whole query surface is written out here. Nothing user-scoped is reachable through an inherited
  * method nobody chose to expose.
  */
 public interface SourceCredentialRepository extends Repository<SourceCredential, UUID> {
@@ -22,7 +22,7 @@ public interface SourceCredentialRepository extends Repository<SourceCredential,
 
 	/*
 	 * ordered, because this is what the rail and the Home cards are drawn in. postgres has no order
-	 * without one, and every sweep updates these rows, so an unordered query hands them back in a
+	 * without one, and every sweep updates these rows: an unordered query hands them back in a
 	 * different order once a sweep has rewritten them.
 	 */
 	List<SourceCredential> findByUserIdOrderBySourceAsc(UUID userId);
@@ -55,7 +55,7 @@ public interface SourceCredentialRepository extends Repository<SourceCredential,
 			@Param("status") SyncStatus status, @Param("error") String error);
 
 	/*
-	 * targeted for the same reason the outcome is: this runs inside a sweep, so saving the whole
+	 * targeted for the same reason the outcome is. this runs inside a sweep, and saving the whole
 	 * entity would write a token and an outcome that the sweep has not decided yet.
 	 */
 	@Modifying(clearAutomatically = true)
@@ -64,9 +64,9 @@ public interface SourceCredentialRepository extends Repository<SourceCredential,
 
 	/*
 	 * a renewed OAuth pair, written the same targeted way and for a second reason of its own: this
-	 * runs in the middle of a sweep, so saving the whole entity would also write a sync outcome that
-	 * is not known yet. GitLab invalidates the old refresh token on every renewal, so if this write
-	 * is lost the connection is dead.
+	 * runs in the middle of a sweep, and saving the whole entity would also write a sync outcome that
+	 * is not known yet. GitLab invalidates the old refresh token on every renewal: lose this write
+	 * and the connection is dead.
 	 */
 	@Modifying
 	@Query("""

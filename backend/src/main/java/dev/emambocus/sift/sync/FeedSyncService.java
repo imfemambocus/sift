@@ -50,7 +50,7 @@ public class FeedSyncService {
 	});
 
 	FeedSyncService(List<NotificationSource> sources, FeedSyncStore store) {
-		// every implementation on the classpath registers itself, so adding a source needs no edit here
+		// every implementation on the classpath registers itself. adding a source needs no edit here
 		this.sources = sources.stream()
 				.collect(Collectors.toUnmodifiableMap(NotificationSource::id, Function.identity()));
 		this.store = store;
@@ -71,7 +71,7 @@ public class FeedSyncService {
 	 * Tells the source to read its history again from the beginning, and reads it now. False when the
 	 * source has nothing to forget, which is not a failure: it already holds everything it can.
 	 *
-	 * <p>The rows are left where they are. They are keyed on the source's own id, so the read that
+	 * <p>The rows are left where they are. They are keyed on the source's own id: the read that
 	 * follows fills them in again rather than making a second copy, and the read state Sift holds
 	 * survives it.
 	 */
@@ -110,8 +110,8 @@ public class FeedSyncService {
 	 * Reads without holding the caller, for the approval that has just landed. A first read of a large
 	 * mailbox is minutes of sequential requests, and nobody should watch a blank page for it.
 	 *
-	 * <p>The credential is claimed on the calling thread rather than inside the task, so the source
-	 * reports itself as syncing from the moment this returns instead of once a thread picks the task up.
+	 * <p>The credential is claimed on the calling thread rather than inside the task. The source then
+	 * reports itself as syncing from the moment this returns, not once a thread picks the task up.
 	 */
 	public void syncInBackground(SourceCredential credential) {
 		UUID id = credential.getId();
@@ -145,8 +145,8 @@ public class FeedSyncService {
 		}
 
 		try {
-			// null means the stored value would not decrypt, so the key changed under us. it is a
-			// reconnect, not a retry, which is exactly what SourceAuthException records.
+			// null means the stored value would not decrypt: the key changed under us. a reconnect,
+			// not a retry, which is exactly what SourceAuthException records.
 			if (credential.getAccessToken() == null) {
 				throw new SourceAuthException(
 						"Sift cannot read the stored token for this source. Reconnect it. "
@@ -165,7 +165,7 @@ public class FeedSyncService {
 			return outcome;
 		}
 		catch (SourceAuthException ex) {
-			// terminal until the user reconnects, so the sweep stops picking this credential up
+			// terminal until the user reconnects: the sweep stops picking this credential up
 			store.markFailure(credential.getId(), SyncStatus.AUTH_FAILED, ex.getMessage());
 			throw ex;
 		}

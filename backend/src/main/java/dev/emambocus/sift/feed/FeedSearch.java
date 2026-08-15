@@ -18,15 +18,15 @@ import java.util.regex.Pattern;
  * <p>One search over everything, however you half remember it. This is one of the two complaints the
  * app started from: Outlook held the mail but could not find anything in it.
  *
- * <p>Every token has to match, so {@code is:mr is:unread} narrows and {@code project:a project:b}
- * finds nothing.
+ * <p>Every token has to match. {@code is:mr is:unread} therefore narrows, and
+ * {@code project:a project:b} finds nothing.
  *
  * @param words free text, lowercased. Each one has to appear, in any order, and one typo in each is
  *     forgiven by the query.
  * @param projects values of {@code project:}, matched against the context label
  * @param actors values of {@code from:}, matched against the actor name
  * @param kinds values of {@code is:} that name no known shape, matched against the source's own
- *     action token, so {@code is:merged} and {@code is:thread} work without being listed anywhere
+ *     action token: {@code is:merged} and {@code is:thread} work without being listed anywhere
  * @param urlParts what {@code is:mr} and {@code is:issue} become. The url is what reliably says which
  *     of the two something is, across every kind of row.
  * @param read what {@code is:read} and {@code is:unread} become, null when neither was typed
@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
  * @param before what {@code before:} becomes: nothing from this moment onwards
  * @param hasAttachment what {@code has:attachment} becomes, null when it was not typed
  * @param impossible two tokens ask for opposite things, or a date cannot be read. Every token has to
- *     match, so nothing can, and the service answers an empty page rather than letting one win.
+ *     match and nothing can, and the service answers an empty page rather than letting one win.
  */
 public record FeedSearch(
 		List<String> words,
@@ -70,7 +70,7 @@ public record FeedSearch(
 		return tokens.toSearch();
 	}
 
-	/** Collects one token at a time, so no single method has to hold the whole grammar. */
+	/** Collects one token at a time. No single method has to hold the whole grammar. */
 	private static final class Tokens {
 
 		/** A span back from now: a number and one of hours, days, weeks, months or years. */
@@ -128,7 +128,7 @@ public record FeedSearch(
 			read = wanted;
 		}
 
-		/** Files are the only thing a row can have, so anything else asks for something nothing has. */
+		/** Files are the only thing a row can have. Anything else asks for something nothing has. */
 		private void addHas(String value) {
 			if (FILES.contains(value)) {
 				hasAttachment = true;
@@ -137,7 +137,7 @@ public record FeedSearch(
 			impossible = true;
 		}
 
-		// two of them narrow to one window, so the latest floor and the earliest ceiling win
+		// two of them narrow to one window: the latest floor and the earliest ceiling win
 		private void addAfter(String value) {
 			Instant moment = momentOf(value);
 			if (moment == null) {
@@ -168,7 +168,7 @@ public record FeedSearch(
 				return ago(Integer.parseInt(span.group(1)), span.group(2).charAt(0));
 			}
 			try {
-				// a date names a day, and a day is read in UTC, so one query means one thing everywhere
+				// a date names a day, and a day is read in UTC: one query means one thing everywhere
 				return LocalDate.parse(value).atStartOfDay(ZoneOffset.UTC).toInstant();
 			}
 			catch (DateTimeParseException ex) {

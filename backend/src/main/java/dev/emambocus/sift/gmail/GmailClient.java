@@ -63,7 +63,7 @@ class GmailClient {
 	 * the one narrowing Sift does to a mailbox, and it is the mailbox's own answer rather than a rule
 	 * of ours.
 	 *
-	 * <p>Listing is the cheap half of this API, so a caller that has to know the oldest of a set can
+	 * <p>Listing is the cheap half of this API. A caller that has to know the oldest of a set can
 	 * afford to list all of it and read only the end.
 	 */
 	List<GmailResponses.MessageRef> listMessages(String accessToken, String query, int maxPages) {
@@ -77,7 +77,7 @@ class GmailClient {
 	/**
 	 * Every unread id the mailbox still holds, or empty when there are more of them than one sweep may
 	 * list. The caller uses it to work out what has been read there, and a partial answer would say
-	 * that mail it never saw had been read, so a partial answer is refused rather than trimmed.
+	 * that mail it never saw had been read. A partial answer is refused rather than trimmed.
 	 */
 	Optional<Set<String>> listUnread(String accessToken, int maxPages) {
 		Listing unread = list(accessToken, "is:unread", maxPages, Integer.MAX_VALUE);
@@ -182,7 +182,7 @@ class GmailClient {
 		}
 
 		/*
-		 * never truncate quietly. history records arrive oldest first, so the last one read is a valid
+		 * never truncate quietly. history records arrive oldest first: the last one read is a valid
 		 * place to resume: the rest is asked for on the next sweep rather than stepped over.
 		 */
 		log.warn("stopped paging Gmail history at the {}-page cap with {} record(s) read", maxPages, records.size());
@@ -208,7 +208,7 @@ class GmailClient {
 
 	/**
 	 * One message, or null when the mailbox no longer holds it. Listing and reading are separate
-	 * calls, so a message can be deleted between the two, and one that has gone must not fail the
+	 * calls. A message can be deleted between the two, and one that has gone must not fail the
 	 * whole sweep.
 	 *
 	 * <p>The whole message rather than its metadata, because the name of a file that came with it is

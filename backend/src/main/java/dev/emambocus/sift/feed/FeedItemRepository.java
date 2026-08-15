@@ -13,8 +13,8 @@ import org.springframework.data.repository.query.Param;
 
 /**
  * Extends the bare {@link Repository} rather than {@code JpaRepository} on purpose: every method is
- * written out here and every one of them is scoped by user, so there is no inherited way to reach
- * another tenant's items.
+ * written out here and every one of them is scoped by user. Nothing inherited can reach another
+ * tenant's items.
  */
 public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 
@@ -27,7 +27,7 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 
 	/*
 	 * the only rows a sweep's silence can resolve, which with the incoming ids is everything it needs
-	 * to hold. a partial index carries the same predicate, so a mailbox of thousands answers this
+	 * to hold. a partial index carries the same predicate: a mailbox of thousands answers this
 	 * without being read.
 	 */
 	@Query("""
@@ -45,7 +45,7 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 	 * all of them at once.
 	 *
 	 * resolved rows are in `total` deliberately. the feed is the whole history, and read against
-	 * unread is the only axis it narrows on, so a completed to-do is still one of the rows in it.
+	 * unread is the only axis it narrows on. a completed to-do is still one of the rows in it.
 	 */
 	@Query("""
 			select new dev.emambocus.sift.feed.FeedCounts(
@@ -85,7 +85,7 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 
 	/**
 	 * Every unread row, before it stops being unread. Read inside the same transaction as the update
-	 * that follows it, so what is reported upstream is exactly what changed here.
+	 * that follows it: what is reported upstream is exactly what changed here.
 	 */
 	@Query("select new dev.emambocus.sift.feed.SourceRow(i.source, i.sourceId) "
 			+ "from FeedItem i where i.userId = :userId and i.readAt is null "
@@ -94,8 +94,8 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 
 	/*
 	 * read state the source itself reports, which is the direction a push from here cannot cover. the
-	 * ids are a source's own, so the source is in the where clause as well as the user: two sources
-	 * are free to use the same id for different things.
+	 * ids are a source's own. the source is in the where clause as well as the user, because two
+	 * sources are free to use the same id for different things.
 	 */
 	@Modifying
 	@Query("""
@@ -142,9 +142,9 @@ public interface FeedItemRepository extends Repository<FeedItem, UUID> {
 
 	/*
 	 * one statement rather than the client patching every id, which for a full feed would be hundreds
-	 * of requests. only the unread are touched, so an item read yesterday keeps the timestamp it had.
+	 * of requests. only the unread are touched: an item read yesterday keeps the timestamp it had.
 	 *
-	 * resolved rows are included: they are part of the feed, so leaving them behind would be a "mark
+	 * resolved rows are included. they are part of the feed, and leaving them behind would be a "mark
 	 * all read" that visibly did not. nothing invisible is reached either way, because a row is
 	 * stamped read at the moment it resolves.
 	 *

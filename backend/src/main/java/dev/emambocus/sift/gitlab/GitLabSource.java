@@ -67,7 +67,7 @@ public class GitLabSource implements NotificationSource {
 	 */
 	@Override
 	public SourceFetch fetch(SourceCredential credential) {
-		// an OAuth token lives about two hours, so every sweep starts by renewing one that is due
+		// an OAuth token lives about two hours; every sweep starts by renewing one that is due
 		GitLabAccess access = oauth.accessFor(credential);
 
 		// also the cheapest possible check that the token still works, before any real paging
@@ -75,7 +75,7 @@ public class GitLabSource implements NotificationSource {
 		if (me.id() == null) {
 			throw new SourceUnavailableException("GitLab did not say who the token belongs to.");
 		}
-		// the /user call already answers it, so naming the account costs nothing extra
+		// the /user call already answers it. naming the account costs nothing extra
 		syncStore.rememberAccount(credential.getId(), me.username());
 
 		List<GitLabResponses.Todo> todos = client.fetchPendingTodos(access, maxPages);
@@ -206,7 +206,7 @@ public class GitLabSource implements NotificationSource {
 			String kind, Set<String> covered) {
 
 		for (GitLabResponses.MergeRequest mergeRequest : mergeRequests) {
-			// a draft says "not ready" outright, so it is not something waiting on anyone yet
+			// a draft says "not ready" outright. it waits on nobody yet
 			if (Boolean.TRUE.equals(mergeRequest.draft()) || covered.contains(mergeRequest.webUrl())) {
 				continue;
 			}
@@ -290,7 +290,7 @@ public class GitLabSource implements NotificationSource {
 			return objectMapper.writeValueAsString(payload);
 		}
 		catch (JacksonException ex) {
-			// the payload is only ever used for a detail view, so losing it must not fail the sync
+			// the payload is only ever used for a detail view. losing it must not fail the sync
 			log.warn("could not serialise a GitLab record for storage: {}", ex.getMessage());
 			return null;
 		}

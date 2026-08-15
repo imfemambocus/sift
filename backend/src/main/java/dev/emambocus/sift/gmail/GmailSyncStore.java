@@ -31,13 +31,13 @@ class GmailSyncStore {
 	}
 
 	/**
-	 * Forgets how much of the mailbox has been read, so the next read starts at the newest end and
-	 * walks all of it again.
+	 * Forgets how much of the mailbox has been read. The next read starts at the newest end and walks
+	 * all of it again.
 	 *
-	 * <p>The rows are not touched, which is the whole point: they are keyed on the message id, so the
-	 * read that follows fills them in rather than making a second copy, and the read state Sift holds
-	 * survives. Where Gmail's own history is resumed from goes with the row, so the next read records
-	 * that point again and label changes made in the gap before it are not seen.
+	 * <p>The rows are not touched, which is the whole point: they are keyed on the message id, and the
+	 * read that follows fills them in rather than making a second copy. The read state Sift holds
+	 * survives with them. Where Gmail's own history is resumed from goes with the row, and the next
+	 * read records that point again, so label changes made in the gap before it are not seen.
 	 */
 	@Transactional
 	void forget(UUID credentialId) {
@@ -73,7 +73,7 @@ class GmailSyncStore {
 		if (isLater(cursor.historyId(), state.getHistoryId())) {
 			state.setHistoryId(cursor.historyId());
 		}
-		// not an edge, so it is written as it stands: the count has to be able to go back to zero
+		// not an edge. it is written as it stands, because the count has to be able to go back to zero
 		state.setStalledSweeps(cursor.stalledSweeps());
 		state.setUpdatedAt(clock.instant());
 		states.save(state);

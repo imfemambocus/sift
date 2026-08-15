@@ -32,8 +32,8 @@ import org.springframework.stereotype.Component;
  * <p>Sift answers two problems. A source floods a mailbox, and a mailbox cannot then be searched.
  * GitLab's to-do list answers the first for GitLab. For mail the value is the second one, and it is
  * the only one: every message in the same feed, with a search that forgives a typo and takes scope
- * prefixes. A search can only find what was read, so anything held back from the feed is the one
- * thing this source must not do.
+ * prefixes. A search can only find what was read. Holding anything back from the feed is therefore
+ * the one thing this source must not do.
  *
  * <p>Two things are left out. Spam and trash, because the API leaves them out unless asked for.
  * Drafts and chats, because a draft is unsent and changes as you type, and a chat is not mail.
@@ -61,14 +61,14 @@ class GmailSource implements NotificationSource {
 	private static final Set<String> NOT_MAIL = Set.of("DRAFT", "CHAT");
 
 	/**
-	 * Where a message goes when it leaves the mailbox. Sift never reads either, so a row for a message
+	 * Where a message goes when it leaves the mailbox. Sift never reads either: a row for a message
 	 * that lands in one disagrees with the mailbox only because of when it was thrown away.
 	 */
 	private static final List<String> OUT_OF_THE_MAILBOX = List.of("TRASH", "SPAM");
 
 	/*
-	 * a ceiling on one sweep, since every message costs a request of its own. the rest is read by a
-	 * later sweep, because both edges of the cursor only ever widen the stretch already read.
+	 * a ceiling on one sweep, since every message costs a request of its own. a later sweep reads the
+	 * rest: both edges of the cursor only ever widen the stretch already read.
 	 */
 	private static final int MAX_MESSAGES = 200;
 
@@ -120,8 +120,8 @@ class GmailSource implements NotificationSource {
 	}
 
 	/*
-	 * a mailbox is walked backwards a chunk at a time, so a connection spends its first hours with
-	 * only part of its history in the feed. incomplete before the first sweep as well, which is
+	 * a mailbox is walked backwards a chunk at a time. a connection therefore spends its first hours
+	 * with only part of its history in the feed. incomplete before the first sweep as well, which is
 	 * honest: nothing of it has been read yet.
 	 */
 	@Override
@@ -133,7 +133,7 @@ class GmailSource implements NotificationSource {
 	}
 
 	/*
-	 * the mailbox is a corpus and this is a cursor over it, so forgetting it is safe: the rows are
+	 * the mailbox is a corpus and this is only a cursor over it. forgetting it is safe: the rows are
 	 * what the reading produced, they are keyed on the message id, and reading again fills them in.
 	 */
 	@Override
@@ -144,7 +144,7 @@ class GmailSource implements NotificationSource {
 
 	@Override
 	public SourceFetch fetch(SourceCredential credential) {
-		// a Google access token lives about an hour, so every sweep starts by renewing one that is due
+		// a Google access token lives about an hour; every sweep starts by renewing one that is due
 		String accessToken = oauth.accessTokenFor(credential);
 
 		GmailResponses.Profile me = client.fetchProfile(accessToken);
@@ -152,7 +152,7 @@ class GmailSource implements NotificationSource {
 			throw new SourceUnavailableException("Google did not say which mailbox the token belongs to.");
 		}
 
-		// the profile call already answers it, so naming the mailbox costs nothing extra
+		// the profile call already answers it. naming the mailbox costs nothing extra
 		syncStore.rememberAccount(credential.getId(), me.emailAddress());
 
 		UUID credentialId = credential.getId();
@@ -184,8 +184,8 @@ class GmailSource implements NotificationSource {
 	 * to unread, thrown them away, or taken them back out of the bin.
 	 *
 	 * <p>Gmail's own record of the changes, rather than a comparison against the mailbox: it is one
-	 * request whatever the mailbox holds. It also carries Sift's own writes back, so a decision taken
-	 * here and one taken there cannot fight over the same row.
+	 * request whatever the mailbox holds. It also carries Sift's own writes back, which is what stops
+	 * a decision taken here and one taken there fighting over the same row.
 	 *
 	 * <p>The first sweep of a connection only records where to start, because nothing that happened
 	 * before it existed is news, and every row it inserts is seeded from the message itself.
@@ -206,7 +206,7 @@ class GmailSource implements NotificationSource {
 		Set<String> unread = new LinkedHashSet<>();
 		Set<String> gone = new LinkedHashSet<>();
 		Set<String> back = new LinkedHashSet<>();
-		// oldest first, so the last thing that happened to a message is what stands
+		// oldest first: the last thing that happened to a message is what stands
 		for (GmailResponses.HistoryRecord record : since.get().records()) {
 			label(record.labelsAdded(), UNREAD, unread, read);
 			label(record.labelsRemoved(), UNREAD, read, unread);
@@ -222,8 +222,8 @@ class GmailSource implements NotificationSource {
 	}
 
 	/**
-	 * Google keeps its history for about a week, so an instance that was off for longer is told to
-	 * start again. What is left is the mailbox itself: every message it still counts as unread names
+	 * Google keeps its history for about a week. An instance that was off for longer is told to start
+	 * again. What is left is the mailbox itself: every message it still counts as unread names
 	 * the rest as read, which is the whole answer in about one request.
 	 *
 	 * <p>A mailbox with more unread mail than one sweep may list answers nothing, since a partial
@@ -303,9 +303,9 @@ class GmailSource implements NotificationSource {
 	 * The first read of a mailbox takes its newest chunk, which seeds both edges. Every read after it
 	 * takes what arrived since the forward edge.
 	 *
-	 * <p>The oldest of those is read first, so that what Sift has read stays one unbroken stretch even
-	 * when more has arrived than one sweep can hold. Gmail lists newest first, so the end of the list
-	 * is the oldest of it.
+	 * <p>The oldest of those is read first. What Sift has read then stays one unbroken stretch even
+	 * when more has arrived than one sweep can hold. Gmail lists newest first, which makes the end of
+	 * the list the oldest of it.
 	 */
 	private GmailCursor readNewer(String accessToken, GmailCursor cursor, List<IncomingItem> items) {
 		if (!cursor.started()) {
@@ -319,7 +319,7 @@ class GmailSource implements NotificationSource {
 
 	/**
 	 * One chunk below the floor, which is what walks a mailbox back to its beginning. Gmail lists
-	 * newest first, so what it answers here is the chunk immediately under the floor.
+	 * newest first: what it answers here is the chunk immediately under the floor.
 	 */
 	private GmailCursor readOlder(String accessToken, GmailCursor cursor, List<IncomingItem> items) {
 		if (cursor.backfillDone() || cursor.oldest() == null) {
@@ -338,8 +338,8 @@ class GmailSource implements NotificationSource {
 		}
 
 		/*
-		 * gmail reads before: to the second, so one second holding more mail than a whole chunk would
-		 * ask for the same messages for ever. stepping the floor under that second is what ends it.
+		 * gmail reads before: to the second. one second holding more mail than a whole chunk would ask
+		 * for the same messages for ever, and stepping the floor under that second is what ends it.
 		 */
 		log.warn("Gmail backfill did not move below {}; stepping the floor back one second", cursor.oldest());
 		return moved.floorAt(cursor.oldest().minusSeconds(1)).stalling();
@@ -372,8 +372,8 @@ class GmailSource implements NotificationSource {
 	private IncomingItem toIncomingItem(GmailResponses.Message message, Instant arrived) {
 		boolean sent = labels(message).contains(SENT);
 		/*
-		 * the other party: whoever sent mail you received, and whoever received mail you sent. it is
-		 * what the row is about, and it is what puts their address in the search haystack.
+		 * the other party: whoever sent mail you received, and whoever received mail you sent. that
+		 * is what the row is about, and what puts their address in the search haystack.
 		 */
 		String party = header(message, sent ? "To" : "From");
 		return new IncomingItem(
@@ -388,7 +388,7 @@ class GmailSource implements NotificationSource {
 				MESSAGE_URL + message.id(),
 				/*
 				 * the thread, not the url. every message of every conversation lives at the same path
-				 * and differs only in the fragment, so the rule that strips the fragment would make one
+				 * and differs only in the fragment: the rule that strips the fragment would make one
 				 * group of the whole mailbox.
 				 */
 				message.threadId(),
@@ -408,7 +408,7 @@ class GmailSource implements NotificationSource {
 	 *
 	 * <p>The text part is preferred, and the HTML one is taken without its markup when a message has
 	 * no text part at all, which a great deal of mail sent by machines does not. Both are cut to
-	 * {@link #MAX_BODY_CHARS}, so what this costs the table and the search is the same either way.
+	 * {@link #MAX_BODY_CHARS}: what this costs the table and the search is the same either way.
 	 */
 	private static String searchableBody(GmailResponses.Message message) {
 		String plain = firstPartOfType(message.payload(), TEXT_PART);
@@ -452,7 +452,7 @@ class GmailSource implements NotificationSource {
 			return new String(bytes, StandardCharsets.UTF_8);
 		}
 		catch (IllegalArgumentException ex) {
-			// one unreadable part must not cost the message its row, so its text is left out
+			// one unreadable part must not cost the message its row. its text is left out instead
 			log.warn("Gmail sent a {} part that could not be decoded", part.mimeType());
 			return null;
 		}
@@ -487,13 +487,13 @@ class GmailSource implements NotificationSource {
 			return text;
 		}
 		String cut = text.substring(0, MAX_BODY_CHARS);
-		// a word cut in half matches nothing, so the last whole word is where it ends
+		// a word cut in half matches nothing. the last whole word is where it ends
 		int lastSpace = cut.lastIndexOf(' ');
 		return lastSpace > 0 ? cut.substring(0, lastSpace) : cut;
 	}
 
 	/**
-	 * The files that came with a message, by name, so the search finds it by what was attached as
+	 * The files that came with a message, by name. The search then finds it by what was attached as
 	 * well as by what it says.
 	 *
 	 * <p>An inline part is left out. A signature image and a logo in a newsletter are parts with a
@@ -525,7 +525,7 @@ class GmailSource implements NotificationSource {
 		if (part.filename() == null || part.filename().isBlank() || isInline(part)) {
 			return null;
 		}
-		// the names are stored one per line, so one that carries a line break would become two files
+		// the names are stored one per line: one carrying a line break would become two files
 		return part.filename().replaceAll("\\s+", " ").trim();
 	}
 
@@ -609,7 +609,7 @@ class GmailSource implements NotificationSource {
 		return first.substring(open + 1, close).trim();
 	}
 
-	/** A comma inside a quoted display name is not a separator, so the quotes are counted. */
+	/** A comma inside a quoted display name is not a separator. The quotes are counted for that. */
 	private static String firstAddress(String header) {
 		if (header == null || header.isBlank()) {
 			return null;

@@ -63,7 +63,7 @@ public class FeedSyncStore {
 		 * an adapter must not hand over two items with the same id, and one reading several
 		 * endpoints can do it by accident (a merge request that is both assigned to you and awaiting
 		 * your review). left through, the second insert violates the unique key mid-flush and takes
-		 * the whole sync down, so it is collapsed here rather than trusted not to happen.
+		 * the whole sync down. it is collapsed here rather than trusted not to happen.
 		 */
 		Map<String, IncomingItem> unique = new LinkedHashMap<>();
 		for (IncomingItem item : incoming) {
@@ -87,9 +87,9 @@ public class FeedSyncStore {
 				stored.setSourceId(item.sourceId());
 				stored.setFirstSeenAt(now);
 				/*
-				 * only where the row is new. after that Sift's own read state owns it, so a message
-				 * you read here does not come back unread because the mailbox still says so, and one
-				 * you deliberately marked unread here is not overwritten either.
+				 * only where the row is new. after that Sift's own read state owns it: a message you
+				 * read here does not come back unread because the mailbox still says so, and one you
+				 * deliberately marked unread here is not overwritten either.
 				 */
 				if (item.alreadyRead()) {
 					stored.setReadAt(now);
@@ -112,7 +112,7 @@ public class FeedSyncStore {
 			if (!seen.contains(stored.getSourceId()) && stored.getResolvedAt() == null) {
 				stored.setResolvedAt(now);
 				/*
-				 * resolved rows stay in the feed, so one that finished upstream before anyone opened it
+				 * resolved rows stay in the feed. one that finished upstream before anyone opened it
 				 * would sit there unread for ever and count towards the tab badge. it wants nothing from
 				 * anybody, and finishing is what dealt with it. an existing read time is left alone.
 				 */
@@ -166,8 +166,8 @@ public class FeedSyncStore {
 	 * Applies read state the source itself reports, which is the direction {@link SourceReadSync} does
 	 * not cover: a message read in the mailbox rather than here.
 	 *
-	 * <p>Each statement touches only the rows that really change, so a row already read keeps the time
-	 * it was read at and one already unread is not given a time it never had.
+	 * <p>Each statement touches only the rows that really change. A row already read keeps the time
+	 * it was read at, and one already unread is not given a time it never had.
 	 *
 	 * @return how many rows changed
 	 */
@@ -241,7 +241,7 @@ public class FeedSyncStore {
 
 		/*
 		 * something that moved again after you read it is a new thing to look at, not one you have
-		 * dealt with, so the read mark is dropped. only forward movement counts: a source that
+		 * dealt with. the read mark is dropped. only forward movement counts: a source that
 		 * reports a slightly older timestamp on a later sweep must not un-read the row every pass.
 		 */
 		if (stored.getActivityAt() != null && activity.isAfter(stored.getActivityAt())) {

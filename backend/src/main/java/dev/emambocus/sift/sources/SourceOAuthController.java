@@ -34,8 +34,8 @@ import org.springframework.web.server.ResponseStatusException;
  * already signed in, and the callback is authenticated like every other API path, which is what ties
  * the returned code to the account that started the flow.
  *
- * <p>A redirect URI is registered with the provider, so these paths cannot be renamed without every
- * application being registered again.
+ * <p>A redirect URI is registered with the provider. Renaming these paths means registering every
+ * application again.
  */
 @RestController
 @RequestMapping("/api/sources/{source}/oauth")
@@ -70,7 +70,7 @@ class SourceOAuthController {
 		this.syncService = syncService;
 	}
 
-	/** @param target null when nothing is configured, so the page can name what it offers */
+	/** @param target null when nothing is configured. It is how the page names what it offers */
 	record Availability(boolean configured, String target) {
 	}
 
@@ -84,8 +84,8 @@ class SourceOAuthController {
 	}
 
 	/**
-	 * A POST rather than a redirect of its own, so the browser leaves the app under its own control
-	 * and the call is covered by CSRF like every other state-changing one.
+	 * A POST rather than a redirect of its own. The browser leaves the app under its own control, and
+	 * the call is covered by CSRF like every other state-changing one.
 	 */
 	@PostMapping("/start")
 	Authorization start(@PathVariable String source, HttpSession session) {
@@ -94,7 +94,7 @@ class SourceOAuthController {
 
 		String state = newSecret();
 		String verifier = newSecret();
-		// keyed by source, so authorizing one while another is half-started cannot cross the two
+		// keyed by source: authorizing one while another is half-started cannot cross the two
 		session.setAttribute(stateAttribute(flow), state);
 		session.setAttribute(verifierAttribute(flow), verifier);
 
@@ -150,10 +150,10 @@ class SourceOAuthController {
 
 		/*
 		 * the first read starts here and the browser does not wait for it. a mailbox is minutes of
-		 * sequential requests, so reading before the redirect means a blank page for as long as it
-		 * takes. what the app needs to say meanwhile is already built: the source reports itself as
-		 * syncing, and its counts fill in as the rows land. a failure is recorded on the credential
-		 * itself, so the settings page shows the real reason.
+		 * sequential requests: reading before the redirect means a blank page for as long as it takes.
+		 * what the app needs to say meanwhile is already built. the source reports itself as syncing,
+		 * and its counts fill in as the rows land. a failure is recorded on the credential itself,
+		 * which is what the settings page reads the real reason out of.
 		 */
 		syncService.syncInBackground(credential);
 
